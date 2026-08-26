@@ -1,0 +1,191 @@
+from pathlib import Path
+
+import pytest
+from music21 import stream
+
+from deluge_tools.converter import NoArrangementError, song_to_score
+from deluge_tools.parser import (
+    Clip,
+    ClipInstance,
+    Instrument,
+    Note,
+    NoteRow,
+    Song,
+    parse_song,
+)
+
+SAMPLE_SONG = Path(__file__).parent.parent / "Square Spelunking.XML"
+
+
+@pytest.fixture
+def score():
+    song = parse_song(SAMPLE_SONG)
+    return song_to_score(song)
+
+
+def test_produces_score(score):
+    assert isinstance(score, stream.Score)
+
+
+def test_has_parts(score):
+    assert len(score.parts) > 0
+
+
+def test_synth_parts_have_notes(score):
+    for part in score.parts:
+        if part.partName and "Kit" not in part.partName:
+            notes = part.flatten().notes
+            assert len(notes) > 0, f"{part.partName} has no notes"
+
+
+def test_can_export_musicxml(score, tmp_path):
+    out = tmp_path / "test.musicxml"
+    score.write("musicxml", fp=str(out))
+    assert out.exists()
+    assert out.stat().st_size > 100
+
+
+def _make_song(
+    clips: list[Clip],
+    instruments: list[Instrument],
+    in_arrangement_view: bool = True,
+) -> Song:
+    return Song(
+        bpm=120.0,
+        root_note=0,
+        mode_notes=[0, 2, 4, 5, 7, 9, 11],
+        instruments=instruments,
+        clips=clips,
+        in_arrangement_view=in_arrangement_view,
+    )
+
+
+class TestNoArrangement:
+    def test_raises_when_no_clip_instances(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 96, 80, 20)])],
+        )
+        inst = Instrument(name="Synth", slot=0, sub_slot=-1, clip_instances=[])
+        song = _make_song([clip], [inst], in_arrangement_view=False)
+        with pytest.raises(NoArrangementError):
+            song_to_score(song)
+
+    def test_raises_even_with_clips_but_no_arrangement(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 96, 80, 20)])],
+        )
+        inst = Instrument(name="Synth", slot=0, sub_slot=-1, clip_instances=[])
+        song = _make_song([clip], [inst], in_arrangement_view=True)
+        with pytest.raises(NoArrangementError):
+            song_to_score(song)
+
+
+class TestClipLooping:
+    def test_clip_loops_when_instance_longer_than_clip(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=96,
+            rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20)])],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=288, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        notes = list(score.parts[0].flatten().notes)
+        assert len(notes) == 3
+
+    def test_looped_notes_at_correct_offsets(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=96,
+            rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20)])],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=288, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        notes = list(score.parts[0].flatten().notes)
+        offsets = [n.offset for n in notes]
+        assert offsets == [0.0, 2.0, 4.0]
+
+
+class TestQuantization:
+    def test_off_grid_duration_snapped(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 29, 80, 20)])],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        notes = list(score.parts[0].flatten().notes)
+        assert len(notes) == 1
+        assert float(notes[0].quarterLength) == pytest.approx(30 / 48)  # snapped 29 → 30
+
+    def test_glitch_note_removed(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[
+                Note(0, 48, 80, 20),
+                Note(96, 1, 80, 20),
+            ])],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        notes = list(score.parts[0].flatten().notes)
+        assert len(notes) == 1
+
+    def test_on_grid_notes_unchanged(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 16, 80, 20), Note(48, 96, 80, 20)])],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        notes = list(score.parts[0].flatten().notes)
+        assert len(notes) == 2
+        assert float(notes[0].quarterLength) == pytest.approx(16 / 48)
+        assert float(notes[1].quarterLength) == pytest.approx(2.0)
+
+
+class TestClipTruncation:
+    def test_notes_beyond_instance_length_excluded(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=384,
+            rows=[NoteRow(y=60, notes=[
+                Note(0, 48, 80, 20),
+                Note(96, 48, 80, 20),
+                Note(192, 48, 80, 20),
+            ])],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=144, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        notes = list(score.parts[0].flatten().notes)
+        assert len(notes) == 2

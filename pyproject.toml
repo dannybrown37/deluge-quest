@@ -1,0 +1,19 @@
+[project]
+name = "deluge-tools"
+version = "0.1.0"
+description = "Utilities for Synthstrom Deluge song files"
+requires-python = ">=3.11"
+dependencies = [
+    "music21>=9.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+deluge-score = "deluge_tools.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
