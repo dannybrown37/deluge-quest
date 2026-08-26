@@ -132,9 +132,9 @@ class TestQuantization:
         score = song_to_score(song)
         notes = list(score.parts[0].flatten().notes)
         assert len(notes) == 1
-        assert float(notes[0].quarterLength) == pytest.approx(30 / 48)  # snapped 29 → 30
+        assert float(notes[0].quarterLength) == pytest.approx(24 / 48)  # snapped 29 → 24 (sixteenth)
 
-    def test_glitch_note_removed(self):
+    def test_tiny_note_becomes_sixteenth(self):
         clip = Clip(
             index=0, instrument_slot=0, instrument_sub_slot=-1,
             length=192,
@@ -150,7 +150,8 @@ class TestQuantization:
         song = _make_song([clip], [inst])
         score = song_to_score(song)
         notes = list(score.parts[0].flatten().notes)
-        assert len(notes) == 1
+        assert len(notes) == 2
+        assert float(notes[1].quarterLength) == pytest.approx(12 / 48)
 
     def test_on_grid_notes_unchanged(self):
         clip = Clip(
@@ -166,7 +167,7 @@ class TestQuantization:
         score = song_to_score(song)
         notes = list(score.parts[0].flatten().notes)
         assert len(notes) == 2
-        assert float(notes[0].quarterLength) == pytest.approx(16 / 48)
+        assert float(notes[0].quarterLength) == pytest.approx(12 / 48)  # 16 → 12 (nearest sixteenth)
         assert float(notes[1].quarterLength) == pytest.approx(2.0)
 
 

@@ -32,21 +32,15 @@ def _root_note_to_pitch_name(root_note: int) -> str:
     return MIDI_NOTE_NAMES[midi % 12]
 
 
-GRID_DIVISORS = [48, 32, 24, 16, 12, 8, 6, 4]
-MIN_DURATION_TICKS = 4
+SIXTEENTH = 12
+MIN_DURATION_TICKS = SIXTEENTH
 
 
 def _quantize(ticks: int) -> int:
     if ticks <= 0:
         return 0
-    best = ticks
-    best_err = ticks
-    for div in GRID_DIVISORS:
-        snapped = round(ticks / div) * div
-        if snapped > 0 and abs(ticks - snapped) < best_err:
-            best = snapped
-            best_err = abs(ticks - snapped)
-    return best
+    snapped = round(ticks / SIXTEENTH) * SIXTEENTH
+    return max(snapped, SIXTEENTH)
 
 
 def _ticks_to_quarter_lengths(ticks: int) -> float:
@@ -69,10 +63,8 @@ def _iter_clip_notes(
                 pos_in_instance = loop_offset + n.position
                 if pos_in_instance >= ci.length:
                     continue
-                q_len = _quantize(n.length)
-                if q_len < MIN_DURATION_TICKS:
-                    continue
                 abs_pos = ci.position + _quantize(pos_in_instance)
+                q_len = _quantize(n.length)
                 results.append((abs_pos, q_len, n.velocity, row.y, row.drum_name or (f"Drum {row.drum_index}" if row.drum_index is not None else None)))
     return results
 
@@ -157,11 +149,29 @@ def song_to_score(song: Song) -> stream.Score:
 
     clips_by_index = {c.index: c for c in song.clips}
 
+    parts = []
     for inst in song.instruments:
         if not inst.clip_instances:
             continue
         part = _build_arrangement_part(inst, clips_by_index, song)
         if part is not None:
+            parts.append(part)
+
+    if parts:
+        max_measures = max(
+            len(p.getElementsByClass("Measure")) for p in parts
+        )
+        for part in parts:
+            n_measures = len(part.getElementsByClass("Measure"))
+            if n_measures < max_measures:
+                last = part.getElementsByClass("Measure")[-1]
+                last_offset = last.offset
+                bar_ql = 4.0
+                for i in range(max_measures - n_measures):
+                    m = stream.Measure(number=n_measures + i + 1)
+                    r = note.Rest(quarterLength=bar_ql)
+                    m.append(r)
+                    part.insert(last_offset + bar_ql * (i + 1), m)
             score.insert(0, part)
 
     return score
