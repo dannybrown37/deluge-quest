@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -53,6 +54,17 @@ def _open_in_musescore(file_path: Path) -> bool:
         )
 
     return True
+
+
+def _fix_musicxml_voices(path: Path) -> None:
+    """music21 writes 0-indexed voices; MusicXML spec requires 1-indexed."""
+    xml = path.read_text()
+    xml = re.sub(
+        r"<voice>(\d+)</voice>",
+        lambda m: f"<voice>{int(m.group(1)) + 1}</voice>",
+        xml,
+    )
+    path.write_text(xml)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -123,6 +135,10 @@ def main(argv: list[str] | None = None) -> None:
         output_path.write_text(score.show("text", returnRecordingFilePath=True) or "")
     else:
         score.write(fmt, fp=str(output_path))
+
+    if fmt == "musicxml":
+        _fix_musicxml_voices(output_path)
+
     print(f"Written: {output_path}")
 
     if not args.no_open and fmt in ("musicxml", "midi"):

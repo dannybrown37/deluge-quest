@@ -140,8 +140,6 @@ def _build_arrangement_part(
         return None
 
     part.makeNotation(inPlace=True)
-    for m in part.getElementsByClass("Measure"):
-        m.makeVoices(inPlace=True)
     return part
 
 
