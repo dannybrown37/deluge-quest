@@ -49,10 +49,14 @@ def _ticks_to_quarter_lengths(ticks: int) -> float:
 
 def _iter_clip_notes(
     clip: Clip, ci: ClipInstance,
-) -> list[tuple[int, int, int, int | None, str | None]]:
-    """Yield (abs_position, length, velocity, y, drum_name) for each note,
-    handling looping and truncation of clip within clip instance."""
-    results = []
+) -> list[tuple[int, int, int, int | None, str | None, bool]]:
+    """Yield (abs_position, length, velocity, y, drum_name, is_grace) for each
+    note, handling looping and truncation of clip within clip instance.
+    Notes that would collapse into false chords under 16th quantization are
+    marked as grace notes instead."""
+    from collections import defaultdict
+
+    raw_entries: list[tuple[int, int, int, int | None, str | None]] = []
     loops = (ci.length + clip.length - 1) // clip.length if clip.length > 0 else 1
     for row in clip.rows:
         if not row.notes:
@@ -63,39 +67,70 @@ def _iter_clip_notes(
                 pos_in_instance = loop_offset + n.position
                 if pos_in_instance >= ci.length:
                     continue
-                abs_pos = ci.position + _quantize(pos_in_instance)
-                q_len = _quantize(n.length)
-                results.append((abs_pos, q_len, n.velocity, row.y, row.drum_name or (f"Drum {row.drum_index}" if row.drum_index is not None else None)))
+                raw_entries.append((pos_in_instance, n.length, n.velocity, row.y, row.drum_name or (f"Drum {row.drum_index}" if row.drum_index is not None else None)))
+
+    by_qpos: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    for i, (pos, _len, _vel, y, _name) in enumerate(raw_entries):
+        by_qpos[_quantize(pos)].append((pos, i))
+
+    grace_indices: set[int] = set()
+    for qpos, group in by_qpos.items():
+        raw_positions = {pos for pos, _ in group}
+        if len(raw_positions) > 1:
+            sorted_by_pos = sorted(group, key=lambda x: x[0])
+            for pos, idx in sorted_by_pos[:-1]:
+                grace_indices.add(idx)
+
+    results = []
+    for i, (pos, length, velocity, y, drum_name) in enumerate(raw_entries):
+        is_grace = i in grace_indices
+        abs_pos = ci.position + _quantize(pos)
+        q_len = _quantize(length)
+        results.append((abs_pos, q_len, velocity, y, drum_name, is_grace))
     return results
 
 
 def _insert_synth_clip_notes(
     part: stream.Part, clip: Clip, ci: ClipInstance,
 ) -> None:
-    for abs_pos, length, velocity, y, _ in _iter_clip_notes(clip, ci):
+    for abs_pos, length, velocity, y, _, is_grace in _iter_clip_notes(clip, ci):
         if y is None:
             continue
         offset_ql = _ticks_to_quarter_lengths(abs_pos)
-        duration_ql = _ticks_to_quarter_lengths(length)
-        mn = note.Note(y)
-        mn.quarterLength = duration_ql
-        mn.volume.velocity = velocity
-        part.insert(offset_ql, mn)
+        if is_grace:
+            gn = note.Note(y)
+            gn.duration = gn.duration.getGraceDuration()
+            gn.volume.velocity = velocity
+            part.insert(offset_ql, gn)
+        else:
+            duration_ql = _ticks_to_quarter_lengths(length)
+            mn = note.Note(y)
+            mn.quarterLength = duration_ql
+            mn.volume.velocity = velocity
+            part.insert(offset_ql, mn)
 
 
 def _insert_drum_clip_notes(
     part: stream.Part, clip: Clip, ci: ClipInstance,
 ) -> None:
-    for abs_pos, length, velocity, _, name in _iter_clip_notes(clip, ci):
+    for abs_pos, length, velocity, _, name, is_grace in _iter_clip_notes(clip, ci):
         offset_ql = _ticks_to_quarter_lengths(abs_pos)
-        duration_ql = _ticks_to_quarter_lengths(length)
-        mn = note.Note("C4")
-        mn.stemDirection = "noStem"
-        mn.notehead = "x"
-        mn.lyric = name or "Drum"
-        mn.quarterLength = duration_ql
-        mn.volume.velocity = velocity
-        part.insert(offset_ql, mn)
+        if is_grace:
+            gn = note.Note("C4")
+            gn.notehead = "x"
+            gn.duration = gn.duration.getGraceDuration()
+            gn.volume.velocity = velocity
+            gn.lyric = name or "Drum"
+            part.insert(offset_ql, gn)
+        else:
+            duration_ql = _ticks_to_quarter_lengths(length)
+            mn = note.Note("C4")
+            mn.stemDirection = "noStem"
+            mn.notehead = "x"
+            mn.lyric = name or "Drum"
+            mn.quarterLength = duration_ql
+            mn.volume.velocity = velocity
+            part.insert(offset_ql, mn)
 
 
 def _build_arrangement_part(

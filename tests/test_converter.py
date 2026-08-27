@@ -171,6 +171,52 @@ class TestQuantization:
         assert float(notes[1].quarterLength) == pytest.approx(2.0)
 
 
+class TestGraceNotes:
+    def test_sub_sixteenth_run_becomes_grace_notes(self):
+        """Notes that would collide under 16th quantization become grace notes."""
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[
+                NoteRow(y=60, notes=[Note(48, 8, 80, 20)]),
+                NoteRow(y=64, notes=[Note(49, 8, 80, 20)]),
+                NoteRow(y=67, notes=[Note(50, 48, 80, 20)]),
+            ],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        all_notes = list(score.parts[0].flatten().notes)
+        grace = [n for n in all_notes if n.duration.isGrace]
+        regular = [n for n in all_notes if not n.duration.isGrace]
+        assert len(grace) == 2
+        assert len(regular) == 1
+
+    def test_real_chord_no_grace_notes(self):
+        """Notes at the same raw position are a chord, not grace notes."""
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[
+                NoteRow(y=60, notes=[Note(0, 48, 80, 20)]),
+                NoteRow(y=64, notes=[Note(0, 48, 80, 20)]),
+            ],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        all_notes = list(score.parts[0].flatten().notes)
+        grace = [n for n in all_notes if n.duration.isGrace]
+        assert len(grace) == 0
+        assert len(all_notes) == 2
+
+
 class TestClipTruncation:
     def test_notes_beyond_instance_length_excluded(self):
         clip = Clip(
