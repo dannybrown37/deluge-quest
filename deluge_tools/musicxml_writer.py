@@ -66,6 +66,8 @@ def _add_note_element(
     stem: str | None = None,
     tuplet_start: bool = False,
     tuplet_stop: bool = False,
+    tie_start: bool = False,
+    tie_stop: bool = False,
 ) -> None:
     note_el = ET.SubElement(measure, "note")
 
@@ -83,6 +85,10 @@ def _add_note_element(
         ET.SubElement(pitch, "octave").text = str(octave)
 
     ET.SubElement(note_el, "duration").text = str(duration_ticks)
+    if tie_stop:
+        ET.SubElement(note_el, "tie", type="stop")
+    if tie_start:
+        ET.SubElement(note_el, "tie", type="start")
     ET.SubElement(note_el, "voice").text = "1"
 
     note_type, dotted, triplet = _dur_info(duration_ticks)
@@ -99,8 +105,12 @@ def _add_note_element(
     if notehead:
         ET.SubElement(note_el, "notehead").text = notehead
 
-    if tuplet_start or tuplet_stop:
+    if tuplet_start or tuplet_stop or tie_start or tie_stop:
         notations = ET.SubElement(note_el, "notations")
+        if tie_stop:
+            ET.SubElement(notations, "tied", type="stop")
+        if tie_start:
+            ET.SubElement(notations, "tied", type="start")
         if tuplet_start:
             ET.SubElement(notations, "tuplet", type="start", number="1")
         if tuplet_stop:
@@ -153,6 +163,7 @@ def _build_note_seq(m_events: list, measure_ticks: int = MEASURE_TICKS) -> list[
     if cursor < measure_ticks:
         seq.append({"forward": measure_ticks - cursor})
     _pad_triplet_groups(seq)
+    _merge_triplet_islands(seq)
     return seq
 
 
@@ -203,6 +214,95 @@ def _pad_triplet_groups(seq: list[dict]) -> None:
             if seq[run_start - n_rests - 1]["forward"] <= 0:
                 seq.pop(run_start - n_rests - 1)
                 i -= 1
+
+
+def _merge_triplet_islands(seq: list[dict]) -> None:
+    """Merge isolated triplet notes (< 3 consecutive) into adjacent groups
+    by converting intervening forwards to triplet rests and splitting
+    straight notes into tied triplet equivalents."""
+    changed = True
+    while changed:
+        changed = False
+        i = 0
+        while i < len(seq):
+            item = seq[i]
+            if item.get("forward") or item.get("rest"):
+                i += 1
+                continue
+            dur = item.get("dur", 0)
+            if dur <= 0 or not _dur_info(dur)[2]:
+                i += 1
+                continue
+            start = i
+            while i < len(seq) and not seq[i].get("forward"):
+                d = seq[i].get("dur", 0)
+                if d > 0 and _dur_info(d)[2]:
+                    i += 1
+                else:
+                    break
+            count = i - start
+            if count >= 3:
+                continue
+            merged = False
+            if start > 0:
+                prev = seq[start - 1]
+                if prev.get("forward") and prev["forward"] % 4 == 0:
+                    parts = _split_rests(prev["forward"], triplet=True)
+                    if sum(parts) == prev["forward"]:
+                        seq[start - 1 : start] = [
+                            {"dur": d, "rest": True} for d in parts
+                        ]
+                        merged = True
+                elif not prev.get("forward") and not prev.get("rest"):
+                    _, _, pt = _dur_info(prev["dur"])
+                    if not pt and prev["dur"] % 4 == 0:
+                        parts = _split_rests(prev["dur"], triplet=True)
+                        if sum(parts) == prev["dur"] and len(parts) >= 2:
+                            new_items = []
+                            for k, d in enumerate(parts):
+                                ni = {**prev, "dur": d}
+                                ni.pop("tuplet_start", None)
+                                ni.pop("tuplet_stop", None)
+                                if k > 0:
+                                    ni["tie_stop"] = True
+                                if k < len(parts) - 1:
+                                    ni["tie_start"] = True
+                                new_items.append(ni)
+                            seq[start - 1 : start] = new_items
+                            merged = True
+            if merged:
+                changed = True
+                break
+            if i < len(seq):
+                nxt = seq[i]
+                if nxt.get("forward") and nxt["forward"] % 4 == 0:
+                    parts = _split_rests(nxt["forward"], triplet=True)
+                    if sum(parts) == nxt["forward"]:
+                        seq[i : i + 1] = [
+                            {"dur": d, "rest": True} for d in parts
+                        ]
+                        merged = True
+                elif not nxt.get("forward") and not nxt.get("rest"):
+                    _, _, nt = _dur_info(nxt["dur"])
+                    if not nt and nxt["dur"] % 4 == 0:
+                        parts = _split_rests(nxt["dur"], triplet=True)
+                        if sum(parts) == nxt["dur"] and len(parts) >= 2:
+                            new_items = []
+                            for k, d in enumerate(parts):
+                                ni = {**nxt, "dur": d}
+                                ni.pop("tuplet_start", None)
+                                ni.pop("tuplet_stop", None)
+                                if k > 0:
+                                    ni["tie_stop"] = True
+                                if k < len(parts) - 1:
+                                    ni["tie_start"] = True
+                                new_items.append(ni)
+                            seq[i : i + 1] = new_items
+                            merged = True
+            if merged:
+                changed = True
+                break
+            i += 1
 
 
 def _add_tuplet_brackets(seq: list[dict]) -> None:
@@ -294,6 +394,8 @@ class MusicXMLWriter:
                         continue
                     ts = item.get("tuplet_start", False)
                     te = item.get("tuplet_stop", False)
+                    t_start = item.get("tie_start", False)
+                    t_stop = item.get("tie_stop", False)
                     if item.get("rest"):
                         _add_note_element(
                             measure, item["dur"], is_rest=True,
@@ -311,6 +413,8 @@ class MusicXMLWriter:
                                 stem=item["stem"],
                                 tuplet_start=ts and j == 0,
                                 tuplet_stop=te and j == 0,
+                                tie_start=t_start,
+                                tie_stop=t_stop,
                             )
 
         rough = ET.tostring(root, encoding="unicode")
