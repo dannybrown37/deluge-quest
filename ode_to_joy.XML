@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<song firmwareVersion="3.0.0" earliestCompatibleFirmware="3.0.0" inArrangementView="1" timePerTimerTick="459" timerTickFraction="1610612736" rootNote="0" swingAmount="0">
+	<modeNotes>
+		<modeNote>0</modeNote>
+		<modeNote>2</modeNote>
+		<modeNote>4</modeNote>
+		<modeNote>5</modeNote>
+		<modeNote>7</modeNote>
+		<modeNote>9</modeNote>
+		<modeNote>11</modeNote>
+	</modeNotes>
+	<instruments>
+		<sound presetSlot="0" presetSubSlot="-1" isArmedForRecording="0" clipInstances="0x0000000000000C0000000000" lpfMode="24dB" modFXType="none" currentFilterType="lpf" polyphonic="auto" voicePriority="1" mode="subtractive">
+			<delay pingPong="1" analog="0" syncLevel="7" />
+			<compressor syncLevel="6" attack="327244" release="936" />
+			<osc1 type="square" />
+			<osc2 type="square" transpose="0" />
+			<lfo1 type="triangle" syncLevel="0" />
+			<lfo2 type="triangle" />
+			<unison num="1" detune="8" />
+			<arpeggiator mode="off" numOctaves="2" syncLevel="7" />
+		</sound>
+	</instruments>
+	<sessionClips>
+		<instrumentClip instrumentPresetSlot="0" instrumentPresetSubSlot="-1" isPlaying="0" isSoloing="0" isArmedForRecording="0" length="3072" colourOffset="0">
+			<soundParams arpeggiatorGate="0x00000000" portamento="0x80000000" compressorShape="0xDC28F5B2" oscAVolume="0x7FFFFFFF" oscAPulseWidth="0x00000000" oscBVolume="0x80000000" oscBPulseWidth="0x00000000" noiseVolume="0x80000000" volume="0x7FFFFFFF" pan="0x00000000" lpfFrequency="0x7FFFFFFF" lpfResonance="0x80000000" hpfFrequency="0x80000000" hpfResonance="0x80000000" lfo1Rate="0x1999999A" lfo2Rate="0x00000000" modulator1Amount="0x80000000" modulator1Feedback="0x80000000" modulator2Amount="0x80000000" modulator2Feedback="0x80000000" carrier1Feedback="0x80000000" carrier2Feedback="0x80000000" modFXRate="0x00000000" modFXDepth="0x00000000" delayRate="0x00000000" delayFeedback="0x80000000" reverbAmount="0x80000000" arpeggiatorRate="0x00000000" stutterRate="0x00000000" sampleRateReduction="0x80000000" bitCrush="0x80000000" modFXOffset="0x00000000" modFXFeedback="0x80000000">
+				<envelope1 attack="0x80000000" decay="0xE6666654" sustain="0x7FFFFFFF" release="0x80000000" />
+				<envelope2 attack="0xE6666654" decay="0xE6666654" sustain="0xFFFFFFE9" release="0xE6666654" />
+				<patchCables>
+					<patchCable source="velocity" destination="volume" amount="0x3FFFFFE8" />
+				</patchCables>
+				<equalizer bass="0x00000000" treble="0x00000000" bassFrequency="0x00000000" trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow y="55" noteData="0x000008A0000000605040" />
+				<noteRow y="60" noteData="0x00000180000000305040000001B000000030504000000480000000305040000004B000000030504000000588000000185040000005A000000060504000000690000000305040000007500000003050400000084000000030504000000A8000000030504000000AB000000030504000000B8800000018504000000BA0000000605040" />
+				<noteRow y="62" noteData="0x00000150000000305040000001E000000030504000000288000000185040000002A000000060504000000450000000305040000004E0000000305040000005400000004850400000060000000030504000000630000000305040000006C000000030504000000780000000305040000008100000003050400000087000000030504000000A5000000030504000000AE000000030504000000B40000000485040" />
+				<noteRow y="64" noteData="0x00000000000000305040000000300000003050400000012000000030504000000210000000305040000002400000004850400000030000000030504000000330000000305040000004200000003050400000051000000030504000000660000000305040000006F000000018504000000720000000305040000007B0000000185040000007E0000000305040000009000000003050400000093000000030504000000A2000000030504000000B10000000305040" />
+				<noteRow y="65" noteData="0x00000060000000305040000000F000000030504000000360000000305040000003F000000030504000000708000000185040000007C800000018504000000960000000305040000009F0000000305040" />
+				<noteRow y="67" noteData="0x00000090000000305040000000C000000030504000000390000000305040000003C000000030504000000990000000305040000009C0000000305040" />
+			</noteRows>
+		</instrumentClip>
+	</sessionClips>
+</song>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
 from deluge_tools.midi_to_deluge import midi_to_deluge_xml
@@ -11,7 +12,11 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Convert a MIDI file to Deluge XML song format",
     )
-    parser.add_argument("input", type=Path, help="MIDI file (.mid)")
+    parser.add_argument(
+        "--version", action="version",
+        version=f"%(prog)s {version('deluge-tools')}",
+    )
+    parser.add_argument("input", nargs="?", type=Path, help="MIDI file (.mid)")
     parser.add_argument(
         "-o", "--output", type=Path, default=None,
         help="Output Deluge XML path (default: <input>.XML)",
@@ -24,6 +29,10 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     args = parser.parse_args(argv)
+
+    if args.input is None:
+        parser.print_help()
+        sys.exit(1)
 
     if not args.input.exists():
         print(f"Error: {args.input} not found", file=sys.stderr)

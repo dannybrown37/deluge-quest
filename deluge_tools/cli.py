@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
 from deluge_tools.converter import NoArrangementError, song_to_score
@@ -70,6 +71,10 @@ def _fix_musicxml_voices(path: Path) -> None:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Convert Deluge XML songs to sheet music",
+    )
+    parser.add_argument(
+        "--version", action="version",
+        version=f"%(prog)s {version('deluge-tools')}",
     )
     parser.add_argument("input", nargs="?", type=Path, help="Deluge .XML song file")
     parser.add_argument(
