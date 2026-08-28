@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import argparse
-import re
 import shutil
 import subprocess
 import sys
 from importlib.metadata import version
 from pathlib import Path
 
-from deluge_tools.converter import NoArrangementError, song_to_score
+from deluge_tools.converter import NoArrangementError, song_to_musicxml, song_to_score
 from deluge_tools.parser import parse_song
 
 MUSESCORE_PATHS = [
@@ -57,16 +56,6 @@ def _open_in_musescore(file_path: Path) -> bool:
     return True
 
 
-def _fix_musicxml_voices(path: Path) -> None:
-    """music21 writes 0-indexed voices; MusicXML spec requires 1-indexed."""
-    xml = path.read_text()
-    xml = re.sub(
-        r"<voice>(\d+)</voice>",
-        lambda m: f"<voice>{int(m.group(1)) + 1}</voice>",
-        xml,
-    )
-    path.write_text(xml)
-
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
@@ -107,16 +96,6 @@ def main(argv: list[str] | None = None) -> None:
           f"{len(song.clips)} clips, view={view}, "
           f"root={song.root_note}, mode={song.mode_notes}")
 
-    try:
-        score = song_to_score(song)
-    except NoArrangementError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    for part in score.parts:
-        note_count = len(part.flatten().notes)
-        print(f"  Part: {part.partName} — {note_count} notes")
-
     fmt = args.format
     if fmt is None and args.output:
         suffix = args.output.suffix.lower()
@@ -136,13 +115,26 @@ def main(argv: list[str] | None = None) -> None:
     if output_path is None:
         output_path = args.input.with_suffix(".musicxml")
 
-    if fmt == "text":
-        output_path.write_text(score.show("text", returnRecordingFilePath=True) or "")
-    else:
-        score.write(fmt, fp=str(output_path))
-
     if fmt == "musicxml":
-        _fix_musicxml_voices(output_path)
+        try:
+            xml_str = song_to_musicxml(song)
+        except NoArrangementError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        output_path.write_text(xml_str)
+    else:
+        try:
+            score = song_to_score(song)
+        except NoArrangementError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        for part in score.parts:
+            note_count = len(part.flatten().notes)
+            print(f"  Part: {part.partName} — {note_count} notes")
+        if fmt == "text":
+            output_path.write_text(score.show("text", returnRecordingFilePath=True) or "")
+        else:
+            score.write(fmt, fp=str(output_path))
 
     print(f"Written: {output_path}")
 

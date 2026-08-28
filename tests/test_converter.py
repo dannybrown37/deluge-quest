@@ -118,29 +118,15 @@ class TestClipLooping:
 
 
 class TestQuantization:
-    def test_off_grid_duration_snapped(self):
-        clip = Clip(
-            index=0, instrument_slot=0, instrument_sub_slot=-1,
-            length=192,
-            rows=[NoteRow(y=60, notes=[Note(0, 29, 80, 20)])],
-        )
-        inst = Instrument(
-            name="Synth", slot=0, sub_slot=-1,
-            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
-        )
-        song = _make_song([clip], [inst])
-        score = song_to_score(song)
-        notes = list(score.parts[0].flatten().notes)
-        assert len(notes) == 1
-        assert float(notes[0].quarterLength) == pytest.approx(24 / 48)  # snapped 29 → 24 (sixteenth)
-
-    def test_tiny_note_becomes_sixteenth(self):
+    def test_triplet_positions_preserved(self):
+        """Notes at triplet positions (multiples of 16 ticks) stay on triplet grid."""
         clip = Clip(
             index=0, instrument_slot=0, instrument_sub_slot=-1,
             length=192,
             rows=[NoteRow(y=60, notes=[
-                Note(0, 48, 80, 20),
-                Note(96, 1, 80, 20),
+                Note(0, 16, 80, 20),
+                Note(16, 16, 80, 20),
+                Note(32, 16, 80, 20),
             ])],
         )
         inst = Instrument(
@@ -150,14 +136,62 @@ class TestQuantization:
         song = _make_song([clip], [inst])
         score = song_to_score(song)
         notes = list(score.parts[0].flatten().notes)
-        assert len(notes) == 2
-        assert float(notes[1].quarterLength) == pytest.approx(12 / 48)
+        assert len(notes) == 3
+        offsets = [float(n.offset) for n in notes]
+        assert offsets == pytest.approx([0.0, 1 / 3, 2 / 3], abs=0.01)
+
+    def test_sixteenth_positions_preserved(self):
+        """Notes at 16th positions (multiples of 12 ticks) stay on 16th grid."""
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[
+                Note(0, 12, 80, 20),
+                Note(12, 12, 80, 20),
+                Note(24, 12, 80, 20),
+                Note(36, 12, 80, 20),
+            ])],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        notes = list(score.parts[0].flatten().notes)
+        assert len(notes) == 4
+        offsets = [n.offset for n in notes]
+        assert offsets == [0.0, 0.25, 0.5, 0.75]
+
+    def test_measures_total_four_quarters(self):
+        """Every measure should total 4.0 quarter lengths in 4/4."""
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[
+                Note(0, 16, 80, 20),
+                Note(16, 16, 80, 20),
+                Note(32, 16, 80, 20),
+                Note(48, 48, 80, 20),
+                Note(96, 48, 80, 20),
+                Note(144, 48, 80, 20),
+            ])],
+        )
+        inst = Instrument(
+            name="Synth", slot=0, sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        for m in score.parts[0].getElementsByClass("Measure"):
+            total = sum(n.quarterLength for n in m.flatten().notesAndRests)
+            assert total == pytest.approx(4.0), f"Measure {m.number} has {total} QL"
 
     def test_on_grid_notes_unchanged(self):
         clip = Clip(
             index=0, instrument_slot=0, instrument_sub_slot=-1,
             length=192,
-            rows=[NoteRow(y=60, notes=[Note(0, 16, 80, 20), Note(48, 96, 80, 20)])],
+            rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20), Note(48, 96, 80, 20)])],
         )
         inst = Instrument(
             name="Synth", slot=0, sub_slot=-1,
@@ -167,54 +201,8 @@ class TestQuantization:
         score = song_to_score(song)
         notes = list(score.parts[0].flatten().notes)
         assert len(notes) == 2
-        assert float(notes[0].quarterLength) == pytest.approx(12 / 48)  # 16 → 12 (nearest sixteenth)
+        assert float(notes[0].quarterLength) == pytest.approx(1.0)
         assert float(notes[1].quarterLength) == pytest.approx(2.0)
-
-
-class TestGraceNotes:
-    def test_sub_sixteenth_run_becomes_grace_notes(self):
-        """Notes that would collide under 16th quantization become grace notes."""
-        clip = Clip(
-            index=0, instrument_slot=0, instrument_sub_slot=-1,
-            length=192,
-            rows=[
-                NoteRow(y=60, notes=[Note(48, 8, 80, 20)]),
-                NoteRow(y=64, notes=[Note(49, 8, 80, 20)]),
-                NoteRow(y=67, notes=[Note(50, 48, 80, 20)]),
-            ],
-        )
-        inst = Instrument(
-            name="Synth", slot=0, sub_slot=-1,
-            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
-        )
-        song = _make_song([clip], [inst])
-        score = song_to_score(song)
-        all_notes = list(score.parts[0].flatten().notes)
-        grace = [n for n in all_notes if n.duration.isGrace]
-        regular = [n for n in all_notes if not n.duration.isGrace]
-        assert len(grace) == 2
-        assert len(regular) == 1
-
-    def test_real_chord_no_grace_notes(self):
-        """Notes at the same raw position are a chord, not grace notes."""
-        clip = Clip(
-            index=0, instrument_slot=0, instrument_sub_slot=-1,
-            length=192,
-            rows=[
-                NoteRow(y=60, notes=[Note(0, 48, 80, 20)]),
-                NoteRow(y=64, notes=[Note(0, 48, 80, 20)]),
-            ],
-        )
-        inst = Instrument(
-            name="Synth", slot=0, sub_slot=-1,
-            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
-        )
-        song = _make_song([clip], [inst])
-        score = song_to_score(song)
-        all_notes = list(score.parts[0].flatten().notes)
-        grace = [n for n in all_notes if n.duration.isGrace]
-        assert len(grace) == 0
-        assert len(all_notes) == 2
 
 
 class TestClipTruncation:
