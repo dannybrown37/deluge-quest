@@ -602,7 +602,7 @@
     gap: 6px;
     margin-left: auto;
     margin-right: auto;
-    transform: translateX(-12px);
+    transform: translateX(-56px);
   }
 
   .knob-screen-left {
