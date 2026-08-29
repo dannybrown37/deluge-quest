@@ -14,6 +14,7 @@
 
   const ROWS = 8;
   const COLS = 16;
+  const SIDEBAR_COLS = 2;
 
   const GOLD = '#D4A847';
   const TEAL = '#5AABAC';
@@ -41,6 +42,7 @@
   let screenText = 'DELUGE TOOLS';
   let screenSubtext = 'drop a song to begin';
   let pads: Pad[][] = [];
+  let sidebarPads: Pad[][] = [];
   let animFrame: number;
   let pulsePhase = 0;
   let mounted = false;
@@ -89,6 +91,19 @@
         row.push({ row: r, col: c, color, glowIntensity, active, link, label, group });
       }
       pads.push(row);
+    }
+
+    sidebarPads = [];
+    for (let r = 0; r < ROWS; r++) {
+      const row: Pad[] = [];
+      for (let c = 0; c < SIDEBAR_COLS; c++) {
+        row.push({
+          row: r, col: c,
+          color: OFF, glowIntensity: 0,
+          active: false,
+        });
+      }
+      sidebarPads.push(row);
     }
   }
 
@@ -368,11 +383,11 @@
       </div>
     </div>
 
-    <!-- Pad grid -->
+    <!-- Pad grid: 18 columns (16 main + gap + 2 sidebar) -->
     {#if mounted}
       <div class="pad-grid">
-        {#each pads as row}
-          {#each row as pad}
+        {#each { length: ROWS } as _, r}
+          {#each pads[r] as pad}
             <button
               class="pad"
               class:pad--lit={pad.glowIntensity > 0}
@@ -384,14 +399,29 @@
               aria-label={pad.label || `Pad ${pad.row + 1}-${pad.col + 1}`}
             ></button>
           {/each}
+          <div class="grid-gap"></div>
+          {#each sidebarPads[r] as pad}
+            <button
+              class="pad"
+              class:pad--lit={pad.glowIntensity > 0}
+              style="--glow-color: {pad.color}; --glow-intensity: {pad.glowIntensity}"
+              aria-label="Sidebar {pad.row + 1}-{pad.col + 1}"
+            ></button>
+          {/each}
         {/each}
       </div>
     {/if}
 
     <div class="grid-labels">
-      <div class="grid-label grid-label--score">♫ Score</div>
-      <div class="grid-label grid-label--inspector">◧ Inspector</div>
-      <div class="grid-label grid-label--midi">⇄ MIDI</div>
+      <div class="grid-labels-main">
+        <div class="grid-label grid-label--score">&#9835; Score</div>
+        <div class="grid-label grid-label--inspector">&#9703; Inspector</div>
+        <div class="grid-label grid-label--midi">&#8644; MIDI</div>
+      </div>
+      <div class="grid-label grid-label--sidebar">
+        <span>MUTE<br/>LAUNCH</span>
+        <span>AUDITION<br/>SECTION</span>
+      </div>
     </div>
   </div>
 
@@ -639,11 +669,17 @@
     letter-spacing: 0.04em;
   }
 
-  /* === Pad grid === */
+  /* === Pad grid: 16 main + gap + 2 sidebar === */
   .pad-grid {
     display: grid;
-    grid-template-columns: repeat(16, 1fr);
+    grid-template-columns: repeat(16, 1fr) 8px repeat(2, 1fr);
     gap: 3px;
+    min-width: 0;
+  }
+
+  .grid-gap {
+    grid-column: 17;
+    width: 8px;
   }
 
   .pad {
@@ -686,10 +722,14 @@
   /* Grid labels */
   .grid-labels {
     pointer-events: none;
-    display: grid;
-    grid-template-columns: repeat(16, 1fr);
-    gap: 3px;
+    display: flex;
+    gap: 8px;
     margin-top: 4px;
+  }
+  .grid-labels-main {
+    flex: 1;
+    display: flex;
+    min-width: 0;
   }
   .grid-label {
     font-family: 'DM Mono', monospace;
@@ -699,10 +739,27 @@
     letter-spacing: 0.06em;
     white-space: nowrap;
     color: rgba(255,255,255,0.3);
+    text-align: center;
   }
-  .grid-label--score { grid-column: 2 / 7; text-align: center; }
-  .grid-label--inspector { grid-column: 8 / 13; text-align: center; }
-  .grid-label--midi { grid-column: 14 / 17; text-align: center; }
+  .grid-label--score { flex: 5; }
+  .grid-label--inspector { flex: 5; }
+  .grid-label--midi { flex: 3; }
+  .grid-label--sidebar {
+    flex-shrink: 0;
+    display: flex;
+    gap: 3px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.36rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.25);
+    text-align: center;
+    line-height: 1.3;
+  }
+  .grid-label--sidebar span {
+    display: block;
+  }
 
   /* === Responsive === */
   @media (max-width: 700px) {
@@ -718,6 +775,8 @@
     .knobs-left { gap: 6px; }
     .knobs-right { gap: 6px; }
     .pad-grid { gap: 2px; }
+    .grid-gap { width: 6px; }
+    .pad-grid { grid-template-columns: repeat(16, 1fr) 6px repeat(2, 1fr); }
   }
 
   @media (max-width: 500px) {
@@ -735,6 +794,8 @@
     .oled-text { font-size: 0.6rem; }
     .deluge-logo { font-size: 0.85rem; }
     .pad-grid { gap: 1.5px; }
+    .grid-gap { width: 4px; }
+    .pad-grid { grid-template-columns: repeat(16, 1fr) 4px repeat(2, 1fr); }
     .grid-labels { display: none; }
   }
 </style>
