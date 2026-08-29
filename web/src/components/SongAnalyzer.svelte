@@ -8,6 +8,7 @@
   let progressPct = $state(0);
   let errorMsg = $state("");
   let results: SongStats[] = $state([]);
+  let fileContents = new Map<string, string>();
   let sortBy = $state("name");
   let sortAsc = $state(true);
   let dragOver = $state(false);
@@ -172,6 +173,9 @@
         xmlFiles.map(async f => ({ name: f.name, content: await f.text() }))
       );
 
+      fileContents.clear();
+      for (const f of fileData) fileContents.set(f.name, f.content);
+
       const stats = await analyzeStats(fileData, pyodide);
       results = stats.map(s => ({ ...s, lastModified: timestamps.get(s.filename) }));
       state = "done";
@@ -240,11 +244,19 @@
     filterKey = filterKey === key ? "" : key;
   }
 
+  function openInScore(filename: string) {
+    const content = fileContents.get(filename);
+    if (!content) return;
+    sessionStorage.setItem("deluge-score-file", JSON.stringify({ name: filename, content }));
+    window.location.href = "/score";
+  }
+
   function reset() {
     state = "idle";
     results = [];
     errorMsg = "";
     fileCount = 0;
+    fileContents.clear();
     clearFilters();
   }
 </script>
@@ -346,7 +358,6 @@
               { id: 'name', label: 'Song' },
               { id: 'bpm', label: 'BPM' },
               { id: 'key', label: 'Key' },
-              { id: 'arr', label: 'Arr?' },
               { id: 'duration', label: 'Duration' },
               { id: 'instruments', label: 'Inst' },
               { id: 'clips', label: 'Clips' },
@@ -376,12 +387,16 @@
           {#each sorted as s}
             {@const name = s.filename.replace(/\.XML$/i, '')}
             <tr class:row--error={s.key.startsWith('Error')}>
-              <td class="cell-name" title={name}>{name}</td>
+              <td class="cell-name" title={name}>
+                {name}
+                {#if s.hasArrangement}
+                  <button class="score-btn" title="Convert to sheet music" onclick={() => openInScore(s.filename)}>Score</button>
+                {/if}
+              </td>
               <td class="cell-num" title={s.bpm > 0 ? s.bpm.toFixed(1) : ''}>{s.bpm > 0 ? s.bpm.toFixed(0) : '-'}</td>
               <td title={s.key}>
                 <button class="key-chip" class:key-chip--active={filterKey === s.key} onclick={() => filterByKey(s.key)}>{s.key}</button>
               </td>
-              <td class="cell-center" title={s.hasArrangement ? 'Yes' : 'No'}>{s.hasArrangement ? 'Y' : ''}</td>
               <td class="cell-num" title={s.durationStr}>{s.durationStr}</td>
               <td class="cell-num" title={`${s.synthCount} synth, ${s.kitCount} kit`}>{s.instrumentCount || '-'}</td>
               <td class="cell-num" title={`${s.clipCount} clips`}>{s.clipCount || '-'}</td>
@@ -390,7 +405,7 @@
             </tr>
           {/each}
           {#if sorted.length === 0}
-            <tr><td colspan="9" class="cell-empty">No songs match filters</td></tr>
+            <tr><td colspan="8" class="cell-empty">No songs match filters</td></tr>
           {/if}
         </tbody>
       </table>
@@ -694,9 +709,33 @@
   .cell-name {
     font-family: 'DM Mono', monospace;
     font-weight: 500;
-    max-width: 200px;
+    max-width: 240px;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .score-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.45rem;
+    margin-left: 0.5rem;
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+    vertical-align: middle;
+  }
+  tbody tr:hover .score-btn {
+    opacity: 1;
+  }
+  .score-btn:hover {
+    background: var(--accent);
+    color: var(--ground);
   }
   .cell-num {
     text-align: right;

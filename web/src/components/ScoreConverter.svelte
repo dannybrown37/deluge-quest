@@ -11,14 +11,8 @@
   let resultXml = $state("");
   let dragOver = $state(false);
 
-  async function handleFile(file: File) {
-    if (!file.name.toLowerCase().endsWith(".xml")) {
-      state = "error";
-      errorMsg = "Please drop a Deluge .XML song file";
-      return;
-    }
-
-    fileName = file.name;
+  async function convert(name: string, xmlContent: string) {
+    fileName = name;
     state = "loading";
 
     try {
@@ -31,7 +25,6 @@
       progress = "Converting";
       progressPct = 85;
 
-      const xmlContent = await file.text();
       resultXml = await convertToMusicXML(xmlContent, pyodide);
 
       state = "done";
@@ -42,6 +35,26 @@
       errorMsg = e.message || "Conversion failed";
     }
   }
+
+  async function handleFile(file: File) {
+    if (!file.name.toLowerCase().endsWith(".xml")) {
+      state = "error";
+      errorMsg = "Please drop a Deluge .XML song file";
+      return;
+    }
+    convert(file.name, await file.text());
+  }
+
+  $effect(() => {
+    try {
+      const stored = sessionStorage.getItem("deluge-score-file");
+      if (stored) {
+        sessionStorage.removeItem("deluge-score-file");
+        const { name, content } = JSON.parse(stored);
+        if (name && content) convert(name, content);
+      }
+    } catch {}
+  });
 
   function handleDrop(e: DragEvent) {
     e.preventDefault();
