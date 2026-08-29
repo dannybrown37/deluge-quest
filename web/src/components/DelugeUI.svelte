@@ -250,11 +250,9 @@
           on:touchstart={(e) => handleKnobStart(0, e)}
           on:wheel={(e) => handleKnobWheel(0, e)}
         >
-          <div class="knob-3d" style="transform: rotate({knobAngles[0]}deg)">
+          <div class="knob-3d">
             <div class="knob-barrel knob-barrel--black"></div>
-            <div class="knob-top knob-top--black">
-              <div class="knob-notch"></div>
-            </div>
+            <div class="knob-top knob-top--black"></div>
           </div>
         </div>
         <!-- Knob 1: lower black — bottom row, far left (anchor) -->
@@ -268,11 +266,9 @@
           on:touchstart={(e) => handleKnobStart(1, e)}
           on:wheel={(e) => handleKnobWheel(1, e)}
         >
-          <div class="knob-3d" style="transform: rotate({knobAngles[1]}deg)">
+          <div class="knob-3d">
             <div class="knob-barrel knob-barrel--black"></div>
-            <div class="knob-top knob-top--black">
-              <div class="knob-notch"></div>
-            </div>
+            <div class="knob-top knob-top--black"></div>
           </div>
         </div>
         <!-- Knob 2: upper gold — top row, right -->
@@ -286,11 +282,9 @@
           on:touchstart={(e) => handleKnobStart(2, e)}
           on:wheel={(e) => handleKnobWheel(2, e)}
         >
-          <div class="knob-3d" style="transform: rotate({knobAngles[2]}deg)">
+          <div class="knob-3d">
             <div class="knob-barrel knob-barrel--gold"></div>
-            <div class="knob-top knob-top--gold">
-              <div class="knob-notch knob-notch--dark"></div>
-            </div>
+            <div class="knob-top knob-top--gold"></div>
           </div>
         </div>
         <!-- Knob 3: lower gold — bottom row, middle -->
@@ -304,11 +298,9 @@
           on:touchstart={(e) => handleKnobStart(3, e)}
           on:wheel={(e) => handleKnobWheel(3, e)}
         >
-          <div class="knob-3d" style="transform: rotate({knobAngles[3]}deg)">
+          <div class="knob-3d">
             <div class="knob-barrel knob-barrel--gold"></div>
-            <div class="knob-top knob-top--gold">
-              <div class="knob-notch knob-notch--dark"></div>
-            </div>
+            <div class="knob-top knob-top--gold"></div>
           </div>
         </div>
       </div>
@@ -325,11 +317,9 @@
             on:touchstart={(e) => handleKnobStart(4, e)}
             on:wheel={(e) => handleKnobWheel(4, e)}
           >
-            <div class="knob-3d" style="transform: rotate({knobAngles[4]}deg)">
+            <div class="knob-3d">
               <div class="knob-barrel knob-barrel--black"></div>
-              <div class="knob-top knob-top--black">
-                <div class="knob-notch"></div>
-              </div>
+              <div class="knob-top knob-top--black"></div>
             </div>
           </div>
         </div>
@@ -357,11 +347,9 @@
           on:touchstart={(e) => handleKnobStart(5, e)}
           on:wheel={(e) => handleKnobWheel(5, e)}
         >
-          <div class="knob-3d" style="transform: rotate({knobAngles[5]}deg)">
+          <div class="knob-3d">
             <div class="knob-barrel knob-barrel--black"></div>
-            <div class="knob-top knob-top--black">
-              <div class="knob-notch"></div>
-            </div>
+            <div class="knob-top knob-top--black"></div>
           </div>
         </div>
         <!-- Gold (output level) -->
