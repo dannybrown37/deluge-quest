@@ -22,18 +22,20 @@
   const WHITE = '#E0DDD6';
   const OFF = 'transparent';
 
-  // 6 knobs matching real Deluge layout
+  // 7 knobs matching real Deluge layout
   // Left: 2 black diagonal + 2 gold diagonal to their right
+  // Center-left: 1 black knob next to screen
   // Right: 1 gold + 1 black, horizontally parallel
-  let knobValues = [64, 64, 64, 64, 120, 100];
+  let knobValues = [64, 64, 64, 64, 64, 120, 100];
   let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
   const knobMeta = [
     { name: 'upper',    style: 'black' },  // 0: left upper black
     { name: 'select',   style: 'black' },  // 1: left lower black
     { name: 'scroll',   style: 'gold'  },  // 2: left upper gold
     { name: 'encoder',  style: 'gold'  },  // 3: left lower gold
-    { name: 'tempo',    style: 'gold'  },  // 4: right gold
-    { name: 'output',   style: 'black' },  // 5: right black
+    { name: 'navigate', style: 'black' },  // 4: black knob left of screen
+    { name: 'tempo',    style: 'gold'  },  // 5: right gold
+    { name: 'output',   style: 'black' },  // 6: right black
   ];
 
   let screenText = 'DELUGE TOOLS';
@@ -291,6 +293,26 @@
         </div>
       </div>
 
+      <!-- Black knob left of screen -->
+      <div class="knob-screen-left">
+        <div
+          class="knob-hitbox"
+          role="slider" tabindex="0"
+          aria-label={knobMeta[4].name}
+          aria-valuenow={knobValues[4]}
+          on:mousedown={(e) => handleKnobStart(4, e)}
+          on:touchstart={(e) => handleKnobStart(4, e)}
+          on:wheel={(e) => handleKnobWheel(4, e)}
+        >
+          <div class="knob-3d" style="transform: rotate({knobAngles[4]}deg)">
+            <div class="knob-barrel knob-barrel--black"></div>
+            <div class="knob-top knob-top--black">
+              <div class="knob-notch"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- CENTER: logo + OLED screen -->
       <div class="screen-area">
         <div class="deluge-logo">✦ deluge</div>
@@ -308,13 +330,13 @@
         <div
           class="knob-hitbox"
           role="slider" tabindex="0"
-          aria-label={knobMeta[4].name}
-          aria-valuenow={knobValues[4]}
-          on:mousedown={(e) => handleKnobStart(4, e)}
-          on:touchstart={(e) => handleKnobStart(4, e)}
-          on:wheel={(e) => handleKnobWheel(4, e)}
+          aria-label={knobMeta[5].name}
+          aria-valuenow={knobValues[5]}
+          on:mousedown={(e) => handleKnobStart(5, e)}
+          on:touchstart={(e) => handleKnobStart(5, e)}
+          on:wheel={(e) => handleKnobWheel(5, e)}
         >
-          <div class="knob-3d" style="transform: rotate({knobAngles[4]}deg)">
+          <div class="knob-3d" style="transform: rotate({knobAngles[5]}deg)">
             <div class="knob-barrel knob-barrel--gold"></div>
             <div class="knob-top knob-top--gold">
               <div class="knob-notch knob-notch--dark"></div>
@@ -325,13 +347,13 @@
         <div
           class="knob-hitbox"
           role="slider" tabindex="0"
-          aria-label={knobMeta[5].name}
-          aria-valuenow={knobValues[5]}
-          on:mousedown={(e) => handleKnobStart(5, e)}
-          on:touchstart={(e) => handleKnobStart(5, e)}
-          on:wheel={(e) => handleKnobWheel(5, e)}
+          aria-label={knobMeta[6].name}
+          aria-valuenow={knobValues[6]}
+          on:mousedown={(e) => handleKnobStart(6, e)}
+          on:touchstart={(e) => handleKnobStart(6, e)}
+          on:wheel={(e) => handleKnobWheel(6, e)}
         >
-          <div class="knob-3d" style="transform: rotate({knobAngles[5]}deg)">
+          <div class="knob-3d" style="transform: rotate({knobAngles[6]}deg)">
             <div class="knob-barrel knob-barrel--black"></div>
             <div class="knob-top knob-top--black">
               <div class="knob-notch"></div>
@@ -552,6 +574,13 @@
   .knob-notch--dark {
     background: #2A1A0A;
     box-shadow: 0 0 2px rgba(0,0,0,0.2);
+  }
+
+  /* --- Black knob left of screen --- */
+  .knob-screen-left {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
   }
 
   /* --- Center: logo + screen --- */
