@@ -5,7 +5,30 @@ import DelugeUI from '../components/DelugeUI.svelte';
 
 <BaseLayout title="Home" description="Browser-based tools for Synthstrom Deluge — score conversion, song inspection, MIDI import. No server, no upload, everything runs in your browser.">
   <section class="landing">
-    <DelugeUI client:load />
+    <div class="deluge-desktop">
+      <DelugeUI client:load />
+    </div>
+    <div class="mobile-hero">
+      <h1 class="mobile-title">Deluge Tools</h1>
+      <p class="mobile-tagline">Browser-based tools for the Synthstrom Deluge. No server, no uploads — everything runs locally.</p>
+      <nav class="mobile-tools">
+        <a href="/score" class="tool-card tool-card--score">
+          <span class="tool-icon">&#9835;</span>
+          <span class="tool-name">Score Converter</span>
+          <span class="tool-desc">Deluge XML → MusicXML</span>
+        </a>
+        <a href="/inspector" class="tool-card tool-card--inspector">
+          <span class="tool-icon">&#9703;</span>
+          <span class="tool-name">Song Inspector</span>
+          <span class="tool-desc">Visual arrangement timeline</span>
+        </a>
+        <a href="https://github.com/dannybrown37/deluge" class="tool-card tool-card--github" target="_blank" rel="noopener">
+          <span class="tool-icon">&#10097;</span>
+          <span class="tool-name">Source</span>
+          <span class="tool-desc">Open source on GitHub</span>
+        </a>
+      </nav>
+    </div>
   </section>
 </BaseLayout>
 
@@ -15,7 +38,80 @@ import DelugeUI from '../components/DelugeUI.svelte';
     text-align: center;
   }
 
-  @media (max-width: 600px) {
-    .landing { padding: 1rem 0.5rem; }
+  .mobile-hero {
+    display: none;
+  }
+
+  @media (max-width: 700px) {
+    .deluge-desktop { display: none; }
+    .mobile-hero { display: block; }
+    .landing { padding: 2rem 1rem; }
+  }
+
+  .mobile-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  .mobile-tagline {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    max-width: 340px;
+    margin: 0 auto 2rem;
+    line-height: 1.5;
+  }
+
+  .mobile-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+
+  .tool-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    text-decoration: none;
+    text-align: left;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .tool-card:hover {
+    text-decoration: none;
+    border-color: var(--accent);
+    box-shadow: 0 2px 12px var(--accent-dim);
+  }
+
+  .tool-icon {
+    font-size: 1.4rem;
+    width: 2rem;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .tool-card--score .tool-icon { color: var(--accent); }
+  .tool-card--inspector .tool-icon { color: var(--teal); }
+  .tool-card--github .tool-icon { color: var(--text-secondary); }
+
+  .tool-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text);
+    display: block;
+  }
+
+  .tool-desc {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    display: block;
   }
 </style>

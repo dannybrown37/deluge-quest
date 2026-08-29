@@ -50,6 +50,11 @@
   let dragStartY = 0;
   let dragStartAngle = 0;
 
+  const DESIGN_WIDTH = 900;
+  let wrapperWidth = DESIGN_WIDTH;
+  let housingHeight = 0;
+  $: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH);
+
   function initPads() {
     pads = [];
     for (let r = 0; r < ROWS; r++) {
@@ -223,7 +228,8 @@
   });
 </script>
 
-<div class="deluge-housing">
+<div class="deluge-scaler" bind:clientWidth={wrapperWidth} style="height: {housingHeight * scale}px;">
+<div class="deluge-housing" bind:clientHeight={housingHeight} style="transform: scale({scale}); transform-origin: top center;">
   <div class="wood-panel wood-panel--left"></div>
 
   <div class="deluge-body">
@@ -422,12 +428,19 @@
 
   <div class="wood-panel wood-panel--right"></div>
 </div>
+</div>
 
 <style>
+  /* === Scaler wrapper === */
+  .deluge-scaler {
+    width: 100%;
+    position: relative;
+  }
+
   /* === Housing === */
   .deluge-housing {
     display: flex;
-    max-width: 900px;
+    width: 900px;
     margin: 0 auto;
     user-select: none;
     filter: drop-shadow(0 12px 40px rgba(0,0,0,0.5));
@@ -616,8 +629,8 @@
     flex-direction: column;
     align-items: center;
     gap: 0.25rem;
-    max-width: 240px;
-    min-width: 0;
+    width: 240px;
+    flex-shrink: 0;
   }
   .deluge-logo {
     font-family: 'DM Mono', monospace;
@@ -746,39 +759,4 @@
     display: block;
   }
 
-  /* === Responsive === */
-  @media (max-width: 700px) {
-    .wood-panel { width: 18px; }
-    .deluge-body { padding: 0.5rem 0.6rem 0.75rem; }
-    .knob-hitbox { width: 44px; height: 44px; }
-    .knob-3d { width: 38px; height: 38px; }
-    .knob-top { inset: 2px; }
-    .knob-notch { height: 8px; top: 3px; }
-    .knob-barrel--gold { box-shadow: 0 3px 1px #7A5818, 0 4px 2px rgba(0,0,0,0.5); }
-    .knob-barrel--black { box-shadow: 0 3px 1px #1A1A1E, 0 4px 2px rgba(0,0,0,0.5); }
-    .knobs-left { width: 120px; height: 94px; }
-    .knobs-right { gap: 6px; }
-    .pad-grid { gap: 2px; }
-    .grid-gap { width: 6px; }
-    .pad-grid { grid-template-columns: repeat(16, 1fr) 6px repeat(2, 1fr); }
-  }
-
-  @media (max-width: 500px) {
-    .wood-panel { width: 10px; }
-    .deluge-body { padding: 0.3rem 0.4rem 0.5rem; }
-    .knob-hitbox { width: 36px; height: 36px; }
-    .knob-3d { width: 30px; height: 30px; }
-    .knob-notch { height: 6px; top: 2px; width: 2px; }
-    .knob-barrel--gold { box-shadow: 0 2px 1px #7A5818, 0 3px 2px rgba(0,0,0,0.5); }
-    .knob-barrel--black { box-shadow: 0 2px 1px #1A1A1E, 0 3px 2px rgba(0,0,0,0.5); }
-    .knobs-left { width: 96px; height: 78px; }
-    .knobs-right { gap: 4px; }
-    .oled-screen { padding: 0.25rem 0.4rem; }
-    .oled-text { font-size: 0.6rem; }
-    .deluge-logo { font-size: 0.85rem; }
-    .pad-grid { gap: 1.5px; }
-    .grid-gap { width: 4px; }
-    .pad-grid { grid-template-columns: repeat(16, 1fr) 4px repeat(2, 1fr); }
-    .grid-labels { display: none; }
-  }
 </style>
