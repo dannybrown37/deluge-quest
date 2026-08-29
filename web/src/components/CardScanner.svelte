@@ -6,6 +6,12 @@
     referencedBy: string[];
   }
 
+  interface DuplicateGroup {
+    hash: string;
+    size: number;
+    files: string[];
+  }
+
   interface CardReport {
     totalSamples: number;
     totalSamplesBytes: number;
@@ -14,20 +20,33 @@
     missingReferences: MissingRef[];
     unusedPresets: string[];
     reclaimableBytes: number;
+    duplicates: DuplicateGroup[];
+    duplicateWastedBytes: number;
   }
 
   const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
   const XML_DIRS = ["SONGS", "KITS", "SYNTHS"];
   const FILE_ATTRS = ["fileName", "filePath"];
+  const TRASH_DIR = "DELUGE_UNUSED";
 
   let state: State = $state("idle");
   let errorMsg = $state("");
   let report: CardReport | null = $state(null);
   let dragOver = $state(false);
   let cardName = $state("");
-  let listCategory = $state<"all" | "samples" | "missing" | "presets">("all");
+  let listCategory = $state<"all" | "samples" | "missing" | "presets" | "duplicates">("all");
   let showList = $state(false);
   let progress = $state("");
+  let canWrite = $state(false);
+  let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
+  let movedFiles = $state(new Set<string>());
+  let movingFiles = $state(new Set<string>());
+  let fileHandles = $state(new Map<string, File>());
+  let playingFile = $state<string | null>(null);
+  let currentAudio = $state<HTMLAudioElement | null>(null);
+
+  let movedCount = $derived(movedFiles.size);
+  let hasFileSystemAccess = $derived(typeof window !== "undefined" && "showDirectoryPicker" in window);
 
   function ext(name: string): string {
     const i = name.lastIndexOf(".");
@@ -84,7 +103,52 @@
     return names;
   }
 
+  async function readDirHandle(
+    dirHandle: FileSystemDirectoryHandle,
+    path: string,
+    fileMap: Map<string, File>,
+  ) {
+    for await (const entry of (dirHandle as any).values()) {
+      const entryPath = path ? `${path}/${entry.name}` : entry.name;
+      if (entry.kind === "file") {
+        const file = await (entry as FileSystemFileHandle).getFile();
+        fileMap.set(entryPath, file);
+      } else if (entry.kind === "directory") {
+        if (entry.name === TRASH_DIR) continue;
+        await readDirHandle(entry as FileSystemDirectoryHandle, entryPath, fileMap);
+      }
+    }
+  }
+
+  async function getOrCreateDir(
+    root: FileSystemDirectoryHandle,
+    path: string,
+  ): Promise<FileSystemDirectoryHandle> {
+    const parts = path.split("/").filter(Boolean);
+    let current = root;
+    for (const part of parts) {
+      current = await current.getDirectoryHandle(part, { create: true });
+    }
+    return current;
+  }
+
+  async function scanFromHandle(handle: FileSystemDirectoryHandle) {
+    rootHandle = handle;
+    canWrite = true;
+    cardName = handle.name;
+
+    state = "processing";
+    progress = "Indexing files...";
+    await new Promise(r => setTimeout(r, 0));
+
+    const filesByPath = new Map<string, File>();
+    await readDirHandle(handle, "", filesByPath);
+    await runScan(filesByPath, "");
+  }
+
   async function scanCard(files: File[]) {
+    canWrite = false;
+    rootHandle = null;
     state = "processing";
     progress = "Indexing files...";
 
@@ -104,6 +168,10 @@
       cardName = firstPath.split("/")[0];
     }
 
+    await runScan(filesByPath, rootPrefix);
+  }
+
+  async function runScan(filesByPath: Map<string, File>, rootPrefix: string) {
     const stripRoot = (p: string) => rootPrefix && p.startsWith(rootPrefix) ? p.slice(rootPrefix.length) : p;
 
     const hasSamples = [...filesByPath.keys()].some(p => {
@@ -199,6 +267,60 @@
       }
     }
     fileHandles = handles;
+    movedFiles = new Set();
+
+    progress = "Finding duplicates (grouping by size)...";
+    await new Promise(r => setTimeout(r, 0));
+
+    const sizeGroups = new Map<number, string[]>();
+    for (const [path, size] of allSamples) {
+      const group = sizeGroups.get(size);
+      if (group) group.push(path);
+      else sizeGroups.set(size, [path]);
+    }
+
+    const candidates = new Map<string, File>();
+    for (const [size, paths] of sizeGroups) {
+      if (paths.length < 2 || size === 0) continue;
+      for (const p of paths) {
+        const file = handles.get(p);
+        if (file) candidates.set(p, file);
+      }
+    }
+
+    const hashGroups = new Map<string, { size: number; files: string[] }>();
+    let hashDone = 0;
+    const totalToHash = candidates.size;
+
+    for (const [path, file] of candidates) {
+      const buf = await file.arrayBuffer();
+      const hashBuf = await crypto.subtle.digest("SHA-256", buf);
+      const hashArr = new Uint8Array(hashBuf);
+      const hash = Array.from(hashArr, b => b.toString(16).padStart(2, "0")).join("");
+
+      const existing = hashGroups.get(hash);
+      if (existing) {
+        existing.files.push(path);
+      } else {
+        hashGroups.set(hash, { size: file.size, files: [path] });
+      }
+
+      hashDone++;
+      if (hashDone % 50 === 0) {
+        progress = `Finding duplicates (hashing ${hashDone}/${totalToHash})...`;
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    const duplicates: DuplicateGroup[] = [];
+    let duplicateWastedBytes = 0;
+    for (const [hash, { size, files }] of hashGroups) {
+      if (files.length < 2) continue;
+      files.sort();
+      duplicates.push({ hash, size, files });
+      duplicateWastedBytes += size * (files.length - 1);
+    }
+    duplicates.sort((a, b) => (b.size * (b.files.length - 1)) - (a.size * (a.files.length - 1)));
 
     report = {
       totalSamples: allSamples.size,
@@ -208,9 +330,57 @@
       missingReferences: missing,
       unusedPresets,
       reclaimableBytes: reclaimable,
+      duplicates,
+      duplicateWastedBytes,
     };
     state = "done";
     saveToSession();
+  }
+
+  async function moveSample(samplePath: string) {
+    if (!rootHandle || movedFiles.has(samplePath) || movingFiles.has(samplePath)) return;
+
+    const next = new Set(movingFiles);
+    next.add(samplePath);
+    movingFiles = next;
+
+    try {
+      const parts = samplePath.split("/");
+      const fileName = parts.pop()!;
+      const sourceDir = parts.join("/");
+
+      const sourceDirHandle = await getOrCreateDir(rootHandle, sourceDir);
+      const sourceFileHandle = await sourceDirHandle.getFileHandle(fileName);
+      const file = await sourceFileHandle.getFile();
+      const data = await file.arrayBuffer();
+
+      const trashPath = `${TRASH_DIR}/${sourceDir}`;
+      const trashDirHandle = await getOrCreateDir(rootHandle, trashPath);
+      const destFileHandle = await trashDirHandle.getFileHandle(fileName, { create: true });
+      const writable = await destFileHandle.createWritable();
+      await writable.write(data);
+      await writable.close();
+
+      await sourceDirHandle.removeEntry(fileName);
+
+      const moved = new Set(movedFiles);
+      moved.add(samplePath);
+      movedFiles = moved;
+    } catch (e: any) {
+      console.error(`Failed to move ${samplePath}:`, e);
+    } finally {
+      const rm = new Set(movingFiles);
+      rm.delete(samplePath);
+      movingFiles = rm;
+    }
+  }
+
+  async function moveAllUnused() {
+    if (!rootHandle || !report) return;
+    const toMove = report.unusedSamples.filter(s => !movedFiles.has(s));
+    for (const s of toMove) {
+      await moveSample(s);
+    }
   }
 
   function formatBytes(n: number): string {
@@ -218,6 +388,18 @@
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
     if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
     return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+
+  async function openDirectoryPicker() {
+    try {
+      const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+      await scanFromHandle(handle);
+    } catch (e: any) {
+      if (e.name !== "AbortError") {
+        state = "error";
+        errorMsg = e.message || "Failed to open directory";
+      }
+    }
   }
 
   function handleInputChange(e: Event) {
@@ -282,6 +464,8 @@
       missing_references: report.missingReferences.map(m => ({ sample: m.sample, referenced_by: m.referencedBy })),
       unused_presets: report.unusedPresets,
       reclaimable_bytes: report.reclaimableBytes,
+      duplicates: (report.duplicates ?? []).map(d => ({ hash: d.hash, size: d.size, files: d.files })),
+      duplicate_wasted_bytes: report.duplicateWastedBytes ?? 0,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -308,6 +492,8 @@
       if (!raw) return false;
       const cached = JSON.parse(raw);
       if (!cached) return false;
+      cached.duplicates ??= [];
+      cached.duplicateWastedBytes ??= 0;
       report = cached;
       cardName = sessionStorage.getItem(CACHE_KEY_NAME) ?? "";
       state = "done";
@@ -332,6 +518,10 @@
     cardName = "";
     showList = false;
     fileHandles = new Map();
+    rootHandle = null;
+    canWrite = false;
+    movedFiles = new Set();
+    movingFiles = new Set();
     try {
       sessionStorage.removeItem(CACHE_KEY);
       sessionStorage.removeItem(CACHE_KEY_NAME);
@@ -346,6 +536,9 @@
   );
   let filteredPresets = $derived(
     listCategory === "all" || listCategory === "presets" ? (report?.unusedPresets ?? []) : []
+  );
+  let filteredDuplicates = $derived(
+    listCategory === "all" || listCategory === "duplicates" ? (report?.duplicates ?? []) : []
   );
 
   interface FolderNode {
@@ -417,9 +610,6 @@
 
   let missingTree = $derived(buildMissingTree(filteredMissing));
   let expandedDirs = $state(new Set<string>());
-  let fileHandles = $state(new Map<string, File>());
-  let playingFile = $state<string | null>(null);
-  let currentAudio = $state<HTMLAudioElement | null>(null);
 
   function toggleDir(path: string) {
     const next = new Set(expandedDirs);
@@ -467,16 +657,25 @@
     ondrop={handleDrop}
     ondragover={(e) => { e.preventDefault(); dragOver = true; }}
     ondragleave={() => { dragOver = false; }}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById('clean-folder-input')?.click(); }}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { if (hasFileSystemAccess) openDirectoryPicker(); else document.getElementById('clean-folder-input')?.click(); }}}
   >
     <div class="dropzone-content">
       <span class="dropzone-icon">#</span>
       <p class="dropzone-title">Select your SD card folder</p>
       <p class="dropzone-sub">
-        <label class="dropzone-browse">Browse for folder<input id="clean-folder-input" type="file" webkitdirectory onchange={handleInputChange} hidden /></label>
+        {#if hasFileSystemAccess}
+          <button class="dropzone-browse" onclick={openDirectoryPicker}>Browse for folder</button>
+        {:else}
+          <label class="dropzone-browse">Browse for folder<input id="clean-folder-input" type="file" webkitdirectory onchange={handleInputChange} hidden /></label>
+        {/if}
         or drag &amp; drop
       </p>
-      <p class="dropzone-hint">Scans SONGS/, KITS/, SYNTHS/, and SAMPLES/ directories</p>
+      <p class="dropzone-hint">
+        Scans SONGS/, KITS/, SYNTHS/, and SAMPLES/ directories
+        {#if !hasFileSystemAccess}
+          <br/><span class="dropzone-hint-warn">Use Chrome or Edge to enable sample playback and cleanup</span>
+        {/if}
+      </p>
     </div>
   </div>
 
@@ -524,10 +723,24 @@
             <span class="stat-label">orphan presets (not used by any song)</span>
           </div>
         {/if}
+        {#if report.duplicates.length > 0}
+          <div class="stat stat--warn">
+            <span class="stat-value">{report.duplicates.length.toLocaleString()}</span>
+            <span class="stat-label">
+              duplicate groups ({report.duplicates.reduce((s, d) => s + d.files.length, 0)} files, {formatBytes(report.duplicateWastedBytes)} wasted)
+            </span>
+          </div>
+        {/if}
       </div>
 
-      {#if report.unusedSamples.length === 0 && report.missingReferences.length === 0 && report.unusedPresets.length === 0}
-        <p class="clean-msg">Your card is clean — every sample is referenced and every preset is used.</p>
+      {#if movedCount > 0}
+        <p class="moved-msg">
+          Moved {movedCount} file{movedCount === 1 ? "" : "s"} to {TRASH_DIR}/
+        </p>
+      {/if}
+
+      {#if report.unusedSamples.length === 0 && report.missingReferences.length === 0 && report.unusedPresets.length === 0 && (report.duplicates?.length ?? 0) === 0}
+        <p class="clean-msg">Your card is clean — every sample is referenced, every preset is used, no duplicates.</p>
       {/if}
     </div>
 
@@ -535,6 +748,19 @@
       <button class="btn btn-secondary btn-sm" onclick={() => { showList = !showList; }}>
         {showList ? "Hide" : "Show"} file list
       </button>
+      {#if canWrite && report.unusedSamples.length > 0}
+        <button
+          class="btn btn-accent btn-sm"
+          onclick={moveAllUnused}
+          disabled={movedCount === report.unusedSamples.length}
+        >
+          {movedCount === report.unusedSamples.length
+            ? `All moved to ${TRASH_DIR}/`
+            : movedCount > 0
+              ? `Move remaining ${report.unusedSamples.length - movedCount} to ${TRASH_DIR}/`
+              : `Move all ${report.unusedSamples.length} unused to ${TRASH_DIR}/`}
+        </button>
+      {/if}
       <button class="btn btn-secondary btn-sm" onclick={exportJson}>Export JSON</button>
       <button class="btn btn-secondary btn-sm" onclick={reset}>Scan another</button>
     </div>
@@ -547,6 +773,7 @@
             { id: "samples", label: `Unused (${report.unusedSamples.length})` },
             { id: "missing", label: `Missing (${report.missingReferences.length})` },
             { id: "presets", label: `Presets (${report.unusedPresets.length})` },
+            { id: "duplicates", label: `Duplicates (${report.duplicates.length})` },
           ] as tab}
             <button
               class="list-tab"
@@ -575,14 +802,28 @@
                         {@render folderChildren(child, fullPath)}
                         {#each child.files.sort() as file}
                           {@const filePath = fullPath ? `${fullPath}/${file}` : file}
-                          <div class="tree-file tree-file--playable">
-                            <button
-                              class="play-btn"
-                              class:play-btn--active={playingFile === filePath}
-                              onclick={() => playSample(filePath)}
-                              title={playingFile === filePath ? "Stop" : "Play"}
-                            >{playingFile === filePath ? "◼" : "▶"}</button>
-                            <span>{file}</span>
+                          {@const isMoved = movedFiles.has(filePath)}
+                          {@const isMoving = movingFiles.has(filePath)}
+                          <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
+                            {#if !isMoved}
+                              <button
+                                class="play-btn"
+                                class:play-btn--active={playingFile === filePath}
+                                onclick={() => playSample(filePath)}
+                                title={playingFile === filePath ? "Stop" : "Play"}
+                              >{playingFile === filePath ? "◼" : "▶"}</button>
+                            {/if}
+                            <span class="tree-file-name">{file}</span>
+                            {#if isMoved}
+                              <span class="tree-file-badge">moved</span>
+                            {:else if canWrite}
+                              <button
+                                class="move-btn"
+                                onclick={() => moveSample(filePath)}
+                                disabled={isMoving}
+                                title="Move to {TRASH_DIR}/"
+                              >{isMoving ? "..." : "×"}</button>
+                            {/if}
                           </div>
                         {/each}
                       </div>
@@ -658,7 +899,34 @@
           </div>
         {/if}
 
-        {#if filteredUnused.length === 0 && filteredMissing.length === 0 && filteredPresets.length === 0}
+        {#if filteredDuplicates.length > 0}
+          <div class="list-group">
+            <h4 class="list-heading">Duplicate samples ({filteredDuplicates.length} groups)</h4>
+            <div class="dup-list">
+              {#each filteredDuplicates as group, i}
+                <div class="dup-group">
+                  <div class="dup-header">
+                    <span class="dup-label">Group {i + 1}</span>
+                    <span class="dup-meta">{group.files.length} copies · {formatBytes(group.size)} each · {formatBytes(group.size * (group.files.length - 1))} wasted</span>
+                  </div>
+                  {#each group.files as filePath}
+                    <div class="tree-file tree-file--sample">
+                      <button
+                        class="play-btn"
+                        class:play-btn--active={playingFile === filePath}
+                        onclick={() => playSample(filePath)}
+                        title={playingFile === filePath ? "Stop" : "Play"}
+                      >{playingFile === filePath ? "◼" : "▶"}</button>
+                      <span class="tree-file-name" title={filePath}>{filePath}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if filteredUnused.length === 0 && filteredMissing.length === 0 && filteredPresets.length === 0 && filteredDuplicates.length === 0}
           <p class="list-empty">Nothing to list in this category.</p>
         {/if}
       </div>
@@ -711,12 +979,20 @@
     color: var(--accent);
     cursor: pointer;
     text-decoration: underline;
+    background: none;
+    border: none;
+    font: inherit;
+    padding: 0;
   }
   .dropzone-hint {
     font-size: 0.8rem;
     color: var(--text-secondary);
     margin-top: 0.75rem;
     opacity: 0.7;
+  }
+  .dropzone-hint-warn {
+    color: var(--accent);
+    opacity: 1;
   }
 
   .status-card, .error-card {
@@ -791,6 +1067,12 @@
   .clean-msg {
     margin-top: 1rem;
     font-size: 0.88rem;
+    color: var(--teal);
+  }
+  .moved-msg {
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    font-family: 'DM Mono', monospace;
     color: var(--teal);
   }
 
@@ -910,10 +1192,28 @@
     padding: 0.15rem 0;
     color: var(--text-secondary);
   }
-  .tree-file--playable {
+  .tree-file--sample {
     display: flex;
     align-items: center;
     gap: 0.35rem;
+  }
+  .tree-file--moved {
+    opacity: 0.4;
+  }
+  .tree-file-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tree-file-badge {
+    font-size: 0.65rem;
+    color: var(--teal);
+    border: 1px solid var(--teal);
+    border-radius: 3px;
+    padding: 0 0.3rem;
+    flex-shrink: 0;
   }
   .play-btn {
     flex-shrink: 0;
@@ -940,11 +1240,61 @@
     border-color: var(--accent);
     background: var(--accent-dim);
   }
+  .move-btn {
+    flex-shrink: 0;
+    width: 1.4rem;
+    height: 1.4rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+  }
+  .move-btn:hover {
+    color: #c47a7a;
+    border-color: #c47a7a;
+  }
+  .move-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
   .tree-file--missing {
     display: flex;
     flex-wrap: wrap;
     gap: 0 0.5rem;
     color: var(--text);
+  }
+
+  .dup-list {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    max-height: 500px;
+    overflow-y: auto;
+  }
+  .dup-group {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .dup-group:last-child { border-bottom: none; }
+  .dup-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-bottom: 0.3rem;
+  }
+  .dup-label {
+    font-weight: 500;
+    color: var(--text);
+  }
+  .dup-meta {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
   }
 
   .list-empty {
@@ -978,4 +1328,14 @@
     border: 1px solid var(--border);
   }
   .btn-secondary:hover { background: var(--surface); }
+  .btn-accent {
+    background: var(--accent);
+    color: var(--bg);
+    border: 1px solid var(--accent);
+  }
+  .btn-accent:hover { opacity: 0.9; }
+  .btn-accent:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 </style>
