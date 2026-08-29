@@ -600,7 +600,8 @@
   .knob-screen-left {
     flex-shrink: 0;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
+    align-self: flex-end;
   }
 
   .screen-area {
