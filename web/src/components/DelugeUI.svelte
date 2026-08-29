@@ -297,34 +297,35 @@
         </div>
       </div>
 
-      <!-- Black knob left of screen -->
-      <div class="knob-screen-left">
-        <div
-          class="knob-hitbox"
-          role="slider" tabindex="0"
-          aria-label={knobMeta[4].name}
-          aria-valuenow={knobValues[4]}
-          on:mousedown={(e) => handleKnobStart(4, e)}
-          on:touchstart={(e) => handleKnobStart(4, e)}
-          on:wheel={(e) => handleKnobWheel(4, e)}
-        >
-          <div class="knob-3d" style="transform: rotate({knobAngles[4]}deg)">
-            <div class="knob-barrel knob-barrel--black"></div>
-            <div class="knob-top knob-top--black">
-              <div class="knob-notch"></div>
+      <!-- Center group: black knob + logo/screen -->
+      <div class="center-group">
+        <div class="knob-screen-left">
+          <div
+            class="knob-hitbox"
+            role="slider" tabindex="0"
+            aria-label={knobMeta[4].name}
+            aria-valuenow={knobValues[4]}
+            on:mousedown={(e) => handleKnobStart(4, e)}
+            on:touchstart={(e) => handleKnobStart(4, e)}
+            on:wheel={(e) => handleKnobWheel(4, e)}
+          >
+            <div class="knob-3d" style="transform: rotate({knobAngles[4]}deg)">
+              <div class="knob-barrel knob-barrel--black"></div>
+              <div class="knob-top knob-top--black">
+                <div class="knob-notch"></div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- CENTER: logo + OLED screen -->
-      <div class="screen-area">
-        <div class="deluge-logo">✦ deluge</div>
-        <div class="oled-screen">
-          <div class="oled-text">{screenText}</div>
-          {#if screenSubtext}
-            <div class="oled-subtext">{screenSubtext}</div>
-          {/if}
+        <div class="screen-area">
+          <div class="deluge-logo">✦ deluge</div>
+          <div class="oled-screen">
+            <div class="oled-text">{screenText}</div>
+            {#if screenSubtext}
+              <div class="oled-subtext">{screenSubtext}</div>
+            {/if}
+          </div>
         </div>
       </div>
 
@@ -579,20 +580,27 @@
     box-shadow: 0 0 2px rgba(0,0,0,0.2);
   }
 
-  /* --- Black knob left of screen --- */
+  /* --- Center group: knob + logo/screen together --- */
+  .center-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    margin-right: auto;
+    transform: translateX(-12px);
+  }
+
   .knob-screen-left {
     flex-shrink: 0;
     display: flex;
     align-items: center;
   }
 
-  /* --- Center: logo + screen --- */
   .screen-area {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.25rem;
-    flex: 1;
     max-width: 240px;
     min-width: 0;
   }
