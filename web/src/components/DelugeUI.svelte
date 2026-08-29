@@ -158,6 +158,7 @@
       else if (pad.group === 'inspector') screenSubtext = 'visual arrangement timeline';
       else if (pad.group === 'midi') screenSubtext = 'MIDI → Deluge XML';
       else if (pad.group === 'about') screenSubtext = 'open source / community';
+      else if (pad.group === 'stats') screenSubtext = 'library analysis & stats';
       else if (pad.group === 'privacy') screenSubtext = 'no uploads, no server';
       else if (pad.group === 'github') screenSubtext = 'view source code';
       else screenSubtext = '';
@@ -331,9 +332,7 @@
           <div class="deluge-logo">✦ deluge</div>
           <div class="oled-screen">
             <div class="oled-text">{screenText}</div>
-            {#if screenSubtext}
-              <div class="oled-subtext">{screenSubtext}</div>
-            {/if}
+            <div class="oled-subtext">{screenSubtext || ' '}</div>
           </div>
         </div>
       </div>
