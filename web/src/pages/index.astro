@@ -1,0 +1,185 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Home" description="Browser-based tools for Synthstrom Deluge — score conversion, song inspection, MIDI import. No server, no upload, everything runs in your browser.">
+  <section class="hero">
+    <div class="hero-inner">
+      <p class="hero-eyebrow">For the Synthstrom Deluge</p>
+      <h1 class="hero-title">Your songs,<br>on the page.</h1>
+      <p class="hero-desc">Convert Deluge arrangements to sheet music, inspect song structure, import MIDI — all in the browser. Your files never leave your machine.</p>
+      <div class="hero-actions">
+        <a href="/score" class="btn btn-primary">Score Converter</a>
+        <a href="/inspector" class="btn btn-secondary">Song Inspector</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="tools">
+    <div class="tools-inner">
+      <div class="tool-card">
+        <div class="tool-icon">♫</div>
+        <h2 class="tool-name">Score Converter</h2>
+        <p class="tool-desc">Deluge XML → MusicXML. Open your arrangements in MuseScore, Dorico, or any notation app.</p>
+        <a href="/score" class="tool-link">Open tool →</a>
+      </div>
+      <div class="tool-card">
+        <div class="tool-icon">◧</div>
+        <h2 class="tool-name">Song Inspector</h2>
+        <p class="tool-desc">See your arrangement as a visual timeline — clips, instruments, structure — no DAW required.</p>
+        <a href="/inspector" class="tool-link">Open tool →</a>
+      </div>
+      <div class="tool-card tool-card--coming">
+        <div class="tool-icon">⇄</div>
+        <h2 class="tool-name">MIDI Import</h2>
+        <p class="tool-desc">MIDI → Deluge XML. Bring your compositions into the Deluge.</p>
+        <span class="tool-badge">Coming soon</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="privacy">
+    <div class="privacy-inner">
+      <h2 class="privacy-title">100% client-side</h2>
+      <p>Every tool runs entirely in your browser using <a href="https://pyodide.org" target="_blank" rel="noopener">Pyodide</a> — Python compiled to WebAssembly. No files are uploaded anywhere. No server. No account.</p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero {
+    padding: 5rem 1.5rem 4rem;
+    text-align: center;
+  }
+  .hero-inner {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .hero-eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1rem;
+  }
+  .hero-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 2.5rem;
+    font-weight: 500;
+    line-height: 1.15;
+    margin-bottom: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+  .hero-desc {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    line-height: 1.6;
+    max-width: 50ch;
+    margin: 0 auto 2rem;
+  }
+  .hero-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.65rem 1.5rem;
+    border-radius: 5px;
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn:hover { text-decoration: none; }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--ground);
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--border); }
+
+  .tools {
+    padding: 0 1.5rem 4rem;
+  }
+  .tools-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+  .tool-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .tool-card--coming { opacity: 0.6; }
+  .tool-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+  }
+  .tool-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+  .tool-desc {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    flex: 1;
+  }
+  .tool-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--accent);
+    margin-top: 0.25rem;
+  }
+  .tool-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+  }
+
+  .privacy {
+    padding: 3rem 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .privacy-inner {
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .privacy-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  .privacy-inner p {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  @media (max-width: 600px) {
+    .hero { padding: 3rem 1.5rem 2.5rem; }
+    .hero-title { font-size: 1.8rem; }
+  }
+</style>

@@ -1,0 +1,79 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ScoreConverter from '../components/ScoreConverter.svelte';
+---
+
+<BaseLayout title="Score Converter" description="Convert Deluge song arrangements to MusicXML sheet music — entirely in your browser.">
+  <section class="page-header">
+    <h1 class="page-title">Score Converter</h1>
+    <p class="page-desc">Convert your Deluge song arrangement to MusicXML. Open the result in MuseScore, Dorico, Finale, or any notation app.</p>
+  </section>
+  <section class="tool-area">
+    <ScoreConverter client:only="svelte" />
+  </section>
+  <section class="info">
+    <div class="info-inner">
+      <div class="info-block">
+        <h3>How it works</h3>
+        <p>Drop a <code>.XML</code> song file from your Deluge SD card. The tool parses the arrangement view — clip instances, note data, instruments — and generates MusicXML with proper time signatures, key signatures, and tuplet notation.</p>
+      </div>
+      <div class="info-block">
+        <h3>What you need</h3>
+        <p>A song file saved in <strong>arrangement view</strong>. Songs saved only in clip/session view don't have a timeline to convert. The file is the <code>.XML</code> in your <code>SONGS</code> folder on the SD card.</p>
+      </div>
+      <div class="info-block">
+        <h3>Privacy</h3>
+        <p>Your file is processed entirely in-browser using Python compiled to WebAssembly. Nothing is uploaded anywhere. First load downloads the runtime (~15MB, cached after that).</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page-header {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 2rem;
+    text-align: center;
+  }
+  .page-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  .page-desc {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  .tool-area {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+  }
+
+  .info {
+    border-top: 1px solid var(--border);
+    padding: 3rem 1.5rem;
+  }
+  .info-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+  }
+  .info-block h3 {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+  }
+  .info-block p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+</style>

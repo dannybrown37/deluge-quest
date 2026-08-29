@@ -1,0 +1,113 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Browser-based tools for Synthstrom Deluge" } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{title} — Deluge Tools</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <nav class="nav">
+      <div class="nav-inner">
+        <a href="/" class="nav-brand">
+          <span class="nav-logo">⬡</span>
+          <span class="nav-name">Deluge Tools</span>
+        </a>
+        <div class="nav-links">
+          <a href="/score" class="nav-link">Score</a>
+          <a href="/inspector" class="nav-link">Inspector</a>
+          <a href="/about" class="nav-link">About</a>
+        </div>
+      </div>
+    </nav>
+    <main>
+      <slot />
+    </main>
+    <footer class="footer">
+      <div class="footer-inner">
+        <p>Open source tools for the <a href="https://synthstrom.com/product/deluge/" target="_blank" rel="noopener">Synthstrom Deluge</a></p>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  @import '../styles/global.css';
+</style>
+
+<style>
+  .nav {
+    border-bottom: 1px solid var(--border);
+    background: var(--ground);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .nav-brand:hover { text-decoration: none; }
+  .nav-logo {
+    font-size: 1.2rem;
+    color: var(--accent);
+  }
+  .nav-name {
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .nav-links {
+    display: flex;
+    gap: 1.5rem;
+  }
+  .nav-link {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+  }
+  .nav-link:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  main {
+    min-height: calc(100vh - 56px - 80px);
+  }
+
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 1.5rem;
+  }
+  .footer-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+</style>

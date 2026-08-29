@@ -1,0 +1,61 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="About" description="About Deluge Tools — open source utilities for the Synthstrom Deluge.">
+  <section class="about">
+    <h1 class="about-title">About</h1>
+    <p>Deluge Tools is an open-source project for the <a href="https://synthstrom.com/product/deluge/" target="_blank" rel="noopener">Synthstrom Deluge</a> community.</p>
+    <p>The Deluge stores songs as XML files on an SD card. These tools parse that format and convert it into standard music formats — so you can see your arrangements as sheet music, inspect song structure, or import MIDI compositions.</p>
+    <h2>How it works</h2>
+    <p>Everything runs in your browser. The Python conversion library is compiled to WebAssembly via <a href="https://pyodide.org" target="_blank" rel="noopener">Pyodide</a>, so your files never leave your machine. No server, no account, no upload.</p>
+    <h2>Source</h2>
+    <p>The code is on GitHub. Contributions welcome — especially from the Deluge community.</p>
+    <h2>Built with</h2>
+    <ul>
+      <li><a href="https://astro.build" target="_blank" rel="noopener">Astro</a> + <a href="https://svelte.dev" target="_blank" rel="noopener">Svelte</a></li>
+      <li><a href="https://pyodide.org" target="_blank" rel="noopener">Pyodide</a> (Python in WebAssembly)</li>
+      <li>Hosted on <a href="https://vercel.com" target="_blank" rel="noopener">Vercel</a></li>
+    </ul>
+  </section>
+</BaseLayout>
+
+<style>
+  .about {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 5rem;
+  }
+  .about-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+  }
+  .about h2 {
+    font-family: 'DM Mono', monospace;
+    font-size: 1rem;
+    font-weight: 500;
+    margin-top: 2rem;
+    margin-bottom: 0.5rem;
+  }
+  .about p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 0.75rem;
+  }
+  .about ul {
+    list-style: none;
+    padding: 0;
+  }
+  .about li {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    padding: 0.25rem 0;
+  }
+  .about li::before {
+    content: "→ ";
+    color: var(--accent);
+  }
+</style>
