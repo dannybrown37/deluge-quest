@@ -79,18 +79,9 @@
           color = PURPLE; glowIntensity = 0.7; active = true;
           link = '/stats'; label = 'Song Stats'; group = 'stats';
         }
-        else if (r === 6 && c === 15) {
-          color = WHITE; glowIntensity = 0.5; active = true;
-          link = '/about'; label = 'About'; group = 'about';
-        }
         else if (r === 6 && c === 14) {
           color = GREEN; glowIntensity = 0.5; active = true;
           label = '100% client-side'; group = 'privacy';
-        }
-        else if (r === 6 && c === 0) {
-          color = PURPLE; glowIntensity = 0.5; active = true;
-          link = 'https://github.com/dannybrown37/deluge';
-          label = 'GitHub'; group = 'github';
         }
 
         row.push({ row: r, col: c, color, glowIntensity, active, link, label, group });
@@ -102,11 +93,23 @@
     for (let r = 0; r < ROWS; r++) {
       const row: Pad[] = [];
       for (let c = 0; c < SIDEBAR_COLS; c++) {
-        row.push({
-          row: r, col: c,
-          color: OFF, glowIntensity: 0,
-          active: false,
-        });
+        let color = OFF;
+        let glowIntensity = 0;
+        let active = false;
+        let link: string | undefined;
+        let label: string | undefined;
+        let group: string | undefined;
+
+        if (r === 6 && c === 0) {
+          color = PURPLE; glowIntensity = 0.5; active = true;
+          link = 'https://github.com/dannybrown37/deluge';
+          label = 'GitHub'; group = 'github';
+        } else if (r === 6 && c === 1) {
+          color = WHITE; glowIntensity = 0.5; active = true;
+          link = '/about'; label = 'About'; group = 'about';
+        }
+
+        row.push({ row: r, col: c, color, glowIntensity, active, link, label, group });
       }
       sidebarPads.push(row);
     }
@@ -393,8 +396,12 @@
             <button
               class="pad"
               class:pad--lit={pad.glowIntensity > 0}
+              class:pad--clickable={!!pad.link}
               style="--glow-color: {pad.color}; --glow-intensity: {pad.glowIntensity}"
-              aria-label="Sidebar {pad.row + 1}-{pad.col + 1}"
+              on:mouseenter={() => handlePadHover(pad)}
+              on:mouseleave={handlePadLeave}
+              on:click={() => handlePadClick(pad)}
+              aria-label={pad.label || `Sidebar ${pad.row + 1}-${pad.col + 1}`}
             ></button>
           {/each}
         {/each}
