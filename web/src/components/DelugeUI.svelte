@@ -34,8 +34,8 @@
     { name: 'scroll',   style: 'gold'  },  // 2: left upper gold
     { name: 'encoder',  style: 'gold'  },  // 3: left lower gold
     { name: 'navigate', style: 'black' },  // 4: black knob left of screen
-    { name: 'tempo',    style: 'gold'  },  // 5: right gold
-    { name: 'output',   style: 'black' },  // 6: right black
+    { name: 'tempo',    style: 'black' },  // 5: right black (left position)
+    { name: 'output',   style: 'gold'  },  // 6: right gold (rightmost)
   ];
 
   let screenText = 'DELUGE TOOLS';
@@ -215,78 +215,82 @@
     <!-- Control panel: knobs + logo + screen only -->
     <div class="control-panel">
 
-      <!-- LEFT: 2 black + 2 gold knobs, diagonal pairs -->
+      <!-- LEFT: 2 black + 2 gold knobs as separate diagonal columns -->
       <div class="knobs-left">
-        <!-- Upper row (offset right): black + gold -->
-        <div class="knob-pair knob-pair--upper">
-          <!-- Upper black -->
-          <div
-            class="knob-hitbox"
-            role="slider" tabindex="0"
-            aria-label={knobMeta[0].name}
-            aria-valuenow={knobValues[0]}
-            on:mousedown={(e) => handleKnobStart(0, e)}
-            on:touchstart={(e) => handleKnobStart(0, e)}
-            on:wheel={(e) => handleKnobWheel(0, e)}
-          >
-            <div class="knob-3d" style="transform: rotate({knobAngles[0]}deg)">
-              <div class="knob-barrel knob-barrel--black"></div>
-              <div class="knob-top knob-top--black">
-                <div class="knob-notch"></div>
+        <!-- Black column: 2 knobs, diagonal offset -->
+        <div class="knob-col">
+          <div class="knob-col-upper">
+            <div
+              class="knob-hitbox"
+              role="slider" tabindex="0"
+              aria-label={knobMeta[0].name}
+              aria-valuenow={knobValues[0]}
+              on:mousedown={(e) => handleKnobStart(0, e)}
+              on:touchstart={(e) => handleKnobStart(0, e)}
+              on:wheel={(e) => handleKnobWheel(0, e)}
+            >
+              <div class="knob-3d" style="transform: rotate({knobAngles[0]}deg)">
+                <div class="knob-barrel knob-barrel--black"></div>
+                <div class="knob-top knob-top--black">
+                  <div class="knob-notch"></div>
+                </div>
               </div>
             </div>
           </div>
-          <!-- Upper gold -->
-          <div
-            class="knob-hitbox"
-            role="slider" tabindex="0"
-            aria-label={knobMeta[2].name}
-            aria-valuenow={knobValues[2]}
-            on:mousedown={(e) => handleKnobStart(2, e)}
-            on:touchstart={(e) => handleKnobStart(2, e)}
-            on:wheel={(e) => handleKnobWheel(2, e)}
-          >
-            <div class="knob-3d" style="transform: rotate({knobAngles[2]}deg)">
-              <div class="knob-barrel knob-barrel--gold"></div>
-              <div class="knob-top knob-top--gold">
-                <div class="knob-notch knob-notch--dark"></div>
+          <div class="knob-col-lower">
+            <div
+              class="knob-hitbox"
+              role="slider" tabindex="0"
+              aria-label={knobMeta[1].name}
+              aria-valuenow={knobValues[1]}
+              on:mousedown={(e) => handleKnobStart(1, e)}
+              on:touchstart={(e) => handleKnobStart(1, e)}
+              on:wheel={(e) => handleKnobWheel(1, e)}
+            >
+              <div class="knob-3d" style="transform: rotate({knobAngles[1]}deg)">
+                <div class="knob-barrel knob-barrel--black"></div>
+                <div class="knob-top knob-top--black">
+                  <div class="knob-notch"></div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <!-- Lower row: black + gold -->
-        <div class="knob-pair knob-pair--lower">
-          <!-- Lower black -->
-          <div
-            class="knob-hitbox"
-            role="slider" tabindex="0"
-            aria-label={knobMeta[1].name}
-            aria-valuenow={knobValues[1]}
-            on:mousedown={(e) => handleKnobStart(1, e)}
-            on:touchstart={(e) => handleKnobStart(1, e)}
-            on:wheel={(e) => handleKnobWheel(1, e)}
-          >
-            <div class="knob-3d" style="transform: rotate({knobAngles[1]}deg)">
-              <div class="knob-barrel knob-barrel--black"></div>
-              <div class="knob-top knob-top--black">
-                <div class="knob-notch"></div>
+        <!-- Gold column: 2 knobs, same diagonal offset -->
+        <div class="knob-col">
+          <div class="knob-col-upper">
+            <div
+              class="knob-hitbox"
+              role="slider" tabindex="0"
+              aria-label={knobMeta[2].name}
+              aria-valuenow={knobValues[2]}
+              on:mousedown={(e) => handleKnobStart(2, e)}
+              on:touchstart={(e) => handleKnobStart(2, e)}
+              on:wheel={(e) => handleKnobWheel(2, e)}
+            >
+              <div class="knob-3d" style="transform: rotate({knobAngles[2]}deg)">
+                <div class="knob-barrel knob-barrel--gold"></div>
+                <div class="knob-top knob-top--gold">
+                  <div class="knob-notch knob-notch--dark"></div>
+                </div>
               </div>
             </div>
           </div>
-          <!-- Lower gold -->
-          <div
-            class="knob-hitbox"
-            role="slider" tabindex="0"
-            aria-label={knobMeta[3].name}
-            aria-valuenow={knobValues[3]}
-            on:mousedown={(e) => handleKnobStart(3, e)}
-            on:touchstart={(e) => handleKnobStart(3, e)}
-            on:wheel={(e) => handleKnobWheel(3, e)}
-          >
-            <div class="knob-3d" style="transform: rotate({knobAngles[3]}deg)">
-              <div class="knob-barrel knob-barrel--gold"></div>
-              <div class="knob-top knob-top--gold">
-                <div class="knob-notch knob-notch--dark"></div>
+          <div class="knob-col-lower">
+            <div
+              class="knob-hitbox"
+              role="slider" tabindex="0"
+              aria-label={knobMeta[3].name}
+              aria-valuenow={knobValues[3]}
+              on:mousedown={(e) => handleKnobStart(3, e)}
+              on:touchstart={(e) => handleKnobStart(3, e)}
+              on:wheel={(e) => handleKnobWheel(3, e)}
+            >
+              <div class="knob-3d" style="transform: rotate({knobAngles[3]}deg)">
+                <div class="knob-barrel knob-barrel--gold"></div>
+                <div class="knob-top knob-top--gold">
+                  <div class="knob-notch knob-notch--dark"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -324,9 +328,9 @@
         </div>
       </div>
 
-      <!-- RIGHT: gold + black knobs, horizontally parallel -->
+      <!-- RIGHT: black + gold knobs, horizontally parallel (gold on right) -->
       <div class="knobs-right">
-        <!-- Gold (tempo) -->
+        <!-- Black (tempo) -->
         <div
           class="knob-hitbox"
           role="slider" tabindex="0"
@@ -337,13 +341,13 @@
           on:wheel={(e) => handleKnobWheel(5, e)}
         >
           <div class="knob-3d" style="transform: rotate({knobAngles[5]}deg)">
-            <div class="knob-barrel knob-barrel--gold"></div>
-            <div class="knob-top knob-top--gold">
-              <div class="knob-notch knob-notch--dark"></div>
+            <div class="knob-barrel knob-barrel--black"></div>
+            <div class="knob-top knob-top--black">
+              <div class="knob-notch"></div>
             </div>
           </div>
         </div>
-        <!-- Black (output level) -->
+        <!-- Gold (output level) -->
         <div
           class="knob-hitbox"
           role="slider" tabindex="0"
@@ -354,9 +358,9 @@
           on:wheel={(e) => handleKnobWheel(6, e)}
         >
           <div class="knob-3d" style="transform: rotate({knobAngles[6]}deg)">
-            <div class="knob-barrel knob-barrel--black"></div>
-            <div class="knob-top knob-top--black">
-              <div class="knob-notch"></div>
+            <div class="knob-barrel knob-barrel--gold"></div>
+            <div class="knob-top knob-top--gold">
+              <div class="knob-notch knob-notch--dark"></div>
             </div>
           </div>
         </div>
@@ -446,23 +450,22 @@
     padding: 0.25rem 0;
   }
 
-  /* --- Left knobs: 2 black + 2 gold, diagonal pairs --- */
+  /* --- Left knobs: black col + gold col, each with diagonal offset --- */
   .knobs-left {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    gap: 10px;
     flex-shrink: 0;
   }
 
-  .knob-pair {
+  .knob-col {
     display: flex;
-    gap: 6px;
-    align-items: center;
+    flex-direction: column;
+    gap: 2px;
   }
 
-  /* Upper row offset right to create the diagonal */
-  .knob-pair--upper {
-    margin-left: 30px;
+  /* Upper knob in each column offset right for diagonal */
+  .knob-col-upper {
+    margin-left: 22px;
   }
 
   /* --- Right knobs: gold + black, same row --- */
@@ -703,7 +706,8 @@
     .knob-notch { height: 8px; top: 3px; }
     .knob-barrel--gold { box-shadow: 0 3px 1px #7A5818, 0 4px 2px rgba(0,0,0,0.5); }
     .knob-barrel--black { box-shadow: 0 3px 1px #1A1A1E, 0 4px 2px rgba(0,0,0,0.5); }
-    .knob-pair--upper { margin-left: 20px; }
+    .knob-col-upper { margin-left: 16px; }
+    .knobs-left { gap: 6px; }
     .knobs-right { gap: 6px; }
     .pad-grid { gap: 2px; }
   }
@@ -716,7 +720,8 @@
     .knob-notch { height: 6px; top: 2px; width: 2px; }
     .knob-barrel--gold { box-shadow: 0 2px 1px #7A5818, 0 3px 2px rgba(0,0,0,0.5); }
     .knob-barrel--black { box-shadow: 0 2px 1px #1A1A1E, 0 3px 2px rgba(0,0,0,0.5); }
-    .knob-pair--upper { margin-left: 14px; }
+    .knob-col-upper { margin-left: 10px; }
+    .knobs-left { gap: 4px; }
     .knobs-right { gap: 4px; }
     .oled-screen { padding: 0.25rem 0.4rem; }
     .oled-text { font-size: 0.6rem; }
