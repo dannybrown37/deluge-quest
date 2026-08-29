@@ -55,10 +55,10 @@
 
   const TOOLS: { group: string; label: string; link: string; color: string; subtext: string }[] = [
     { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: PURPLE, subtext: 'library analysis & stats' },
-    { group: 'clean',     label: 'Card Clean',      link: '/clean',     color: WHITE,  subtext: 'find unused samples' },
+    { group: 'inspector', label: 'Song Inspector',   link: '/inspector', color: TEAL,   subtext: 'visual arrangement timeline' },
     { group: 'score',     label: 'Score Converter',  link: '/score',     color: GOLD,   subtext: 'Deluge XML → MusicXML' },
     { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: GREEN,  subtext: 'MIDI → Deluge XML' },
-    { group: 'inspector', label: 'Song Inspector',   link: '/inspector', color: TEAL,   subtext: 'visual arrangement timeline' },
+    { group: 'clean',     label: 'Card Analysis',    link: '/clean',     color: WHITE,  subtext: 'find unused samples' },
   ];
 
   const FUTURE_TOOLS: { group: string; label: string; subtext: string }[] = [

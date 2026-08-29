@@ -331,6 +331,49 @@
   let filteredPresets = $derived(
     listCategory === "all" || listCategory === "presets" ? (report?.unusedPresets ?? []) : []
   );
+
+  interface FolderNode {
+    name: string;
+    files: string[];
+    children: Map<string, FolderNode>;
+    totalFiles: number;
+  }
+
+  function buildTree(paths: string[]): FolderNode {
+    const root: FolderNode = { name: "", files: [], children: new Map(), totalFiles: paths.length };
+    for (const p of paths) {
+      const parts = p.split("/");
+      const fileName = parts.pop()!;
+      let node = root;
+      for (const part of parts) {
+        if (!node.children.has(part)) {
+          node.children.set(part, { name: part, files: [], children: new Map(), totalFiles: 0 });
+        }
+        node = node.children.get(part)!;
+      }
+      node.files.push(fileName);
+    }
+    function computeTotals(node: FolderNode): number {
+      let total = node.files.length;
+      for (const child of node.children.values()) {
+        total += computeTotals(child);
+      }
+      node.totalFiles = total;
+      return total;
+    }
+    computeTotals(root);
+    return root;
+  }
+
+  let unusedTree = $derived(buildTree(filteredUnused));
+  let expandedDirs = $state(new Set<string>());
+
+  function toggleDir(path: string) {
+    const next = new Set(expandedDirs);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    expandedDirs = next;
+  }
 </script>
 
 {#if state === "idle"}
@@ -434,11 +477,30 @@
         {#if filteredUnused.length > 0}
           <div class="list-group">
             <h4 class="list-heading">Unused samples ({filteredUnused.length})</h4>
-            <ul class="file-list">
-              {#each filteredUnused as f}
-                <li>{f}</li>
-              {/each}
-            </ul>
+            <div class="file-tree">
+              {#snippet folderChildren(node: FolderNode, path: string)}
+                {#each [...node.children.entries()].sort((a, b) => b[1].totalFiles - a[1].totalFiles) as [name, child]}
+                  {@const fullPath = path ? `${path}/${name}` : name}
+                  {@const isOpen = expandedDirs.has(fullPath)}
+                  <div class="tree-item">
+                    <button class="tree-dir" onclick={() => toggleDir(fullPath)}>
+                      <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
+                      <span class="tree-dir-name">{name}/</span>
+                      <span class="tree-count">{child.totalFiles}</span>
+                    </button>
+                    {#if isOpen}
+                      <div class="tree-children">
+                        {@render folderChildren(child, fullPath)}
+                        {#each child.files.sort() as file}
+                          <div class="tree-file">{file}</div>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
+              {/snippet}
+              {@render folderChildren(unusedTree, "")}
+            </div>
           </div>
         {/if}
 
@@ -671,6 +733,55 @@
     font-size: 0.72rem;
     margin-left: 0.5rem;
   }
+  .file-tree {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    max-height: 500px;
+    overflow-y: auto;
+  }
+  .tree-item {
+    margin: 0;
+  }
+  .tree-dir {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+    padding: 0.25rem 0;
+    border: none;
+    background: none;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    text-align: left;
+  }
+  .tree-dir:hover {
+    color: var(--accent);
+  }
+  .tree-arrow {
+    width: 0.8rem;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+  }
+  .tree-dir-name {
+    font-weight: 500;
+  }
+  .tree-count {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    margin-left: auto;
+  }
+  .tree-children {
+    padding-left: 1.1rem;
+    border-left: 1px solid var(--border);
+    margin-left: 0.35rem;
+  }
+  .tree-file {
+    padding: 0.15rem 0;
+    color: var(--text-secondary);
+  }
+
   .list-empty {
     padding: 1.5rem 1rem;
     text-align: center;
