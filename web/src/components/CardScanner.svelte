@@ -366,6 +366,40 @@
   }
 
   let unusedTree = $derived(buildTree(filteredUnused));
+  let presetsTree = $derived(buildTree(filteredPresets));
+
+  interface MissingFolderNode {
+    name: string;
+    entries: MissingRef[];
+    children: Map<string, MissingFolderNode>;
+    totalEntries: number;
+  }
+
+  function buildMissingTree(refs: MissingRef[]): MissingFolderNode {
+    const root: MissingFolderNode = { name: "", entries: [], children: new Map(), totalEntries: refs.length };
+    for (const ref of refs) {
+      const parts = ref.sample.split("/");
+      const fileName = parts.pop()!;
+      let node = root;
+      for (const part of parts) {
+        if (!node.children.has(part)) {
+          node.children.set(part, { name: part, entries: [], children: new Map(), totalEntries: 0 });
+        }
+        node = node.children.get(part)!;
+      }
+      node.entries.push({ sample: fileName, referencedBy: ref.referencedBy });
+    }
+    function computeTotals(node: MissingFolderNode): number {
+      let total = node.entries.length;
+      for (const child of node.children.values()) total += computeTotals(child);
+      node.totalEntries = total;
+      return total;
+    }
+    computeTotals(root);
+    return root;
+  }
+
+  let missingTree = $derived(buildMissingTree(filteredMissing));
   let expandedDirs = $state(new Set<string>());
 
   function toggleDir(path: string) {
@@ -507,25 +541,63 @@
         {#if filteredMissing.length > 0}
           <div class="list-group">
             <h4 class="list-heading">Broken references ({filteredMissing.length})</h4>
-            <ul class="file-list">
-              {#each filteredMissing as m}
-                <li>
-                  <span class="missing-sample">{m.sample}</span>
-                  <span class="missing-source">← {m.referencedBy.join(", ")}</span>
-                </li>
-              {/each}
-            </ul>
+            <div class="file-tree">
+              {#snippet missingChildren(node: MissingFolderNode, path: string)}
+                {#each [...node.children.entries()].sort((a, b) => b[1].totalEntries - a[1].totalEntries) as [name, child]}
+                  {@const fullPath = path ? `${path}/${name}` : name}
+                  {@const isOpen = expandedDirs.has(fullPath)}
+                  <div class="tree-item">
+                    <button class="tree-dir" onclick={() => toggleDir(fullPath)}>
+                      <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
+                      <span class="tree-dir-name">{name}/</span>
+                      <span class="tree-count">{child.totalEntries}</span>
+                    </button>
+                    {#if isOpen}
+                      <div class="tree-children">
+                        {@render missingChildren(child, fullPath)}
+                        {#each child.entries.sort((a, b) => a.sample.localeCompare(b.sample)) as entry}
+                          <div class="tree-file tree-file--missing">
+                            <span>{entry.sample}</span>
+                            <span class="missing-source">← {entry.referencedBy.join(", ")}</span>
+                          </div>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
+              {/snippet}
+              {@render missingChildren(missingTree, "")}
+            </div>
           </div>
         {/if}
 
         {#if filteredPresets.length > 0}
           <div class="list-group">
             <h4 class="list-heading">Orphan presets ({filteredPresets.length})</h4>
-            <ul class="file-list">
-              {#each filteredPresets as f}
-                <li>{f}</li>
-              {/each}
-            </ul>
+            <div class="file-tree">
+              {#snippet presetChildren(node: FolderNode, path: string)}
+                {#each [...node.children.entries()].sort((a, b) => b[1].totalFiles - a[1].totalFiles) as [name, child]}
+                  {@const fullPath = path ? `${path}/${name}` : name}
+                  {@const isOpen = expandedDirs.has(fullPath)}
+                  <div class="tree-item">
+                    <button class="tree-dir" onclick={() => toggleDir(fullPath)}>
+                      <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
+                      <span class="tree-dir-name">{name}/</span>
+                      <span class="tree-count">{child.totalFiles}</span>
+                    </button>
+                    {#if isOpen}
+                      <div class="tree-children">
+                        {@render presetChildren(child, fullPath)}
+                        {#each child.files.sort() as file}
+                          <div class="tree-file">{file}</div>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
+              {/snippet}
+              {@render presetChildren(presetsTree, "")}
+            </div>
           </div>
         {/if}
 
@@ -780,6 +852,12 @@
   .tree-file {
     padding: 0.15rem 0;
     color: var(--text-secondary);
+  }
+  .tree-file--missing {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.5rem;
+    color: var(--text);
   }
 
   .list-empty {
