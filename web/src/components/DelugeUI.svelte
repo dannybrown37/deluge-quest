@@ -55,16 +55,16 @@
 
   const TOOLS: { group: string; label: string; link: string; color: string; subtext: string }[] = [
     { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: PURPLE, subtext: 'library analysis & stats' },
-    { group: 'score',     label: 'Score Converter', link: '/score',     color: GOLD,   subtext: 'Deluge XML → MusicXML' },
-    { group: 'midi',      label: 'MIDI Import',     link: '/import',    color: GREEN,  subtext: 'MIDI → Deluge XML' },
-    { group: 'inspector', label: 'Song Inspector',  link: '/inspector', color: TEAL,   subtext: 'visual arrangement timeline' },
+    { group: 'clean',     label: 'Card Clean',      link: '/clean',     color: WHITE,  subtext: 'find unused samples' },
+    { group: 'score',     label: 'Score Converter',  link: '/score',     color: GOLD,   subtext: 'Deluge XML → MusicXML' },
+    { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: GREEN,  subtext: 'MIDI → Deluge XML' },
+    { group: 'inspector', label: 'Song Inspector',   link: '/inspector', color: TEAL,   subtext: 'visual arrangement timeline' },
   ];
 
   const FUTURE_TOOLS: { group: string; label: string; subtext: string }[] = [
     { group: 'future-1', label: 'Coming Soon', subtext: '' },
     { group: 'future-2', label: 'Coming Soon', subtext: '' },
     { group: 'future-3', label: 'Coming Soon', subtext: '' },
-    { group: 'future-4', label: 'Coming Soon', subtext: '' },
   ];
 
   function toolAt(r: number, c: number): typeof TOOLS[number] | undefined {
@@ -78,7 +78,9 @@
     const blockRow = Math.floor(r / 4);
     if (blockRow !== 1) return undefined;
     const blockCol = Math.floor(c / 4);
-    const idx = blockCol;
+    const toolsOnRow1 = TOOLS.length - 4;
+    const idx = blockCol - toolsOnRow1;
+    if (idx < 0) return undefined;
     return FUTURE_TOOLS[idx];
   }
 

@@ -133,7 +133,7 @@ fn print_list(report: &CardReport, category: Option<&ListCategory>) {
         if !report.missing_references.is_empty() {
             println!("\nBroken references ({}):", report.missing_references.len());
             for m in &report.missing_references {
-                println!("  {m}");
+                println!("  {} ← {}", m.sample, m.referenced_by.join(", "));
             }
         }
     }
@@ -263,12 +263,17 @@ fn run(args: Cli) {
     };
 
     if args.json {
+        let missing_json: Vec<serde_json::Value> = report
+            .missing_references
+            .iter()
+            .map(|m| json!({ "sample": m.sample, "referenced_by": m.referenced_by }))
+            .collect();
         let j = json!({
             "total_samples": report.total_samples,
             "total_samples_bytes": report.total_samples_bytes,
             "total_references": report.total_references,
             "unused_samples": report.unused_samples,
-            "missing_references": report.missing_references,
+            "missing_references": missing_json,
             "unused_presets": report.unused_presets,
             "reclaimable_bytes": report.reclaimable_bytes,
         });

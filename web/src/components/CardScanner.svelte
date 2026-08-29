@@ -1,12 +1,17 @@
 <script lang="ts">
   type State = "idle" | "processing" | "done" | "error";
 
+  interface MissingRef {
+    sample: string;
+    referencedBy: string[];
+  }
+
   interface CardReport {
     totalSamples: number;
     totalSamplesBytes: number;
     totalReferences: number;
     unusedSamples: string[];
-    missingReferences: string[];
+    missingReferences: MissingRef[];
     unusedPresets: string[];
     reclaimableBytes: number;
   }
@@ -122,7 +127,7 @@
     progress = "Scanning XML references...";
     await new Promise(r => setTimeout(r, 0));
 
-    const allRefs = new Set<string>();
+    const refSources = new Map<string, Set<string>>();
     const xmlFiles: [string, File][] = [];
     for (const [path, file] of filesByPath) {
       const rel = stripRoot(path);
@@ -133,10 +138,11 @@
     }
 
     let xmlDone = 0;
-    for (const [, file] of xmlFiles) {
+    for (const [rel, file] of xmlFiles) {
       const text = await file.text();
       for (const ref of extractFileRefs(text)) {
-        allRefs.add(ref);
+        if (!refSources.has(ref)) refSources.set(ref, new Set());
+        refSources.get(ref)!.add(rel);
       }
       xmlDone++;
       if (xmlDone % 20 === 0) {
@@ -145,10 +151,16 @@
       }
     }
 
-    const sampleRefs = new Set([...allRefs].filter(r => r.startsWith("SAMPLES/")));
+    const sampleRefs = new Map<string, Set<string>>();
+    for (const [ref, sources] of refSources) {
+      if (ref.startsWith("SAMPLES/")) sampleRefs.set(ref, sources);
+    }
     const sampleKeys = new Set(allSamples.keys());
     const unused = [...sampleKeys].filter(k => !sampleRefs.has(k)).sort();
-    const missing = [...sampleRefs].filter(r => !sampleKeys.has(r)).sort();
+    const missing: MissingRef[] = [...sampleRefs.entries()]
+      .filter(([r]) => !sampleKeys.has(r))
+      .map(([r, sources]) => ({ sample: r, referencedBy: [...sources].sort() }))
+      .sort((a, b) => a.sample.localeCompare(b.sample));
     const totalBytes = [...allSamples.values()].reduce((a, b) => a + b, 0);
     const reclaimable = unused.reduce((sum, k) => sum + (allSamples.get(k) ?? 0), 0);
 
@@ -189,6 +201,7 @@
       reclaimableBytes: reclaimable,
     };
     state = "done";
+    saveToSession();
   }
 
   function formatBytes(n: number): string {
@@ -257,7 +270,7 @@
       total_samples_bytes: report.totalSamplesBytes,
       total_references: report.totalReferences,
       unused_samples: report.unusedSamples,
-      missing_references: report.missingReferences,
+      missing_references: report.missingReferences.map(m => ({ sample: m.sample, referenced_by: m.referencedBy })),
       unused_presets: report.unusedPresets,
       reclaimable_bytes: report.reclaimableBytes,
     };
@@ -270,12 +283,43 @@
     URL.revokeObjectURL(url);
   }
 
+  const CACHE_KEY = "deluge-clean-report";
+  const CACHE_KEY_NAME = "deluge-clean-name";
+
+  function saveToSession() {
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(report));
+      sessionStorage.setItem(CACHE_KEY_NAME, cardName);
+    } catch {}
+  }
+
+  function restoreFromSession(): boolean {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (!raw) return false;
+      const cached = JSON.parse(raw);
+      if (!cached) return false;
+      report = cached;
+      cardName = sessionStorage.getItem(CACHE_KEY_NAME) ?? "";
+      state = "done";
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  restoreFromSession();
+
   function reset() {
     state = "idle";
     report = null;
     errorMsg = "";
     cardName = "";
     showList = false;
+    try {
+      sessionStorage.removeItem(CACHE_KEY);
+      sessionStorage.removeItem(CACHE_KEY_NAME);
+    } catch {}
   }
 
   let filteredUnused = $derived(
@@ -402,8 +446,11 @@
           <div class="list-group">
             <h4 class="list-heading">Broken references ({filteredMissing.length})</h4>
             <ul class="file-list">
-              {#each filteredMissing as f}
-                <li>{f}</li>
+              {#each filteredMissing as m}
+                <li>
+                  <span class="missing-sample">{m.sample}</span>
+                  <span class="missing-source">← {m.referencedBy.join(", ")}</span>
+                </li>
               {/each}
             </ul>
           </div>
@@ -615,6 +662,14 @@
   .file-list li {
     padding: 0.2rem 0;
     color: var(--text);
+  }
+  .missing-sample {
+    color: var(--text);
+  }
+  .missing-source {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    margin-left: 0.5rem;
   }
   .list-empty {
     padding: 1.5rem 1rem;

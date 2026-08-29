@@ -10,13 +10,19 @@ const AUDIO_EXTENSIONS: &[&str] = &["wav", "aif", "aiff"];
 const XML_DIRS: &[&str] = &["SONGS", "KITS", "SYNTHS"];
 const FILE_ATTRS: &[&[u8]] = &[b"fileName", b"filePath"];
 
+#[derive(Debug, Clone)]
+pub struct MissingRef {
+    pub sample: String,
+    pub referenced_by: Vec<String>,
+}
+
 #[derive(Debug, Default)]
 pub struct CardReport {
     pub total_samples: usize,
     pub total_samples_bytes: u64,
     pub total_references: usize,
     pub unused_samples: Vec<String>,
-    pub missing_references: Vec<String>,
+    pub missing_references: Vec<MissingRef>,
     pub unused_presets: Vec<String>,
     pub reclaimable_bytes: u64,
 }
@@ -115,12 +121,18 @@ fn get_attr(e: &quick_xml::events::BytesStart, name: &[u8]) -> Option<String> {
     None
 }
 
-pub fn scan_xml_references(card_root: &Path) -> HashSet<String> {
-    let mut refs = HashSet::new();
+pub fn scan_xml_references(card_root: &Path) -> HashMap<String, Vec<String>> {
+    let mut refs: HashMap<String, Vec<String>> = HashMap::new();
     for dirname in XML_DIRS {
         let dir = card_root.join(dirname);
         for xml_path in walk_xml_files(&dir) {
-            refs.extend(extract_file_refs(&xml_path));
+            let source = xml_path
+                .strip_prefix(card_root)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| xml_path.to_string_lossy().to_string());
+            for r in extract_file_refs(&xml_path) {
+                refs.entry(r).or_default().push(source.clone());
+            }
         }
     }
     refs
@@ -170,23 +182,31 @@ pub fn scan_card(
 
     progress("Scanning XML references...");
     let all_refs = scan_xml_references(card_root);
-    let sample_refs: HashSet<String> = all_refs
-        .iter()
-        .filter(|r| r.starts_with("SAMPLES/"))
-        .cloned()
+    let sample_refs: HashMap<String, Vec<String>> = all_refs
+        .into_iter()
+        .filter(|(r, _)| r.starts_with("SAMPLES/"))
         .collect();
 
     let sample_keys: HashSet<&String> = all_samples.keys().collect();
     let unused: HashSet<String> = sample_keys
         .iter()
-        .filter(|k| !sample_refs.contains(**k))
+        .filter(|k| !sample_refs.contains_key(**k))
         .map(|k| (*k).clone())
         .collect();
-    let missing: HashSet<String> = sample_refs
+    let mut missing: Vec<MissingRef> = sample_refs
         .iter()
-        .filter(|r| !sample_keys.contains(r))
-        .cloned()
+        .filter(|(r, _)| !sample_keys.contains(r))
+        .map(|(r, sources)| {
+            let mut sorted_sources = sources.clone();
+            sorted_sources.sort();
+            sorted_sources.dedup();
+            MissingRef {
+                sample: r.clone(),
+                referenced_by: sorted_sources,
+            }
+        })
         .collect();
+    missing.sort_by(|a, b| a.sample.cmp(&b.sample));
 
     let total_bytes: u64 = all_samples.values().sum();
     let reclaimable: u64 = unused.iter().filter_map(|r| all_samples.get(r)).sum();
@@ -219,8 +239,6 @@ pub fn scan_card(
 
     let mut unused_sorted: Vec<String> = unused.into_iter().collect();
     unused_sorted.sort();
-    let mut missing_sorted: Vec<String> = missing.into_iter().collect();
-    missing_sorted.sort();
     unused_presets.sort();
 
     Ok(CardReport {
@@ -228,7 +246,7 @@ pub fn scan_card(
         total_samples_bytes: total_bytes,
         total_references: sample_refs.len(),
         unused_samples: unused_sorted,
-        missing_references: missing_sorted,
+        missing_references: missing,
         unused_presets,
         reclaimable_bytes: reclaimable,
     })
@@ -271,8 +289,8 @@ mod tests {
                 </song>"#,
             );
             let refs = scan_xml_references(&root);
-            assert!(refs.contains("SAMPLES/RECORD/REC00001.WAV"));
-            assert!(refs.contains("SAMPLES/Kicks/kick.wav"));
+            assert!(refs.contains_key("SAMPLES/RECORD/REC00001.WAV"));
+            assert!(refs.contains_key("SAMPLES/Kicks/kick.wav"));
         }
 
         #[test]
@@ -290,7 +308,7 @@ mod tests {
                 </kit>"#,
             );
             let refs = scan_xml_references(&root);
-            assert!(refs.contains("SAMPLES/RECORD/REC00002.WAV"));
+            assert!(refs.contains_key("SAMPLES/RECORD/REC00002.WAV"));
         }
 
         #[test]
@@ -310,11 +328,12 @@ mod tests {
                 r#"<synth><osc fileName="SAMPLES/c.wav" /></synth>"#,
             );
             let refs = scan_xml_references(&root);
+            let keys: HashSet<String> = refs.keys().cloned().collect();
             let expected: HashSet<String> = ["SAMPLES/a.wav", "SAMPLES/b.wav", "SAMPLES/c.wav"]
                 .iter()
                 .map(|s| s.to_string())
                 .collect();
-            assert_eq!(refs, expected);
+            assert_eq!(keys, expected);
         }
 
         #[test]
@@ -348,7 +367,7 @@ mod tests {
             );
             let refs = scan_xml_references(&root);
             assert_eq!(refs.len(), 1);
-            assert!(refs.contains("SAMPLES/x.wav"));
+            assert!(refs.contains_key("SAMPLES/x.wav"));
         }
 
         #[test]
@@ -360,7 +379,7 @@ mod tests {
                 r#"<song><osc fileName="SAMPLES/low.wav" /></song>"#,
             );
             let refs = scan_xml_references(&root);
-            assert!(refs.contains("SAMPLES/low.wav"));
+            assert!(refs.contains_key("SAMPLES/low.wav"));
         }
     }
 
@@ -425,7 +444,9 @@ mod tests {
                 r#"<song><osc fileName="SAMPLES/RECORD/GONE.WAV" /></song>"#,
             );
             let report = scan_card(&root, None).unwrap();
-            assert!(report.missing_references.contains(&"SAMPLES/RECORD/GONE.WAV".to_string()));
+            assert!(report.missing_references.iter().any(|m| m.sample == "SAMPLES/RECORD/GONE.WAV"));
+            let gone = report.missing_references.iter().find(|m| m.sample == "SAMPLES/RECORD/GONE.WAV").unwrap();
+            assert!(gone.referenced_by.contains(&"SONGS/S.XML".to_string()));
         }
 
         #[test]
