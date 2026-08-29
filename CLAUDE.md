@@ -15,13 +15,23 @@ uv pip install -e .
 
 ```
 deluge_tools/
-  parser.py       — XML → Song dataclasses (clips, instruments, noteData binary, clipInstances binary)
-  converter.py    — Song → music21 Score (arrangement timeline only)
-  cli.py          — `deluge-score` entrypoint (argparse, MuseScore WSL launcher)
-  midi_to_deluge.py — MIDI → Deluge XML (reverse direction)
-  cli_import.py   — `deluge-import` entrypoint for midi_to_deluge
+  parser.py          — XML → Song dataclasses (clips, instruments, noteData binary, clipInstances binary)
+  converter.py       — Song → MusicXML (custom writer) or music21 Score (MIDI/Lilypond)
+  musicxml_writer.py — Custom MusicXML serializer (bypasses music21, divisions=48)
+  cli.py             — `deluge-score` entrypoint (argparse, MuseScore WSL launcher)
+  midi_to_deluge.py  — MIDI → Deluge XML (reverse direction)
+  cli_import.py      — `deluge-import` entrypoint for midi_to_deluge
 tests/
-  test_parser.py, test_converter.py, test_midi_to_deluge.py — 24 tests
+  test_parser.py, test_converter.py, test_midi_to_deluge.py
+web/                 — Astro + Svelte website (Vercel static hosting)
+  src/pages/         — index, /score, /inspector, /about
+  src/components/    — Svelte interactive islands (ScoreConverter.svelte)
+  src/lib/pyodide.ts — Pyodide loader + Python-in-browser bridge
+  src/layouts/       — BaseLayout.astro (nav, footer, theme)
+  src/styles/        — Design tokens (DM Mono + DM Sans, gold/charcoal palette)
+  public/py/         — Built Python wheel for Pyodide (deluge_tools-0.1.0-py3-none-any.whl)
+  build-wheel.sh     — Packages deluge_tools as wheel for Pyodide
+  vercel.json        — Vercel deployment config
 ```
 
 ## Key Design Decisions
@@ -86,6 +96,32 @@ No existing tool does Deluge → sheet music. Nearest peers:
 | `pydel` | Song parser library | Dormant |
 | `deluge-cmd` / `deluge-card` | SD card management | On PyPI, active |
 | `deluge-synthstrom-utils` | Multisample preset generator | Active |
+
+## Web Frontend
+
+The `web/` directory is an Astro + Svelte site deployed to Vercel (static, free tier). All file processing runs client-side via Pyodide (Python compiled to WASM).
+
+### Pyodide Compatibility
+
+The core pipeline is **pure stdlib Python** — no external deps needed:
+- `parser.py` → `converter.py` → `musicxml_writer.py` (all stdlib: struct, xml.etree, dataclasses)
+- `midi_to_deluge.py` needs `mido` (pure Python, installable via micropip)
+- `song_to_score()` uses `music21` (~50MB) — **not used in web**, only CLI
+
+### Dev Commands
+
+```bash
+cd web
+npm run dev          # Astro dev server at localhost:4321
+npm run build        # Static build → web/dist/
+bash build-wheel.sh  # Rebuild Python wheel into web/public/py/
+npx vercel           # Deploy to Vercel
+```
+
+### Design System
+- **Typography:** DM Mono (headers, code, labels) + DM Sans (body, UI)
+- **Palette:** Gold accent (#D4A847 dark / #C4942A light), charcoal ground (#131316 dark / #F2F0EB light), teal secondary (#5AABAC / #3A7B7C)
+- **Theme:** Full light/dark support via CSS custom properties
 
 ## Style
 
