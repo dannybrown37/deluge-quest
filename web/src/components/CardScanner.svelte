@@ -191,6 +191,15 @@
     }
     unusedPresets.sort();
 
+    const handles = new Map<string, File>();
+    for (const [path, file] of filesByPath) {
+      const rel = stripRoot(path);
+      if (rel.toUpperCase().startsWith("SAMPLES/") && AUDIO_EXTENSIONS.has(ext(rel))) {
+        handles.set(rel, file);
+      }
+    }
+    fileHandles = handles;
+
     report = {
       totalSamples: allSamples.size,
       totalSamplesBytes: totalBytes,
@@ -311,11 +320,18 @@
   restoreFromSession();
 
   function reset() {
+    if (currentAudio) {
+      currentAudio.pause();
+      URL.revokeObjectURL(currentAudio.src);
+      currentAudio = null;
+      playingFile = null;
+    }
     state = "idle";
     report = null;
     errorMsg = "";
     cardName = "";
     showList = false;
+    fileHandles = new Map();
     try {
       sessionStorage.removeItem(CACHE_KEY);
       sessionStorage.removeItem(CACHE_KEY_NAME);
@@ -401,12 +417,44 @@
 
   let missingTree = $derived(buildMissingTree(filteredMissing));
   let expandedDirs = $state(new Set<string>());
+  let fileHandles = $state(new Map<string, File>());
+  let playingFile = $state<string | null>(null);
+  let currentAudio = $state<HTMLAudioElement | null>(null);
 
   function toggleDir(path: string) {
     const next = new Set(expandedDirs);
     if (next.has(path)) next.delete(path);
     else next.add(path);
     expandedDirs = next;
+  }
+
+  function playSample(samplePath: string) {
+    if (currentAudio) {
+      currentAudio.pause();
+      URL.revokeObjectURL(currentAudio.src);
+      if (playingFile === samplePath) {
+        currentAudio = null;
+        playingFile = null;
+        return;
+      }
+    }
+    const file = fileHandles.get(samplePath);
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const audio = new Audio(url);
+    audio.onended = () => {
+      URL.revokeObjectURL(url);
+      playingFile = null;
+      currentAudio = null;
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(url);
+      playingFile = null;
+      currentAudio = null;
+    };
+    audio.play();
+    currentAudio = audio;
+    playingFile = samplePath;
   }
 </script>
 
@@ -526,7 +574,16 @@
                       <div class="tree-children">
                         {@render folderChildren(child, fullPath)}
                         {#each child.files.sort() as file}
-                          <div class="tree-file">{file}</div>
+                          {@const filePath = path ? `${path}/${file}` : file}
+                          <div class="tree-file tree-file--playable">
+                            <button
+                              class="play-btn"
+                              class:play-btn--active={playingFile === filePath}
+                              onclick={() => playSample(filePath)}
+                              title={playingFile === filePath ? "Stop" : "Play"}
+                            >{playingFile === filePath ? "◼" : "▶"}</button>
+                            <span>{file}</span>
+                          </div>
                         {/each}
                       </div>
                     {/if}
@@ -852,6 +909,36 @@
   .tree-file {
     padding: 0.15rem 0;
     color: var(--text-secondary);
+  }
+  .tree-file--playable {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .play-btn {
+    flex-shrink: 0;
+    width: 1.4rem;
+    height: 1.4rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 0.6rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+  }
+  .play-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .play-btn--active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-dim);
   }
   .tree-file--missing {
     display: flex;

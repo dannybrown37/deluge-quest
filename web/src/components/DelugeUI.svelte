@@ -27,7 +27,7 @@
   // Left: 2 black diagonal + 2 gold diagonal to their right
   // Center-left: 1 black knob next to screen
   // Right: 1 gold + 1 black, horizontally parallel
-  let knobValues = [64, 64, 64, 64, 64, 120, 100];
+  let knobValues = [64, 64, 64, 64, 64, 64, 100];
   let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
   const knobMeta = [
     { name: 'upper',    style: 'black' },  // 0: left upper black
@@ -47,6 +47,15 @@
   let draggingKnob: number | null = null;
   let dragStartY = 0;
   let dragStartAngle = 0;
+
+  // Audio player state
+  let audioCtx: AudioContext | null = null;
+  let audioBuffer: AudioBuffer | null = null;
+  let sourceNode: AudioBufferSourceNode | null = null;
+  let gainNode: GainNode | null = null;
+  let isPlaying = false;
+  let playStartTime = 0;
+  let playOffset = 0;
 
   const DESIGN_WIDTH = 900;
   let wrapperWidth = DESIGN_WIDTH;
@@ -173,6 +182,87 @@
     e.preventDefault();
   }
 
+  async function initAudio() {
+    if (audioCtx) {
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      return;
+    }
+    audioCtx = new AudioContext();
+    gainNode = audioCtx.createGain();
+    gainNode.connect(audioCtx.destination);
+    updateVolume();
+    try {
+      const resp = await fetch('/audio/demo.mp3');
+      if (!resp.ok) { console.warn('No audio file at /audio/demo.mp3'); return; }
+      const buf = await resp.arrayBuffer();
+      audioBuffer = await audioCtx.decodeAudioData(buf);
+    } catch (e) { console.error('Audio init failed:', e); }
+  }
+
+  function updateVolume() {
+    if (!gainNode) return;
+    gainNode.gain.value = knobValues[6] / 127;
+  }
+
+  function getPlaybackRate(): number {
+    const v = knobValues[5];
+    if (v <= 64) return 0.5 + (v / 64) * 0.5;
+    return 1.0 + ((v - 64) / 63) * 1.0;
+  }
+
+  function updatePlaybackRate() {
+    if (sourceNode) sourceNode.playbackRate.value = getPlaybackRate();
+  }
+
+  async function togglePlay() {
+    await initAudio();
+    if (!audioCtx || !audioBuffer || !gainNode) return;
+
+    if (isPlaying && sourceNode) {
+      playOffset += (audioCtx.currentTime - playStartTime) * sourceNode.playbackRate.value;
+      sourceNode.stop();
+      sourceNode = null;
+      isPlaying = false;
+      screenText = 'PAUSED';
+      screenSubtext = formatTime(playOffset, audioBuffer.duration);
+      return;
+    }
+
+    if (playOffset >= audioBuffer.duration) playOffset = 0;
+
+    sourceNode = audioCtx.createBufferSource();
+    sourceNode.buffer = audioBuffer;
+    sourceNode.playbackRate.value = getPlaybackRate();
+    sourceNode.connect(gainNode);
+    sourceNode.onended = () => {
+      if (isPlaying) {
+        isPlaying = false;
+        playOffset = 0;
+        sourceNode = null;
+        screenText = 'DELUGE TOOLS';
+        screenSubtext = 'drop a song to begin';
+      }
+    };
+    sourceNode.start(0, playOffset);
+    playStartTime = audioCtx.currentTime;
+    isPlaying = true;
+    screenText = 'PLAYING';
+    screenSubtext = formatTime(playOffset, audioBuffer.duration);
+    updateScreenTimer();
+  }
+
+  function formatTime(current: number, total: number): string {
+    const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    return `${fmt(current)} / ${fmt(total)}`;
+  }
+
+  function updateScreenTimer() {
+    if (!isPlaying || !audioCtx || !audioBuffer || !sourceNode) return;
+    const elapsed = playOffset + (audioCtx.currentTime - playStartTime) * sourceNode.playbackRate.value;
+    screenSubtext = formatTime(elapsed, audioBuffer.duration);
+    requestAnimationFrame(updateScreenTimer);
+  }
+
   function handleKnobMove(e: MouseEvent | TouchEvent) {
     if (draggingKnob === null) return;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
@@ -181,13 +271,20 @@
     knobValues[draggingKnob] = Math.round(((knobAngles[draggingKnob] + 135) / 270) * 127);
     screenText = knobMeta[draggingKnob].name.toUpperCase();
     screenSubtext = `${knobValues[draggingKnob]}`;
+    if (draggingKnob === 6) updateVolume();
+    if (draggingKnob === 5) updatePlaybackRate();
   }
 
   function handleKnobEnd() {
     if (draggingKnob !== null) {
       draggingKnob = null;
-      screenText = 'DELUGE TOOLS';
-      screenSubtext = 'drop a song to begin';
+      if (isPlaying) {
+        screenText = 'PLAYING';
+        updateScreenTimer();
+      } else {
+        screenText = 'DELUGE TOOLS';
+        screenSubtext = 'drop a song to begin';
+      }
     }
   }
 
@@ -198,6 +295,8 @@
     knobValues[idx] = Math.round(((knobAngles[idx] + 135) / 270) * 127);
     screenText = knobMeta[idx].name.toUpperCase();
     screenSubtext = `${knobValues[idx]}`;
+    if (idx === 6) updateVolume();
+    if (idx === 5) updatePlaybackRate();
   }
 
   onMount(() => {
@@ -326,36 +425,54 @@
       <!-- RIGHT: black + gold knobs, horizontally parallel (gold on right) -->
       <div class="knobs-right">
         <!-- Black (tempo) -->
-        <div
-          class="knob-hitbox"
-          role="slider" tabindex="0"
-          aria-label={knobMeta[5].name}
-          aria-valuenow={knobValues[5]}
-          on:mousedown={(e) => handleKnobStart(5, e)}
-          on:touchstart={(e) => handleKnobStart(5, e)}
-          on:wheel={(e) => handleKnobWheel(5, e)}
-        >
-          <div class="knob-3d">
-            <div class="knob-barrel knob-barrel--black"></div>
-            <div class="knob-top knob-top--black"></div>
-          </div>
-        </div>
-        <!-- Gold (output level) -->
-        <div
-          class="knob-hitbox"
-          role="slider" tabindex="0"
-          aria-label={knobMeta[6].name}
-          aria-valuenow={knobValues[6]}
-          on:mousedown={(e) => handleKnobStart(6, e)}
-          on:touchstart={(e) => handleKnobStart(6, e)}
-          on:wheel={(e) => handleKnobWheel(6, e)}
-        >
-          <div class="knob-3d" style="transform: rotate({knobAngles[6]}deg)">
-            <div class="knob-barrel knob-barrel--gold"></div>
-            <div class="knob-top knob-top--gold">
-              <div class="knob-notch knob-notch--dark"></div>
+        <div class="knob-col">
+          <div
+            class="knob-hitbox"
+            role="slider" tabindex="0"
+            aria-label={knobMeta[5].name}
+            aria-valuenow={knobValues[5]}
+            on:mousedown={(e) => handleKnobStart(5, e)}
+            on:touchstart={(e) => handleKnobStart(5, e)}
+            on:wheel={(e) => handleKnobWheel(5, e)}
+          >
+            <div class="knob-3d">
+              <div class="knob-barrel knob-barrel--black"></div>
+              <div class="knob-top knob-top--black"></div>
             </div>
           </div>
+        </div>
+        <!-- Gold (output level) + play button below -->
+        <div class="knob-col">
+          <div
+            class="knob-hitbox"
+            role="slider" tabindex="0"
+            aria-label={knobMeta[6].name}
+            aria-valuenow={knobValues[6]}
+            on:mousedown={(e) => handleKnobStart(6, e)}
+            on:touchstart={(e) => handleKnobStart(6, e)}
+            on:wheel={(e) => handleKnobWheel(6, e)}
+          >
+            <div class="knob-3d" style="transform: rotate({knobAngles[6]}deg)">
+              <div class="knob-barrel knob-barrel--gold"></div>
+              <div class="knob-top knob-top--gold">
+                <div class="knob-notch knob-notch--dark"></div>
+              </div>
+            </div>
+          </div>
+          <button
+            class="play-btn"
+            class:play-btn--active={isPlaying}
+            on:click={togglePlay}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+          >
+            <div class="play-btn-surface">
+              {#if isPlaying}
+                <svg viewBox="0 0 12 12" width="8" height="8"><rect x="1" y="1" width="3.5" height="10" fill="currentColor"/><rect x="7.5" y="1" width="3.5" height="10" fill="currentColor"/></svg>
+              {:else}
+                <svg viewBox="0 0 12 12" width="8" height="8"><polygon points="2,0 12,6 2,12" fill="currentColor"/></svg>
+              {/if}
+            </div>
+          </button>
         </div>
       </div>
     </div>
@@ -481,6 +598,48 @@
     gap: 10px;
     align-self: flex-start;
     flex-shrink: 0;
+  }
+  .knob-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* --- Play button --- */
+  .play-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    background: linear-gradient(180deg, #3A3A40 0%, #252528 40%, #1A1A1E 100%);
+    box-shadow:
+      0 2px 1px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: box-shadow 0.1s;
+  }
+  .play-btn:hover {
+    box-shadow:
+      0 2px 1px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      0 0 8px rgba(212,168,71,0.3);
+  }
+  .play-btn:active {
+    transform: scale(0.95);
+  }
+  .play-btn-surface {
+    color: #888;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .play-btn--active .play-btn-surface {
+    color: #D4A847;
   }
 
   /* --- Knob rendering --- */
