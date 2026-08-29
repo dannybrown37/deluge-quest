@@ -54,9 +54,9 @@
   $: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH);
 
   const TOOLS: { group: string; label: string; link: string; color: string; subtext: string }[] = [
+    { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: PURPLE, subtext: 'library analysis & stats' },
     { group: 'score',     label: 'Score Converter', link: '/score',     color: GOLD,   subtext: 'Deluge XML → MusicXML' },
     { group: 'midi',      label: 'MIDI Import',     link: '/import',    color: GREEN,  subtext: 'MIDI → Deluge XML' },
-    { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: PURPLE, subtext: 'library analysis & stats' },
     { group: 'inspector', label: 'Song Inspector',  link: '/inspector', color: TEAL,   subtext: 'visual arrangement timeline' },
   ];
 
@@ -392,9 +392,9 @@
     {/if}
 
     <div class="grid-labels">
+      <div class="grid-label grid-label--stats"># Stats</div>
       <div class="grid-label grid-label--score">&#9835; Score</div>
       <div class="grid-label grid-label--midi">&#9834; Import</div>
-      <div class="grid-label grid-label--stats"># Stats</div>
       <div class="grid-label grid-label--inspector">&#9703; Inspector</div>
       <div class="grid-labels-gap"></div>
       <div class="grid-label grid-label--sidebar">MUTE<br/>LAUNCH</div>
@@ -716,9 +716,9 @@
     color: rgba(255,255,255,0.3);
     text-align: center;
   }
-  .grid-label--score { grid-column: 1 / 5; }
-  .grid-label--midi { grid-column: 5 / 9; }
-  .grid-label--stats { grid-column: 9 / 13; }
+  .grid-label--stats { grid-column: 1 / 5; }
+  .grid-label--score { grid-column: 5 / 9; }
+  .grid-label--midi { grid-column: 9 / 13; }
   .grid-label--inspector { grid-column: 13 / 17; }
   .grid-label--sidebar {
     font-size: 0.36rem;

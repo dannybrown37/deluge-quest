@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { loadPyodide, analyzeStats, type SongStats } from "../lib/pyodide";
+  import { loadPyodide, analyzeStats, convertToMusicXML, type SongStats } from "../lib/pyodide";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -8,11 +8,14 @@
   let progressPct = $state(0);
   let errorMsg = $state("");
   let results: SongStats[] = $state([]);
-  let fileContents = new Map<string, string>();
+  let fileContents = $state(new Map<string, string>());
   let sortBy = $state("name");
   let sortAsc = $state(true);
   let dragOver = $state(false);
   let fileCount = $state(0);
+
+  let convertingFile = $state("");
+  let convertedFiles = $state(new Map<string, string>());
 
   let filterArr = $state<"all" | "yes" | "no">("all");
   let filterKey = $state("");
@@ -119,6 +122,67 @@
     filterBpmMax !== "" || filterNotesMin !== "" || searchQuery !== ""
   );
 
+  const CACHE_KEY_RESULTS = "deluge-stats-results";
+  const CACHE_KEY_FILES = "deluge-stats-files";
+
+  function saveToSession() {
+    try {
+      sessionStorage.setItem(CACHE_KEY_RESULTS, JSON.stringify(results));
+    } catch {}
+    try {
+      sessionStorage.setItem(CACHE_KEY_FILES, JSON.stringify(Object.fromEntries(fileContents)));
+    } catch {}
+  }
+
+  function restoreFromSession(): boolean {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY_RESULTS);
+      if (!raw) return false;
+      const cached = JSON.parse(raw);
+      if (!cached?.length) return false;
+      results = cached;
+      fileCount = results.length;
+      state = "done";
+    } catch {
+      return false;
+    }
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY_FILES);
+      if (raw) fileContents = new Map(Object.entries(JSON.parse(raw)));
+    } catch {}
+    return true;
+  }
+
+  function exportCsv() {
+    const headers = ["Song", "BPM", "Key", "Duration", "Instruments", "Synths", "Kits", "Clips", "Notes", "Arrangement", "Modified"];
+    const rows = sorted.map(s => [
+      s.filename.replace(/\.XML$/i, ""),
+      s.bpm > 0 ? s.bpm.toFixed(1) : "",
+      s.key,
+      s.durationStr,
+      s.instrumentCount,
+      s.synthCount,
+      s.kitCount,
+      s.clipCount,
+      s.totalNotes,
+      s.hasArrangement ? "yes" : "no",
+      s.lastModified ? new Date(s.lastModified).toISOString().split("T")[0] : "",
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(c => {
+      const str = String(c);
+      return str.includes(",") || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
+    }).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `deluge-stats-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  restoreFromSession();
+
   async function readEntryRecursive(entry: FileSystemEntry): Promise<File[]> {
     if (entry.isFile) {
       return new Promise((resolve) => {
@@ -173,13 +237,13 @@
         xmlFiles.map(async f => ({ name: f.name, content: await f.text() }))
       );
 
-      fileContents.clear();
-      for (const f of fileData) fileContents.set(f.name, f.content);
+      fileContents = new Map(fileData.map(f => [f.name, f.content]));
 
       const stats = await analyzeStats(fileData, pyodide);
       results = stats.map(s => ({ ...s, lastModified: timestamps.get(s.filename) }));
       state = "done";
       progressPct = 100;
+      saveToSession();
     } catch (e: any) {
       state = "error";
       errorMsg = e.message || "Analysis failed";
@@ -244,11 +308,43 @@
     filterKey = filterKey === key ? "" : key;
   }
 
-  function openInScore(filename: string) {
+  async function convertScore(filename: string) {
+    if (convertedFiles.get(filename)) {
+      downloadMusicXml(filename);
+      return;
+    }
     const content = fileContents.get(filename);
     if (!content) return;
-    sessionStorage.setItem("deluge-score-file", JSON.stringify({ name: filename, content }));
-    window.location.href = "/score";
+    convertingFile = filename;
+    try {
+      const pyodide = await loadPyodide();
+      const musicxml = await convertToMusicXML(content, pyodide);
+      convertedFiles = new Map(convertedFiles).set(filename, musicxml);
+      downloadMusicXml(filename);
+    } catch (e: any) {
+      errorMsg = `Score conversion failed for ${filename}: ${e.message}`;
+    } finally {
+      convertingFile = "";
+    }
+  }
+
+  function downloadMusicXml(filename: string) {
+    const xml = convertedFiles.get(filename);
+    if (!xml) return;
+    const blob = new Blob([xml], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename.replace(/\.XML$/i, ".musicxml");
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function openInInspector(filename: string) {
+    const content = fileContents.get(filename);
+    if (!content) return;
+    sessionStorage.setItem("deluge-inspector-file", JSON.stringify({ name: filename, content }));
+    window.location.href = "/inspector";
   }
 
   function reset() {
@@ -256,8 +352,12 @@
     results = [];
     errorMsg = "";
     fileCount = 0;
-    fileContents.clear();
+    fileContents = new Map();
     clearFilters();
+    try {
+      sessionStorage.removeItem(CACHE_KEY_RESULTS);
+      sessionStorage.removeItem(CACHE_KEY_FILES);
+    } catch {}
   }
 </script>
 
@@ -345,6 +445,7 @@
         {/if}
         <div class="filter-spacer"></div>
         <span class="results-count">{filtered.length}/{results.length} songs</span>
+        <button class="btn btn-secondary btn-sm" onclick={exportCsv}>Export CSV</button>
         <button class="btn btn-secondary btn-sm" onclick={reset}>Analyze more</button>
       </div>
     </div>
@@ -387,10 +488,19 @@
           {#each sorted as s}
             {@const name = s.filename.replace(/\.XML$/i, '')}
             <tr class:row--error={s.key.startsWith('Error')}>
-              <td class="cell-name" title={name}>
-                {name}
-                {#if s.hasArrangement}
-                  <button class="score-btn" title="Convert to sheet music" onclick={() => openInScore(s.filename)}>Score</button>
+              <td class="cell-name">
+                <span class="cell-name-text" title={name}>{name}</span>
+                {#if s.hasArrangement && fileContents.has(s.filename)}
+                  <span class="cell-name-actions">
+                    {#if convertingFile === s.filename}
+                      <span class="score-btn score-btn--busy">Converting…</span>
+                    {:else}
+                      <button class="score-btn" class:score-btn--done={convertedFiles.has(s.filename)} title={convertedFiles.has(s.filename) ? "Download MusicXML" : "Convert to MusicXML"} onclick={() => convertScore(s.filename)}>
+                        {convertedFiles.has(s.filename) ? "Download" : "Score"}
+                      </button>
+                    {/if}
+                    <button class="score-btn inspect-btn" title="View arrangement timeline" onclick={() => openInInspector(s.filename)}>Inspect</button>
+                  </span>
                 {/if}
               </td>
               <td class="cell-num" title={s.bpm > 0 ? s.bpm.toFixed(1) : ''}>{s.bpm > 0 ? s.bpm.toFixed(0) : '-'}</td>
@@ -709,9 +819,21 @@
   .cell-name {
     font-family: 'DM Mono', monospace;
     font-weight: 500;
-    max-width: 240px;
+    max-width: 300px;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .cell-name-text {
     overflow: hidden;
     text-overflow: ellipsis;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .cell-name-actions {
+    flex-shrink: 0;
+    display: flex;
+    gap: 0.25rem;
   }
   .score-btn {
     font-family: 'DM Mono', monospace;
@@ -720,7 +842,6 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     padding: 0.15rem 0.45rem;
-    margin-left: 0.5rem;
     border: 1px solid var(--accent);
     border-radius: 3px;
     background: transparent;
@@ -735,6 +856,28 @@
   }
   .score-btn:hover {
     background: var(--accent);
+    color: var(--ground);
+  }
+  .score-btn--busy {
+    opacity: 1;
+    cursor: default;
+    color: var(--text-secondary);
+    border-color: var(--border);
+  }
+  .score-btn--done {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+  .score-btn--done:hover {
+    background: var(--teal);
+    color: var(--ground);
+  }
+  .inspect-btn {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+  .inspect-btn:hover {
+    background: var(--teal);
     color: var(--ground);
   }
   .cell-num {
