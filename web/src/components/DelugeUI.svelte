@@ -122,12 +122,15 @@
         let label: string | undefined;
         let group: string | undefined;
 
-        if (r === 6 && c === 0) {
-          color = PURPLE; glowIntensity = 0.5; active = true;
+        const MUTE_COLORS = ['#40A060','#CC3030','#40A060','#CC3030','#40A060','#CC3030','#40A060','#CC3030'];
+        const AUDITION_COLORS = ['#4488DD','#DD55AA','#DDBB33','#5AABAC','#CC3030','#AACC30','#3355CC','#FF6622'];
+
+        if (c === 0) {
+          color = MUTE_COLORS[r]; glowIntensity = 0.5; active = true;
           link = 'https://github.com/dannybrown37/deluge';
           label = 'GitHub'; group = 'github';
-        } else if (r === 6 && c === 1) {
-          color = WHITE; glowIntensity = 0.5; active = true;
+        } else {
+          color = AUDITION_COLORS[r]; glowIntensity = 0.5; active = true;
           link = '/about'; label = 'About'; group = 'about';
         }
 
