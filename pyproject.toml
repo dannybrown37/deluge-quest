@@ -17,6 +17,7 @@ dev = [
 deluge-score = "deluge_tools.cli:main"
 deluge-import = "deluge_tools.cli_import:main"
 deluge-stats = "deluge_tools.cli_stats:main"
+deluge-clean = "deluge_tools.cli_clean:main"
 
 [build-system]
 requires = ["hatchling"]
