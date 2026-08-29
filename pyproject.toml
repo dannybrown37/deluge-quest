@@ -16,6 +16,7 @@ dev = [
 [project.scripts]
 deluge-score = "deluge_tools.cli:main"
 deluge-import = "deluge_tools.cli_import:main"
+deluge-stats = "deluge_tools.cli_stats:main"
 
 [build-system]
 requires = ["hatchling"]

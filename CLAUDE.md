@@ -21,6 +21,8 @@ deluge_tools/
   cli.py             — `deluge-score` entrypoint (argparse, MuseScore WSL launcher)
   midi_to_deluge.py  — MIDI → Deluge XML (reverse direction)
   cli_import.py      — `deluge-import` entrypoint for midi_to_deluge
+  analyzer.py        — Song → SongStats (BPM, key, scale, duration, counts)
+  cli_stats.py       — `deluge-stats` entrypoint (directory scanner, table output)
 tests/
   test_parser.py, test_converter.py, test_midi_to_deluge.py
 web/                 — Astro + Svelte website (Vercel static hosting)
