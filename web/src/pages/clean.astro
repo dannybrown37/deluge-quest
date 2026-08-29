@@ -1,0 +1,79 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import CardScanner from '../components/CardScanner.svelte';
+---
+
+<BaseLayout title="Card Clean" description="Find unused samples and orphan presets on your Deluge SD card.">
+  <section class="page-header">
+    <h1 class="page-title">Card Clean</h1>
+    <p class="page-desc">Find unused samples, broken references, and orphan presets on a backup of your Deluge SD card.</p>
+  </section>
+  <section class="tool-area">
+    <CardScanner client:only="svelte" />
+  </section>
+  <section class="info">
+    <div class="info-inner">
+      <div class="info-block">
+        <h3>How it works</h3>
+        <p>Select your SD card backup folder. The scanner reads all XML files in SONGS/, KITS/, and SYNTHS/ to find sample references, then compares against actual files in SAMPLES/ to identify unused samples and broken references.</p>
+      </div>
+      <div class="info-block">
+        <h3>What it finds</h3>
+        <p><strong>Unused samples</strong> are on disk but never referenced by any song, kit, or synth. <strong>Broken references</strong> point to files that don't exist. <strong>Orphan presets</strong> are kits/synths not used by any song.</p>
+      </div>
+      <div class="info-block">
+        <h3>Privacy</h3>
+        <p>Everything runs in your browser. No files are uploaded anywhere. Export the report as JSON to use with the CLI tool's <code>--move</code> flag.</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page-header {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 2rem;
+    text-align: center;
+  }
+  .page-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  .page-desc {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  .tool-area {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+  }
+
+  .info {
+    border-top: 1px solid var(--border);
+    padding: 3rem 1.5rem;
+  }
+  .info-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+  }
+  .info-block h3 {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+  }
+  .info-block p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+</style>
