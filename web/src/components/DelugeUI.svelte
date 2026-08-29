@@ -480,7 +480,7 @@
   /* === Control panel === */
   .control-panel {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     margin-bottom: 0.6rem;
     padding: 0.25rem 0;
@@ -498,7 +498,7 @@
   .knobs-right {
     display: flex;
     gap: 10px;
-    align-items: center;
+    align-self: flex-start;
     flex-shrink: 0;
   }
 
@@ -609,6 +609,7 @@
   .center-group {
     display: flex;
     align-items: center;
+    align-self: center;
     gap: 6px;
     margin-left: auto;
     margin-right: auto;
