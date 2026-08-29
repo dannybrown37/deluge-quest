@@ -76,8 +76,8 @@
           link = '/inspector'; label = 'Song Inspector'; group = 'inspector';
         }
         else if (r >= 1 && r <= 3 && c >= 13 && c <= 15) {
-          color = WHITE; glowIntensity = 0.15;
-          label = 'MIDI Import — coming soon'; group = 'midi';
+          color = PURPLE; glowIntensity = 0.7; active = true;
+          link = '/stats'; label = 'Song Stats'; group = 'stats';
         }
         else if (r === 6 && c === 15) {
           color = WHITE; glowIntensity = 0.5; active = true;
@@ -404,7 +404,7 @@
     <div class="grid-labels">
       <div class="grid-label grid-label--score">&#9835; Score</div>
       <div class="grid-label grid-label--inspector">&#9703; Inspector</div>
-      <div class="grid-label grid-label--midi">&#8644; MIDI</div>
+      <div class="grid-label grid-label--stats"># Stats</div>
       <div class="grid-labels-gap"></div>
       <div class="grid-label grid-label--sidebar">MUTE<br/>LAUNCH</div>
       <div class="grid-label grid-label--sidebar">AUDITION<br/>SECTION</div>
@@ -727,7 +727,7 @@
   }
   .grid-label--score { grid-column: 1 / 6; }
   .grid-label--inspector { grid-column: 6 / 13; }
-  .grid-label--midi { grid-column: 13 / 17; }
+  .grid-label--stats { grid-column: 13 / 17; }
   .grid-label--sidebar {
     font-size: 0.36rem;
     letter-spacing: 0.04em;

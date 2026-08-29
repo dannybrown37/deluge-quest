@@ -17,6 +17,11 @@ import DelugeUI from '../components/DelugeUI.svelte';
           <span class="tool-name">Score Converter</span>
           <span class="tool-desc">Deluge XML → MusicXML</span>
         </a>
+        <a href="/stats" class="tool-card tool-card--stats">
+          <span class="tool-icon">#</span>
+          <span class="tool-name">Song Stats</span>
+          <span class="tool-desc">Library analysis &amp; stats</span>
+        </a>
         <a href="/inspector" class="tool-card tool-card--inspector">
           <span class="tool-icon">&#9703;</span>
           <span class="tool-name">Song Inspector</span>
@@ -98,6 +103,7 @@ import DelugeUI from '../components/DelugeUI.svelte';
     flex-shrink: 0;
   }
   .tool-card--score .tool-icon { color: var(--accent); }
+  .tool-card--stats .tool-icon { color: var(--accent); font-family: 'DM Mono', monospace; }
   .tool-card--inspector .tool-icon { color: var(--teal); }
   .tool-card--github .tool-icon { color: var(--text-secondary); }
 
