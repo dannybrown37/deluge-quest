@@ -12,13 +12,6 @@
     group?: string;
   }
 
-  interface Knob {
-    label: string;
-    value: number;
-    gold: boolean;
-    large: boolean;
-  }
-
   const ROWS = 8;
   const COLS = 16;
 
@@ -27,59 +20,21 @@
   const GREEN = '#40A060';
   const PURPLE = '#8050B0';
   const WHITE = '#E0DDD6';
-  const BLUE = '#4070C0';
-  const RED = '#C04040';
   const OFF = 'transparent';
 
-  let knobs: Knob[] = [
-    { label: 'upper', value: 64, gold: true, large: true },
-    { label: 'select', value: 64, gold: true, large: true },
-    { label: 'scroll', value: 64, gold: true, large: true },
-    { label: 'tempo', value: 120, gold: false, large: true },
-    { label: 'level', value: 100, gold: false, large: true },
-    { label: 'hp vol', value: 80, gold: false, large: true },
-    { label: 'line in', value: 0, gold: false, large: true },
+  // 6 knobs matching real Deluge layout
+  // Left: 2 black diagonal + 2 gold diagonal to their right
+  // Right: 1 gold + 1 black, horizontally parallel
+  let knobValues = [64, 64, 64, 64, 120, 100];
+  let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
+  const knobMeta = [
+    { name: 'upper',    style: 'black' },  // 0: left upper black
+    { name: 'select',   style: 'black' },  // 1: left lower black
+    { name: 'scroll',   style: 'gold'  },  // 2: left upper gold
+    { name: 'encoder',  style: 'gold'  },  // 3: left lower gold
+    { name: 'tempo',    style: 'gold'  },  // 4: right gold
+    { name: 'output',   style: 'black' },  // 5: right black
   ];
-
-  const buttonGroups = [
-    { buttons: [
-      { label: 'song', lit: false },
-      { label: 'clip', lit: false },
-    ]},
-    { buttons: [
-      { label: 'synth', lit: false },
-      { label: 'kit', lit: false },
-      { label: 'midi', lit: false },
-      { label: 'cv', lit: false },
-    ]},
-    { buttons: [
-      { label: 'scale', lit: false },
-      { label: 'cross\nscreen', lit: false },
-    ]},
-    { buttons: [
-      { label: 'back/\nundo', lit: false },
-      { label: 'load', lit: false },
-    ]},
-    { buttons: [
-      { label: 'tap\ntempo', lit: false },
-      { label: 'sync-\nscaling', lit: false },
-    ]},
-    { buttons: [
-      { label: 'learn/\ninput', lit: false },
-      { label: 'triplet\nview', lit: false },
-    ]},
-    { buttons: [
-      { label: 'play', lit: true, color: '#40A060' },
-      { label: 'record', lit: true, color: '#C04040' },
-    ]},
-    { buttons: [
-      { label: '◁', lit: false },
-      { label: '▷', lit: false },
-      { label: 'shift', lit: false },
-    ]},
-  ];
-
-  let knobAngles: number[] = knobs.map(k => (k.value / 127) * 270 - 135);
 
   let screenText = 'DELUGE TOOLS';
   let screenSubtext = 'drop a song to begin';
@@ -209,9 +164,9 @@
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     const delta = (dragStartY - clientY) * 1.5;
     knobAngles[draggingKnob] = Math.max(-135, Math.min(135, dragStartAngle + delta));
-    knobs[draggingKnob].value = Math.round(((knobAngles[draggingKnob] + 135) / 270) * 127);
-    screenText = knobs[draggingKnob].label.toUpperCase();
-    screenSubtext = `${knobs[draggingKnob].value}`;
+    knobValues[draggingKnob] = Math.round(((knobAngles[draggingKnob] + 135) / 270) * 127);
+    screenText = knobMeta[draggingKnob].name.toUpperCase();
+    screenSubtext = `${knobValues[draggingKnob]}`;
   }
 
   function handleKnobEnd() {
@@ -226,9 +181,9 @@
     e.preventDefault();
     const delta = e.deltaY > 0 ? -5 : 5;
     knobAngles[idx] = Math.max(-135, Math.min(135, knobAngles[idx] + delta));
-    knobs[idx].value = Math.round(((knobAngles[idx] + 135) / 270) * 127);
-    screenText = knobs[idx].label.toUpperCase();
-    screenSubtext = `${knobs[idx].value}`;
+    knobValues[idx] = Math.round(((knobAngles[idx] + 135) / 270) * 127);
+    screenText = knobMeta[idx].name.toUpperCase();
+    screenSubtext = `${knobValues[idx]}`;
   }
 
   onMount(() => {
@@ -255,64 +210,88 @@
   <div class="wood-panel wood-panel--left"></div>
 
   <div class="deluge-body">
-    <!-- Control panel — matches real Deluge knob layout -->
+    <!-- Control panel: knobs + logo + screen only -->
     <div class="control-panel">
-      <!-- Left: 3 gold knobs in offset arrangement -->
+
+      <!-- LEFT: 2 black + 2 gold knobs, diagonal pairs -->
       <div class="knobs-left">
-        <!-- Upper gold knob, offset right -->
-        <div class="knob-row knob-row--upper-left">
-          <div class="knob-wrapper">
-            <div
-              class="knob-hitbox"
-              role="slider"
-              tabindex="0"
-              aria-label={knobs[0].label}
-              aria-valuenow={knobs[0].value}
-              aria-valuemin={0}
-              aria-valuemax={127}
-              on:mousedown={(e) => handleKnobStart(0, e)}
-              on:touchstart={(e) => handleKnobStart(0, e)}
-              on:wheel={(e) => handleKnobWheel(0, e)}
-            >
-              <div class="knob-3d knob-3d--gold" style="transform: rotate({knobAngles[0]}deg)">
-                <div class="knob-barrel knob-barrel--gold"></div>
-                <div class="knob-top knob-top--gold">
-                  <div class="knob-notch knob-notch--dark"></div>
-                </div>
+        <!-- Upper row (offset right): black + gold -->
+        <div class="knob-pair knob-pair--upper">
+          <!-- Upper black -->
+          <div
+            class="knob-hitbox"
+            role="slider" tabindex="0"
+            aria-label={knobMeta[0].name}
+            aria-valuenow={knobValues[0]}
+            on:mousedown={(e) => handleKnobStart(0, e)}
+            on:touchstart={(e) => handleKnobStart(0, e)}
+            on:wheel={(e) => handleKnobWheel(0, e)}
+          >
+            <div class="knob-3d" style="transform: rotate({knobAngles[0]}deg)">
+              <div class="knob-barrel knob-barrel--black"></div>
+              <div class="knob-top knob-top--black">
+                <div class="knob-notch"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Upper gold -->
+          <div
+            class="knob-hitbox"
+            role="slider" tabindex="0"
+            aria-label={knobMeta[2].name}
+            aria-valuenow={knobValues[2]}
+            on:mousedown={(e) => handleKnobStart(2, e)}
+            on:touchstart={(e) => handleKnobStart(2, e)}
+            on:wheel={(e) => handleKnobWheel(2, e)}
+          >
+            <div class="knob-3d" style="transform: rotate({knobAngles[2]}deg)">
+              <div class="knob-barrel knob-barrel--gold"></div>
+              <div class="knob-top knob-top--gold">
+                <div class="knob-notch knob-notch--dark"></div>
               </div>
             </div>
           </div>
         </div>
-        <!-- Select + Scroll, side by side below -->
-        <div class="knob-row">
-          {#each [1, 2] as idx}
-            <div class="knob-wrapper">
-              <div
-                class="knob-hitbox"
-                role="slider"
-                tabindex="0"
-                aria-label={knobs[idx].label}
-                aria-valuenow={knobs[idx].value}
-                aria-valuemin={0}
-                aria-valuemax={127}
-                on:mousedown={(e) => handleKnobStart(idx, e)}
-                on:touchstart={(e) => handleKnobStart(idx, e)}
-                on:wheel={(e) => handleKnobWheel(idx, e)}
-              >
-                <div class="knob-3d knob-3d--gold" style="transform: rotate({knobAngles[idx]}deg)">
-                  <div class="knob-barrel knob-barrel--gold"></div>
-                  <div class="knob-top knob-top--gold">
-                    <div class="knob-notch knob-notch--dark"></div>
-                  </div>
-                </div>
+        <!-- Lower row: black + gold -->
+        <div class="knob-pair knob-pair--lower">
+          <!-- Lower black -->
+          <div
+            class="knob-hitbox"
+            role="slider" tabindex="0"
+            aria-label={knobMeta[1].name}
+            aria-valuenow={knobValues[1]}
+            on:mousedown={(e) => handleKnobStart(1, e)}
+            on:touchstart={(e) => handleKnobStart(1, e)}
+            on:wheel={(e) => handleKnobWheel(1, e)}
+          >
+            <div class="knob-3d" style="transform: rotate({knobAngles[1]}deg)">
+              <div class="knob-barrel knob-barrel--black"></div>
+              <div class="knob-top knob-top--black">
+                <div class="knob-notch"></div>
               </div>
-              <span class="knob-label">{knobs[idx].label}</span>
             </div>
-          {/each}
+          </div>
+          <!-- Lower gold -->
+          <div
+            class="knob-hitbox"
+            role="slider" tabindex="0"
+            aria-label={knobMeta[3].name}
+            aria-valuenow={knobValues[3]}
+            on:mousedown={(e) => handleKnobStart(3, e)}
+            on:touchstart={(e) => handleKnobStart(3, e)}
+            on:wheel={(e) => handleKnobWheel(3, e)}
+          >
+            <div class="knob-3d" style="transform: rotate({knobAngles[3]}deg)">
+              <div class="knob-barrel knob-barrel--gold"></div>
+              <div class="knob-top knob-top--gold">
+                <div class="knob-notch knob-notch--dark"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Center: logo + OLED screen -->
+      <!-- CENTER: logo + OLED screen -->
       <div class="screen-area">
         <div class="deluge-logo">✦ deluge</div>
         <div class="oled-screen">
@@ -323,76 +302,43 @@
         </div>
       </div>
 
-      <!-- Right: 4 black knobs -->
+      <!-- RIGHT: gold + black knobs, horizontally parallel -->
       <div class="knobs-right">
-        <!-- Top row: hp vol + line in -->
-        <div class="knob-row">
-          {#each [5, 6] as idx}
-            <div class="knob-wrapper">
-              <div
-                class="knob-hitbox"
-                role="slider"
-                tabindex="0"
-                aria-label={knobs[idx].label}
-                aria-valuenow={knobs[idx].value}
-                aria-valuemin={0}
-                aria-valuemax={127}
-                on:mousedown={(e) => handleKnobStart(idx, e)}
-                on:touchstart={(e) => handleKnobStart(idx, e)}
-                on:wheel={(e) => handleKnobWheel(idx, e)}
-              >
-                <div class="knob-3d knob-3d--black" style="transform: rotate({knobAngles[idx]}deg)">
-                  <div class="knob-barrel knob-barrel--black"></div>
-                  <div class="knob-top knob-top--black">
-                    <div class="knob-notch"></div>
-                  </div>
-                </div>
-              </div>
+        <!-- Gold (tempo) -->
+        <div
+          class="knob-hitbox"
+          role="slider" tabindex="0"
+          aria-label={knobMeta[4].name}
+          aria-valuenow={knobValues[4]}
+          on:mousedown={(e) => handleKnobStart(4, e)}
+          on:touchstart={(e) => handleKnobStart(4, e)}
+          on:wheel={(e) => handleKnobWheel(4, e)}
+        >
+          <div class="knob-3d" style="transform: rotate({knobAngles[4]}deg)">
+            <div class="knob-barrel knob-barrel--gold"></div>
+            <div class="knob-top knob-top--gold">
+              <div class="knob-notch knob-notch--dark"></div>
             </div>
-          {/each}
+          </div>
         </div>
-        <!-- Bottom row: tempo + level -->
-        <div class="knob-row">
-          {#each [3, 4] as idx}
-            <div class="knob-wrapper">
-              <div
-                class="knob-hitbox"
-                role="slider"
-                tabindex="0"
-                aria-label={knobs[idx].label}
-                aria-valuenow={knobs[idx].value}
-                aria-valuemin={0}
-                aria-valuemax={127}
-                on:mousedown={(e) => handleKnobStart(idx, e)}
-                on:touchstart={(e) => handleKnobStart(idx, e)}
-                on:wheel={(e) => handleKnobWheel(idx, e)}
-              >
-                <div class="knob-3d knob-3d--black" style="transform: rotate({knobAngles[idx]}deg)">
-                  <div class="knob-barrel knob-barrel--black"></div>
-                  <div class="knob-top knob-top--black">
-                    <div class="knob-notch"></div>
-                  </div>
-                </div>
-              </div>
-              <span class="knob-label">{knobs[idx].label}</span>
+        <!-- Black (output level) -->
+        <div
+          class="knob-hitbox"
+          role="slider" tabindex="0"
+          aria-label={knobMeta[5].name}
+          aria-valuenow={knobValues[5]}
+          on:mousedown={(e) => handleKnobStart(5, e)}
+          on:touchstart={(e) => handleKnobStart(5, e)}
+          on:wheel={(e) => handleKnobWheel(5, e)}
+        >
+          <div class="knob-3d" style="transform: rotate({knobAngles[5]}deg)">
+            <div class="knob-barrel knob-barrel--black"></div>
+            <div class="knob-top knob-top--black">
+              <div class="knob-notch"></div>
             </div>
-          {/each}
+          </div>
         </div>
       </div>
-    </div>
-
-    <!-- Button strip -->
-    <div class="button-strip">
-      {#each buttonGroups as group}
-        <div class="button-group">
-          {#each group.buttons as btn}
-            <div class="hw-button-col">
-              <span class="hw-button-label">{btn.label}</span>
-              <div class="hw-button" class:hw-button--lit={btn.lit} style={btn.color ? `--btn-color: ${btn.color}` : ''}></div>
-            </div>
-          {/each}
-        </div>
-      {/each}
     </div>
 
     <!-- Pad grid -->
@@ -426,21 +372,20 @@
 </div>
 
 <style>
+  /* === Housing === */
   .deluge-housing {
     display: flex;
-    max-width: 820px;
+    max-width: 900px;
     margin: 0 auto;
     user-select: none;
     filter: drop-shadow(0 12px 40px rgba(0,0,0,0.5));
   }
 
-  /* Walnut side panels with grain */
   .wood-panel {
     width: 28px;
     flex-shrink: 0;
     background:
-      repeating-linear-gradient(
-        180deg,
+      repeating-linear-gradient(180deg,
         transparent 0px, transparent 3px,
         rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px
       ),
@@ -470,35 +415,43 @@
     min-width: 0;
   }
 
-  /* Control panel */
+  /* === Control panel === */
   .control-panel {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.5rem;
-    padding: 0 0.25rem;
-  }
-  .knobs-left, .knobs-right {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-  .knob-row {
-    display: flex;
-    gap: 0.3rem;
-    align-items: center;
-  }
-  .knob-row--upper-left {
-    padding-left: 1.8rem;
-  }
-  .knob-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.2rem;
+    margin-bottom: 0.6rem;
+    padding: 0.25rem 0;
   }
 
-  /* Knob hit area */
+  /* --- Left knobs: 2 black + 2 gold, diagonal pairs --- */
+  .knobs-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .knob-pair {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  /* Upper row offset right to create the diagonal */
+  .knob-pair--upper {
+    margin-left: 30px;
+  }
+
+  /* --- Right knobs: gold + black, same row --- */
+  .knobs-right {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  /* --- Knob rendering --- */
   .knob-hitbox {
     width: 56px;
     height: 56px;
@@ -506,17 +459,16 @@
     align-items: center;
     justify-content: center;
     cursor: grab;
+    flex-shrink: 0;
   }
   .knob-hitbox:active { cursor: grabbing; }
 
-  /* 3D Knob — barrel + top face, like a cylinder viewed from above-front */
   .knob-3d {
     position: relative;
     width: 48px;
     height: 48px;
   }
 
-  /* Barrel — the side of the cylinder, rendered as a ring shadow */
   .knob-barrel {
     position: absolute;
     inset: 0;
@@ -541,19 +493,15 @@
     );
   }
 
-  /* Top face of the knob */
   .knob-top {
     position: absolute;
     inset: 3px;
     border-radius: 50%;
     z-index: 1;
-    /* Knurling via SVG-like repeating border */
-    background-size: 100% 100%;
   }
   .knob-top--gold {
     background:
-      repeating-conic-gradient(
-        from 0deg,
+      repeating-conic-gradient(from 0deg,
         #C4942A 0deg 2.5deg,
         #D4A847 2.5deg 3.5deg,
         #B08828 3.5deg 5deg,
@@ -572,8 +520,7 @@
   }
   .knob-top--black {
     background:
-      repeating-conic-gradient(
-        from 0deg,
+      repeating-conic-gradient(from 0deg,
         #252528 0deg 2.5deg,
         #3A3A40 2.5deg 3.5deg,
         #1E1E22 3.5deg 5deg,
@@ -591,7 +538,6 @@
       0 0 6px rgba(255,255,255,0.08);
   }
 
-  /* Position notch */
   .knob-notch {
     position: absolute;
     top: 4px;
@@ -608,29 +554,22 @@
     box-shadow: 0 0 2px rgba(0,0,0,0.2);
   }
 
-  .knob-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.5rem;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  /* Logo + OLED */
+  /* --- Center: logo + screen --- */
   .screen-area {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.25rem;
     flex: 1;
-    max-width: 220px;
+    max-width: 240px;
+    min-width: 0;
   }
   .deluge-logo {
     font-family: 'DM Mono', monospace;
-    font-size: 0.85rem;
+    font-size: 1.2rem;
     font-weight: 500;
-    color: #777;
-    letter-spacing: 0.14em;
+    color: #888;
+    letter-spacing: 0.16em;
     text-transform: lowercase;
   }
   .oled-screen {
@@ -660,55 +599,7 @@
     letter-spacing: 0.04em;
   }
 
-  /* Button strip */
-  .button-strip {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    margin-bottom: 0.6rem;
-    padding: 0 0.5rem;
-    flex-wrap: wrap;
-    align-items: flex-end;
-  }
-  .button-group {
-    display: flex;
-    gap: 4px;
-    align-items: flex-end;
-  }
-  .hw-button-col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-  }
-  .hw-button-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.38rem;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    white-space: pre;
-    text-align: center;
-    line-height: 1.2;
-  }
-  .hw-button {
-    width: 16px;
-    height: 10px;
-    background: linear-gradient(180deg, #2A2A2E 0%, #1A1A1E 100%);
-    border: 1px solid #3A3A40;
-    border-radius: 2px;
-    box-shadow:
-      0 2px 1px rgba(0,0,0,0.5),
-      inset 0 1px 0 rgba(255,255,255,0.06);
-  }
-  .hw-button--lit {
-    box-shadow:
-      0 2px 1px rgba(0,0,0,0.5),
-      inset 0 1px 0 rgba(255,255,255,0.06),
-      0 0 4px var(--btn-color, #fff);
-  }
-
-  /* Pad Grid — raised silicone pads with LED glow */
+  /* === Pad grid === */
   .pad-grid {
     display: grid;
     grid-template-columns: repeat(16, 1fr);
@@ -722,8 +613,6 @@
     cursor: default;
     padding: 0;
     transition: box-shadow 0.12s, transform 0.08s;
-
-    /* Translucent white silicone — visible even when unlit */
     background: rgba(220, 215, 205, 0.12);
     border: 1px solid rgba(255,255,255,0.06);
     box-shadow:
@@ -775,8 +664,8 @@
   .grid-label--inspector { grid-column: 8 / 13; text-align: center; }
   .grid-label--midi { grid-column: 14 / 17; text-align: center; }
 
-  /* Responsive */
-  @media (max-width: 768px) {
+  /* === Responsive === */
+  @media (max-width: 700px) {
     .wood-panel { width: 18px; }
     .deluge-body { padding: 0.5rem 0.6rem 0.75rem; }
     .knob-hitbox { width: 44px; height: 44px; }
@@ -785,14 +674,12 @@
     .knob-notch { height: 8px; top: 3px; }
     .knob-barrel--gold { box-shadow: 0 3px 1px #7A5818, 0 4px 2px rgba(0,0,0,0.5); }
     .knob-barrel--black { box-shadow: 0 3px 1px #1A1A1E, 0 4px 2px rgba(0,0,0,0.5); }
-    .knob-row--upper-left { padding-left: 1.2rem; }
+    .knob-pair--upper { margin-left: 20px; }
+    .knobs-right { gap: 6px; }
     .pad-grid { gap: 2px; }
-    .button-strip { gap: 6px; }
-    .hw-button { width: 14px; height: 8px; }
-    .hw-button-label { font-size: 0.34rem; }
   }
 
-  @media (max-width: 520px) {
+  @media (max-width: 500px) {
     .wood-panel { width: 10px; }
     .deluge-body { padding: 0.3rem 0.4rem 0.5rem; }
     .knob-hitbox { width: 36px; height: 36px; }
@@ -800,13 +687,12 @@
     .knob-notch { height: 6px; top: 2px; width: 2px; }
     .knob-barrel--gold { box-shadow: 0 2px 1px #7A5818, 0 3px 2px rgba(0,0,0,0.5); }
     .knob-barrel--black { box-shadow: 0 2px 1px #1A1A1E, 0 3px 2px rgba(0,0,0,0.5); }
-    .knob-label { display: none; }
-    .knob-row--upper-left { padding-left: 0.8rem; }
+    .knob-pair--upper { margin-left: 14px; }
+    .knobs-right { gap: 4px; }
     .oled-screen { padding: 0.25rem 0.4rem; }
     .oled-text { font-size: 0.6rem; }
-    .deluge-logo { font-size: 0.65rem; }
+    .deluge-logo { font-size: 0.85rem; }
     .pad-grid { gap: 1.5px; }
     .grid-labels { display: none; }
-    .button-strip { display: none; }
   }
 </style>
