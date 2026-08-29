@@ -414,15 +414,12 @@
     {/if}
 
     <div class="grid-labels">
-      <div class="grid-labels-main">
-        <div class="grid-label grid-label--score">&#9835; Score</div>
-        <div class="grid-label grid-label--inspector">&#9703; Inspector</div>
-        <div class="grid-label grid-label--midi">&#8644; MIDI</div>
-      </div>
-      <div class="grid-label grid-label--sidebar">
-        <span>MUTE<br/>LAUNCH</span>
-        <span>AUDITION<br/>SECTION</span>
-      </div>
+      <div class="grid-label grid-label--score">&#9835; Score</div>
+      <div class="grid-label grid-label--inspector">&#9703; Inspector</div>
+      <div class="grid-label grid-label--midi">&#8644; MIDI</div>
+      <div class="grid-labels-gap"></div>
+      <div class="grid-label grid-label--sidebar">MUTE<br/>LAUNCH</div>
+      <div class="grid-label grid-label--sidebar">AUDITION<br/>SECTION</div>
     </div>
   </div>
 
@@ -717,17 +714,17 @@
       0 2px 4px rgba(0,0,0,0.3);
   }
 
-  /* Grid labels */
+  /* Grid labels — same grid as pads so sidebar labels align */
   .grid-labels {
     pointer-events: none;
-    display: flex;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(16, 1fr) 8px repeat(2, 1fr);
+    gap: 3px;
     margin-top: 4px;
   }
-  .grid-labels-main {
-    flex: 1;
-    display: flex;
-    min-width: 0;
+  .grid-labels-gap {
+    grid-column: 17;
+    width: 8px;
   }
   .grid-label {
     font-family: 'DM Mono', monospace;
@@ -739,24 +736,14 @@
     color: rgba(255,255,255,0.3);
     text-align: center;
   }
-  .grid-label--score { flex: 5; }
-  .grid-label--inspector { flex: 5; }
-  .grid-label--midi { flex: 3; }
+  .grid-label--score { grid-column: 1 / 6; }
+  .grid-label--inspector { grid-column: 6 / 13; }
+  .grid-label--midi { grid-column: 13 / 17; }
   .grid-label--sidebar {
-    flex-shrink: 0;
-    display: flex;
-    gap: 3px;
-    font-family: 'DM Mono', monospace;
     font-size: 0.36rem;
-    font-weight: 500;
-    text-transform: uppercase;
     letter-spacing: 0.04em;
     color: rgba(255,255,255,0.25);
-    text-align: center;
     line-height: 1.3;
-  }
-  .grid-label--sidebar span {
-    display: block;
   }
 
 </style>
