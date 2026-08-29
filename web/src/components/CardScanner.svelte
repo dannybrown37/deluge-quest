@@ -574,7 +574,7 @@
                       <div class="tree-children">
                         {@render folderChildren(child, fullPath)}
                         {#each child.files.sort() as file}
-                          {@const filePath = path ? `${path}/${file}` : file}
+                          {@const filePath = fullPath ? `${fullPath}/${file}` : file}
                           <div class="tree-file tree-file--playable">
                             <button
                               class="play-btn"

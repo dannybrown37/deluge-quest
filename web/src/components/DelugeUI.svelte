@@ -27,13 +27,13 @@
   // Left: 2 black diagonal + 2 gold diagonal to their right
   // Center-left: 1 black knob next to screen
   // Right: 1 gold + 1 black, horizontally parallel
-  let knobValues = [64, 64, 64, 64, 64, 64, 100];
+  let knobValues = [64, 64, 127, 0, 64, 64, 100];
   let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
   const knobMeta = [
     { name: 'upper',    style: 'black' },  // 0: left upper black
     { name: 'select',   style: 'black' },  // 1: left lower black
-    { name: 'scroll',   style: 'gold'  },  // 2: left upper gold
-    { name: 'encoder',  style: 'gold'  },  // 3: left lower gold
+    { name: 'filter',   style: 'gold'  },  // 2: left upper gold — filter cutoff
+    { name: 'res',      style: 'gold'  },  // 3: left lower gold — filter resonance
     { name: 'navigate', style: 'black' },  // 4: black knob left of screen
     { name: 'tempo',    style: 'black' },  // 5: right black (left position)
     { name: 'output',   style: 'gold'  },  // 6: right gold (rightmost)
@@ -53,6 +53,7 @@
   let audioBuffer: AudioBuffer | null = null;
   let sourceNode: AudioBufferSourceNode | null = null;
   let gainNode: GainNode | null = null;
+  let filterNode: BiquadFilterNode | null = null;
   let isPlaying = false;
   let playStartTime = 0;
   let playOffset = 0;
@@ -188,9 +189,13 @@
       return;
     }
     audioCtx = new AudioContext();
+    filterNode = audioCtx.createBiquadFilter();
+    filterNode.type = 'lowpass';
     gainNode = audioCtx.createGain();
+    filterNode.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     updateVolume();
+    updateFilter();
     try {
       const resp = await fetch('/audio/demo.mp3');
       if (!resp.ok) { console.warn('No audio file at /audio/demo.mp3'); return; }
@@ -202,6 +207,14 @@
   function updateVolume() {
     if (!gainNode) return;
     gainNode.gain.value = knobValues[6] / 127;
+  }
+
+  function updateFilter() {
+    if (!filterNode) return;
+    const norm = knobValues[2] / 127;
+    filterNode.frequency.value = 80 * Math.pow(280, norm); // 80 Hz – 22400 Hz exponential
+    const resNorm = knobValues[3] / 127;
+    filterNode.Q.value = 0.5 + resNorm * 24.5; // 0.5 – 25
   }
 
   function getPlaybackRate(): number {
@@ -233,7 +246,7 @@
     sourceNode = audioCtx.createBufferSource();
     sourceNode.buffer = audioBuffer;
     sourceNode.playbackRate.value = getPlaybackRate();
-    sourceNode.connect(gainNode);
+    sourceNode.connect(filterNode!);
     sourceNode.onended = () => {
       if (isPlaying) {
         isPlaying = false;
@@ -273,6 +286,7 @@
     screenSubtext = `${knobValues[draggingKnob]}`;
     if (draggingKnob === 6) updateVolume();
     if (draggingKnob === 5) updatePlaybackRate();
+    if (draggingKnob === 2 || draggingKnob === 3) updateFilter();
   }
 
   function handleKnobEnd() {
@@ -297,6 +311,7 @@
     screenSubtext = `${knobValues[idx]}`;
     if (idx === 6) updateVolume();
     if (idx === 5) updatePlaybackRate();
+    if (idx === 2 || idx === 3) updateFilter();
   }
 
   onMount(() => {
