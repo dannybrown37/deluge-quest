@@ -67,21 +67,20 @@
         let label: string | undefined;
         let group: string | undefined;
 
-        if (r >= 1 && r <= 3 && c >= 1 && c <= 5) {
+        // Score: 3×3 top-left (rows 0-2, cols 0-2)
+        if (r >= 0 && r <= 2 && c >= 0 && c <= 2) {
           color = GOLD; glowIntensity = 0.7; active = true;
           link = '/score'; label = 'Score Converter'; group = 'score';
         }
-        else if (r >= 1 && r <= 3 && c >= 7 && c <= 11) {
+        // Inspector: 3×3 middle (rows 2-4, cols 5-7)
+        else if (r >= 2 && r <= 4 && c >= 5 && c <= 7) {
           color = TEAL; glowIntensity = 0.7; active = true;
           link = '/inspector'; label = 'Song Inspector'; group = 'inspector';
         }
-        else if (r >= 1 && r <= 3 && c >= 13 && c <= 15) {
+        // Stats: 3×3 lower (rows 4-6, cols 10-12)
+        else if (r >= 4 && r <= 6 && c >= 10 && c <= 12) {
           color = PURPLE; glowIntensity = 0.7; active = true;
           link = '/stats'; label = 'Song Stats'; group = 'stats';
-        }
-        else if (r === 6 && c === 14) {
-          color = GREEN; glowIntensity = 0.5; active = true;
-          label = '100% client-side'; group = 'privacy';
         }
 
         row.push({ row: r, col: c, color, glowIntensity, active, link, label, group });
@@ -731,9 +730,9 @@
     color: rgba(255,255,255,0.3);
     text-align: center;
   }
-  .grid-label--score { grid-column: 1 / 6; }
-  .grid-label--inspector { grid-column: 6 / 13; }
-  .grid-label--stats { grid-column: 13 / 17; }
+  .grid-label--score { grid-column: 1 / 4; }
+  .grid-label--inspector { grid-column: 6 / 9; }
+  .grid-label--stats { grid-column: 11 / 14; }
   .grid-label--sidebar {
     font-size: 0.36rem;
     letter-spacing: 0.04em;
