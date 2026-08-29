@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { loadPyodide, convertToMusicXML } from "../lib/pyodide";
+  import { loadPyodide, convertMidiToDelugeXml } from "../lib/pyodide";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -11,7 +11,7 @@
   let resultXml = $state("");
   let dragOver = $state(false);
 
-  async function convert(name: string, xmlContent: string) {
+  async function convert(name: string, bytes: ArrayBuffer) {
     fileName = name;
     state = "loading";
 
@@ -22,10 +22,13 @@
       });
 
       state = "processing";
-      progress = "Converting";
-      progressPct = 85;
+      progress = "Installing mido";
+      progressPct = 80;
 
-      resultXml = await convertToMusicXML(xmlContent, pyodide);
+      resultXml = await convertMidiToDelugeXml(bytes, name, pyodide);
+
+      progress = "Converting";
+      progressPct = 90;
 
       state = "done";
       progress = "Done";
@@ -37,24 +40,13 @@
   }
 
   async function handleFile(file: File) {
-    if (!file.name.toLowerCase().endsWith(".xml")) {
+    if (!file.name.toLowerCase().match(/\.midi?$/)) {
       state = "error";
-      errorMsg = "Please drop a Deluge .XML song file";
+      errorMsg = "Please drop a .mid or .midi file";
       return;
     }
-    convert(file.name, await file.text());
+    convert(file.name, await file.arrayBuffer());
   }
-
-  $effect(() => {
-    try {
-      const stored = sessionStorage.getItem("deluge-score-file");
-      if (stored) {
-        sessionStorage.removeItem("deluge-score-file");
-        const { name, content } = JSON.parse(stored);
-        if (name && content) convert(name, content);
-      }
-    } catch {}
-  });
 
   function handleDrop(e: DragEvent) {
     e.preventDefault();
@@ -83,7 +75,7 @@
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = fileName.replace(/\.XML$/i, ".musicxml");
+    a.download = fileName.replace(/\.midi?$/i, "") + ".XML";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -105,13 +97,13 @@
     ondrop={handleDrop}
     ondragover={handleDragOver}
     ondragleave={handleDragLeave}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById('file-input')?.click(); }}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById('midi-file-input')?.click(); }}
   >
     <div class="dropzone-content">
-      <span class="dropzone-icon">♫</span>
-      <p class="dropzone-title">Drop a Deluge song file</p>
-      <p class="dropzone-sub">or <label class="dropzone-browse">browse<input id="file-input" type="file" accept=".xml,.XML" onchange={handleInputChange} hidden /></label></p>
-      <p class="dropzone-hint">.XML files from your Deluge SD card</p>
+      <span class="dropzone-icon">🎹</span>
+      <p class="dropzone-title">Drop a MIDI file</p>
+      <p class="dropzone-sub">or <label class="dropzone-browse">browse<input id="midi-file-input" type="file" accept=".mid,.midi" onchange={handleInputChange} hidden /></label></p>
+      <p class="dropzone-hint">.mid or .midi files</p>
     </div>
   </div>
 
@@ -126,7 +118,11 @@
         <span class="pipeline-dot"></span>
         <span>Loading tools</span>
       </div>
-      <div class="pipeline-step" class:pipeline-step--active={progressPct >= 70 && progressPct < 100}>
+      <div class="pipeline-step" class:pipeline-step--active={progressPct >= 70 && progressPct < 90}>
+        <span class="pipeline-dot"></span>
+        <span>Installing mido</span>
+      </div>
+      <div class="pipeline-step" class:pipeline-step--active={progressPct >= 90 && progressPct < 100}>
         <span class="pipeline-dot"></span>
         <span>Converting</span>
       </div>
@@ -145,12 +141,12 @@
   <div class="result-card">
     <div class="result-header">
       <span class="result-icon">✓</span>
-      <span class="result-title">Conversion complete</span>
+      <span class="result-title">Import complete</span>
     </div>
-    <p class="result-file">{fileName} → {fileName.replace(/\.XML$/i, '.musicxml')}</p>
+    <p class="result-file">{fileName} → {fileName.replace(/\.midi?$/i, '')}.XML</p>
     <div class="result-actions">
-      <button class="btn btn-primary" onclick={download}>Download MusicXML</button>
-      <button class="btn btn-secondary" onclick={reset}>Convert another</button>
+      <button class="btn btn-primary" onclick={download}>Download Deluge XML</button>
+      <button class="btn btn-secondary" onclick={reset}>Import another</button>
     </div>
   </div>
 

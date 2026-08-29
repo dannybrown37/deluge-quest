@@ -1,0 +1,79 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import MidiImporter from '../components/MidiImporter.svelte';
+---
+
+<BaseLayout title="MIDI Import" description="Convert MIDI files to Deluge XML songs — entirely in your browser.">
+  <section class="page-header">
+    <h1 class="page-title">MIDI Import</h1>
+    <p class="page-desc">Convert a MIDI file into a Deluge song XML. Drop the result onto your SD card and open it in arrangement view.</p>
+  </section>
+  <section class="tool-area">
+    <MidiImporter client:only="svelte" />
+  </section>
+  <section class="info">
+    <div class="info-inner">
+      <div class="info-block">
+        <h3>How it works</h3>
+        <p>Drop a <code>.mid</code> file. Each MIDI track becomes a Deluge synth instrument with its notes placed in the arrangement timeline. BPM is read from the MIDI tempo map.</p>
+      </div>
+      <div class="info-block">
+        <h3>What you get</h3>
+        <p>A Deluge <code>.XML</code> song file ready for your SD card's <code>SONGS</code> folder. Open it on the Deluge and you'll see the arrangement with all tracks and notes in place.</p>
+      </div>
+      <div class="info-block">
+        <h3>Privacy</h3>
+        <p>Your file is processed entirely in-browser using Python compiled to WebAssembly. Nothing is uploaded anywhere. First load downloads the runtime (~15MB, cached after that).</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page-header {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 2rem;
+    text-align: center;
+  }
+  .page-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  .page-desc {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  .tool-area {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+  }
+
+  .info {
+    border-top: 1px solid var(--border);
+    padding: 3rem 1.5rem;
+  }
+  .info-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+  }
+  .info-block h3 {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+  }
+  .info-block p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+</style>

@@ -495,7 +495,7 @@
     padding: 4rem 2rem;
     text-align: center;
     cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
+    transition: border-color 0.05s, background 0.05s;
   }
   .dropzone:hover,
   .dropzone--over {
@@ -555,7 +555,7 @@
     font-family: 'DM Mono', monospace;
     font-size: 0.8rem;
     color: var(--text-secondary);
-    transition: color 0.2s;
+    transition: color 0.05s;
   }
   .pipeline-step--active {
     color: var(--accent);
@@ -566,7 +566,7 @@
     height: 6px;
     border-radius: 50%;
     background: var(--border);
-    transition: background 0.2s;
+    transition: background 0.05s;
   }
   .pipeline-step--active .pipeline-dot {
     background: var(--accent);
@@ -727,7 +727,7 @@
     color: var(--accent);
     cursor: pointer;
     opacity: 0;
-    transition: opacity 0.15s, background 0.15s, color 0.15s;
+    transition: opacity 0.05s, background 0.05s, color 0.05s;
     vertical-align: middle;
   }
   tbody tr:hover .score-btn {
@@ -790,7 +790,7 @@
     cursor: pointer;
     padding: 0.1rem 0.4rem;
     border-radius: 3px;
-    transition: border-color 0.15s, background 0.15s;
+    transition: border-color 0.05s, background 0.05s;
   }
   .key-chip:hover {
     border-color: var(--accent);
@@ -911,7 +911,7 @@
     border-radius: 5px;
     border: none;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.05s;
   }
   .btn-sm {
     padding: 0.4rem 0.9rem;

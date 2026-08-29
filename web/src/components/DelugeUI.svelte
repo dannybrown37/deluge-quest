@@ -43,8 +43,6 @@
   let screenSubtext = 'drop a song to begin';
   let pads: Pad[][] = [];
   let sidebarPads: Pad[][] = [];
-  let animFrame: number;
-  let pulsePhase = 0;
   let mounted = false;
   let draggingKnob: number | null = null;
   let dragStartY = 0;
@@ -54,6 +52,35 @@
   let wrapperWidth = DESIGN_WIDTH;
   let housingHeight = 0;
   $: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH);
+
+  const TOOLS: { group: string; label: string; link: string; color: string; subtext: string }[] = [
+    { group: 'score',     label: 'Score Converter', link: '/score',     color: GOLD,   subtext: 'Deluge XML → MusicXML' },
+    { group: 'midi',      label: 'MIDI Import',     link: '/import',    color: GREEN,  subtext: 'MIDI → Deluge XML' },
+    { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: PURPLE, subtext: 'library analysis & stats' },
+    { group: 'inspector', label: 'Song Inspector',  link: '/inspector', color: TEAL,   subtext: 'visual arrangement timeline' },
+  ];
+
+  const FUTURE_TOOLS: { group: string; label: string; subtext: string }[] = [
+    { group: 'future-1', label: 'Coming Soon', subtext: '' },
+    { group: 'future-2', label: 'Coming Soon', subtext: '' },
+    { group: 'future-3', label: 'Coming Soon', subtext: '' },
+    { group: 'future-4', label: 'Coming Soon', subtext: '' },
+  ];
+
+  function toolAt(r: number, c: number): typeof TOOLS[number] | undefined {
+    const blockRow = Math.floor(r / 4);
+    const blockCol = Math.floor(c / 4);
+    const idx = blockRow * 4 + blockCol;
+    return TOOLS[idx];
+  }
+
+  function futureAt(r: number, c: number): typeof FUTURE_TOOLS[number] | undefined {
+    const blockRow = Math.floor(r / 4);
+    if (blockRow !== 1) return undefined;
+    const blockCol = Math.floor(c / 4);
+    const idx = blockCol;
+    return FUTURE_TOOLS[idx];
+  }
 
   function initPads() {
     pads = [];
@@ -67,20 +94,16 @@
         let label: string | undefined;
         let group: string | undefined;
 
-        // Score: 3×3 top-left (rows 0-2, cols 0-2)
-        if (r >= 0 && r <= 2 && c >= 0 && c <= 2) {
-          color = GOLD; glowIntensity = 0.7; active = true;
-          link = '/score'; label = 'Score Converter'; group = 'score';
-        }
-        // Inspector: 3×3 middle (rows 2-4, cols 5-7)
-        else if (r >= 2 && r <= 4 && c >= 5 && c <= 7) {
-          color = TEAL; glowIntensity = 0.7; active = true;
-          link = '/inspector'; label = 'Song Inspector'; group = 'inspector';
-        }
-        // Stats: 3×3 lower (rows 4-6, cols 10-12)
-        else if (r >= 4 && r <= 6 && c >= 10 && c <= 12) {
-          color = PURPLE; glowIntensity = 0.7; active = true;
-          link = '/stats'; label = 'Song Stats'; group = 'stats';
+        const tool = toolAt(r, c);
+        if (tool) {
+          color = tool.color; glowIntensity = 0.7; active = true;
+          link = tool.link; label = tool.label; group = tool.group;
+        } else {
+          const future = futureAt(r, c);
+          if (future) {
+            color = WHITE; glowIntensity = 0.08;
+            group = future.group; label = future.label;
+          }
         }
 
         row.push({ row: r, col: c, color, glowIntensity, active, link, label, group });
@@ -114,54 +137,15 @@
     }
   }
 
-  function animate() {
-    pulsePhase += 0.02;
-
-    for (let r = 5; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const pad = pads[r][c];
-        if (pad.group) continue;
-        const wave = Math.sin(pulsePhase + c * 0.3 + r * 0.5);
-        if (wave > 0.6) { pad.color = GOLD; pad.glowIntensity = wave * 0.6; }
-        else if (wave > 0.2) { pad.color = GOLD; pad.glowIntensity = 0.15; }
-        else { pad.color = OFF; pad.glowIntensity = 0; }
-      }
-    }
-
-    for (let c = 0; c < COLS; c++) {
-      const pad = pads[0][c];
-      if (pad.group) continue;
-      const beat = Math.sin(pulsePhase * 0.5 + c * 0.4);
-      if (beat > 0.7) { pad.color = GOLD; pad.glowIntensity = 0.4; }
-      else { pad.color = OFF; pad.glowIntensity = 0; }
-    }
-
-    for (let c = 0; c < COLS; c++) {
-      const pad = pads[4][c];
-      if (pad.group) continue;
-      const pos = ((pulsePhase * 2) % (COLS + 4)) - 2;
-      const dist = Math.abs(c - pos);
-      if (dist < 1) { pad.color = GOLD; pad.glowIntensity = 0.8; }
-      else if (dist < 2.5) { pad.color = GOLD; pad.glowIntensity = 0.2; }
-      else { pad.color = OFF; pad.glowIntensity = 0; }
-    }
-
-    pads = pads;
-    animFrame = requestAnimationFrame(animate);
-  }
-
   function handlePadHover(pad: Pad) {
-    if (pad.label) {
-      screenText = pad.label.toUpperCase();
-      if (pad.group === 'score') screenSubtext = 'Deluge XML → MusicXML';
-      else if (pad.group === 'inspector') screenSubtext = 'visual arrangement timeline';
-      else if (pad.group === 'midi') screenSubtext = 'MIDI → Deluge XML';
-      else if (pad.group === 'about') screenSubtext = 'open source / community';
-      else if (pad.group === 'stats') screenSubtext = 'library analysis & stats';
-      else if (pad.group === 'privacy') screenSubtext = 'no uploads, no server';
-      else if (pad.group === 'github') screenSubtext = 'view source code';
-      else screenSubtext = '';
-    }
+    if (!pad.label) return;
+    screenText = pad.label.toUpperCase();
+    const allTools = [...TOOLS, ...FUTURE_TOOLS];
+    const match = allTools.find(t => t.group === pad.group);
+    if (match) { screenSubtext = match.subtext; }
+    else if (pad.group === 'about') screenSubtext = 'open source / community';
+    else if (pad.group === 'github') screenSubtext = 'view source code';
+    else screenSubtext = '';
   }
 
   function handlePadLeave() {
@@ -214,7 +198,6 @@
   onMount(() => {
     mounted = true;
     initPads();
-    animFrame = requestAnimationFrame(animate);
 
     window.addEventListener('mousemove', handleKnobMove);
     window.addEventListener('mouseup', handleKnobEnd);
@@ -222,7 +205,6 @@
     window.addEventListener('touchend', handleKnobEnd);
 
     return () => {
-      cancelAnimationFrame(animFrame);
       window.removeEventListener('mousemove', handleKnobMove);
       window.removeEventListener('mouseup', handleKnobEnd);
       window.removeEventListener('touchmove', handleKnobMove);
@@ -408,8 +390,9 @@
 
     <div class="grid-labels">
       <div class="grid-label grid-label--score">&#9835; Score</div>
-      <div class="grid-label grid-label--inspector">&#9703; Inspector</div>
+      <div class="grid-label grid-label--midi">&#9834; Import</div>
       <div class="grid-label grid-label--stats"># Stats</div>
+      <div class="grid-label grid-label--inspector">&#9703; Inspector</div>
       <div class="grid-labels-gap"></div>
       <div class="grid-label grid-label--sidebar">MUTE<br/>LAUNCH</div>
       <div class="grid-label grid-label--sidebar">AUDITION<br/>SECTION</div>
@@ -677,7 +660,7 @@
     border-radius: 3px;
     cursor: default;
     padding: 0;
-    transition: box-shadow 0.12s, transform 0.08s;
+    transition: box-shadow 0.05s, transform 0.05s;
     background: rgba(220, 215, 205, 0.12);
     border: 1px solid rgba(255,255,255,0.06);
     box-shadow:
@@ -730,9 +713,10 @@
     color: rgba(255,255,255,0.3);
     text-align: center;
   }
-  .grid-label--score { grid-column: 1 / 4; }
-  .grid-label--inspector { grid-column: 6 / 9; }
-  .grid-label--stats { grid-column: 11 / 14; }
+  .grid-label--score { grid-column: 1 / 5; }
+  .grid-label--midi { grid-column: 5 / 9; }
+  .grid-label--stats { grid-column: 9 / 13; }
+  .grid-label--inspector { grid-column: 13 / 17; }
   .grid-label--sidebar {
     font-size: 0.36rem;
     letter-spacing: 0.04em;
