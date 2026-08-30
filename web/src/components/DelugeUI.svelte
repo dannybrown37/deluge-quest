@@ -110,12 +110,14 @@
 
         const tool = toolAt(r, c);
         if (tool) {
-          color = tool.color; glowIntensity = 0.7; active = true;
+          const localR = r % 4, localC = c % 4;
+          color = tool.color; glowIntensity = 0.9 - (localR + localC) * 0.1; active = true;
           link = tool.link; label = tool.label; group = tool.group;
         } else {
           const future = futureAt(r, c);
           if (future) {
-            color = future.color; glowIntensity = 0.08;
+            const fLocalR = r % 4, fLocalC = c % 4;
+            color = future.color; glowIntensity = 0.15 - (fLocalR + fLocalC) * 0.015;
             group = future.group; label = future.label;
           }
         }
