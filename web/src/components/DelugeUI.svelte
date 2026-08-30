@@ -27,11 +27,11 @@
   // Left: 2 black diagonal + 2 gold diagonal to their right
   // Center-left: 1 black knob next to screen
   // Right: 1 gold + 1 black, horizontally parallel
-  let knobValues = [64, 64, 127, 0, 64, 64, 100];
+  let knobValues = [64, 0, 127, 0, 64, 64, 100];
   let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
   const knobMeta = [
-    { name: 'upper',    style: 'black' },  // 0: left upper black
-    { name: 'select',   style: 'black' },  // 1: left lower black
+    { name: 'scrub',      style: 'black' },  // 0: left upper black — time scrub
+    { name: 'reverb',     style: 'black' },  // 1: left lower black — reverb send
     { name: 'filter',   style: 'gold'  },  // 2: left upper gold — filter cutoff
     { name: 'res',      style: 'gold'  },  // 3: left lower gold — filter resonance
     { name: 'navigate', style: 'black' },  // 4: black knob left of screen
@@ -54,6 +54,9 @@
   let sourceNode: AudioBufferSourceNode | null = null;
   let gainNode: GainNode | null = null;
   let filterNode: BiquadFilterNode | null = null;
+  let reverbNode: ConvolverNode | null = null;
+  let dryGain: GainNode | null = null;
+  let wetGain: GainNode | null = null;
   let isPlaying = false;
   let playStartTime = 0;
   let playOffset = 0;
@@ -187,6 +190,19 @@
     e.preventDefault();
   }
 
+  function createImpulse(ctx: AudioContext, duration = 2.5, decay = 3): AudioBuffer {
+    const rate = ctx.sampleRate;
+    const len = rate * duration;
+    const buf = ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+    }
+    return buf;
+  }
+
   async function initAudio() {
     if (audioCtx) {
       if (audioCtx.state === 'suspended') await audioCtx.resume();
@@ -196,10 +212,19 @@
     filterNode = audioCtx.createBiquadFilter();
     filterNode.type = 'lowpass';
     gainNode = audioCtx.createGain();
-    filterNode.connect(gainNode);
+    dryGain = audioCtx.createGain();
+    wetGain = audioCtx.createGain();
+    reverbNode = audioCtx.createConvolver();
+    reverbNode.buffer = createImpulse(audioCtx);
+    filterNode.connect(dryGain);
+    filterNode.connect(reverbNode);
+    reverbNode.connect(wetGain);
+    dryGain.connect(gainNode);
+    wetGain.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     updateVolume();
     updateFilter();
+    updateReverb();
     try {
       const resp = await fetch('/audio/demo.mp3');
       if (!resp.ok) { console.warn('No audio file at /audio/demo.mp3'); return; }
@@ -213,12 +238,47 @@
     gainNode.gain.value = knobValues[6] / 127;
   }
 
+  function updateReverb() {
+    if (!dryGain || !wetGain) return;
+    const mix = knobValues[1] / 127;
+    dryGain.gain.value = 1 - mix * 0.5;
+    wetGain.gain.value = mix;
+  }
+
   function updateFilter() {
     if (!filterNode) return;
     const norm = knobValues[2] / 127;
     filterNode.frequency.value = 80 * Math.pow(280, norm); // 80 Hz – 22400 Hz exponential
     const resNorm = knobValues[3] / 127;
     filterNode.Q.value = 0.5 + resNorm * 24.5; // 0.5 – 25
+  }
+
+  function scrubTo() {
+    if (!audioBuffer) return;
+    const target = (knobValues[0] / 127) * audioBuffer.duration;
+    screenSubtext = formatTime(target, audioBuffer.duration);
+    if (isPlaying && sourceNode && audioCtx) {
+      sourceNode.onended = null;
+      sourceNode.stop();
+      playOffset = target;
+      sourceNode = audioCtx.createBufferSource();
+      sourceNode.buffer = audioBuffer;
+      sourceNode.playbackRate.value = getPlaybackRate();
+      sourceNode.connect(filterNode!);
+      sourceNode.onended = () => {
+        if (isPlaying) {
+          isPlaying = false;
+          playOffset = 0;
+          sourceNode = null;
+          screenText = 'DELUGE TOOLS';
+          screenSubtext = 'drop a song to begin';
+        }
+      };
+      sourceNode.start(0, playOffset);
+      playStartTime = audioCtx.currentTime;
+    } else {
+      playOffset = target;
+    }
   }
 
   function getPlaybackRate(): number {
@@ -288,6 +348,8 @@
     knobValues[draggingKnob] = Math.round(((knobAngles[draggingKnob] + 135) / 270) * 127);
     screenText = knobMeta[draggingKnob].name.toUpperCase();
     screenSubtext = `${knobValues[draggingKnob]}`;
+    if (draggingKnob === 0) scrubTo();
+    if (draggingKnob === 1) updateReverb();
     if (draggingKnob === 6) updateVolume();
     if (draggingKnob === 5) updatePlaybackRate();
     if (draggingKnob === 2 || draggingKnob === 3) updateFilter();
@@ -312,6 +374,8 @@
     knobValues[idx] = Math.round(((knobAngles[idx] + 135) / 270) * 127);
     screenText = knobMeta[idx].name.toUpperCase();
     screenSubtext = `${knobValues[idx]}`;
+    if (idx === 0) scrubTo();
+    if (idx === 1) updateReverb();
     if (idx === 6) updateVolume();
     if (idx === 5) updatePlaybackRate();
     if (idx === 2 || idx === 3) updateFilter();
