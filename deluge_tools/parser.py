@@ -47,8 +47,11 @@ class Clip:
 class Instrument:
     name: str | None = None
     is_kit: bool = False
+    instrument_type: str = "synth"
     slot: int = -1
     sub_slot: int = -1
+    midi_channel: int | None = None
+    cv_channel: int | None = None
     clip_instances: list[ClipInstance] = field(default_factory=list)
     drum_names: list[str] = field(default_factory=list)
 
@@ -138,23 +141,36 @@ def parse_song(path: Path | str) -> Song:
     song.bpm = _parse_bpm(root)
     song.in_arrangement_view = root.get("inArrangementView", "0") == "1"
 
+    _TAG_TO_TYPE = {"sound": "synth", "kit": "kit", "midiChannel": "midi", "cv": "cv"}
+
     instrument_map: dict[tuple[int, int], Instrument] = {}
     for inst_el in root.findall("instruments/*"):
+        tag = inst_el.tag
+        inst_type = _TAG_TO_TYPE.get(tag)
+        if inst_type is None:
+            continue
+
         slot = int(inst_el.get("presetSlot", "-1"))
         sub = int(inst_el.get("presetSubSlot", "-1"))
-        is_kit = inst_el.tag == "kit"
 
         instrument = Instrument(
-            is_kit=is_kit,
+            is_kit=(inst_type == "kit"),
+            instrument_type=inst_type,
             slot=slot,
             sub_slot=sub,
             clip_instances=parse_clip_instances(inst_el.get("clipInstances")),
         )
 
-        if is_kit:
+        if inst_type == "kit":
             instrument.name = "Kit"
             for sound in inst_el.findall("soundSources/sound"):
                 instrument.drum_names.append(sound.get("name", ""))
+        elif inst_type == "midi":
+            instrument.midi_channel = int(inst_el.get("channel", "0"))
+            instrument.name = f"MIDI Ch {instrument.midi_channel + 1}"
+        elif inst_type == "cv":
+            instrument.cv_channel = int(inst_el.get("channel", "0"))
+            instrument.name = f"CV {instrument.cv_channel + 1}"
         else:
             instrument.name = f"Synth {slot}"
 

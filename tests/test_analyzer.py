@@ -99,7 +99,7 @@ class TestAnalyzeSong:
                 ClipInstance(position=0, length=192 * 4, clip_index=0),
                 ClipInstance(position=192 * 4, length=192 * 4, clip_index=0),
             ]),
-            Instrument(name="Kit", is_kit=True, slot=1, sub_slot=-1, clip_instances=[
+            Instrument(name="Kit", is_kit=True, instrument_type="kit", slot=1, sub_slot=-1, clip_instances=[
                 ClipInstance(position=0, length=192 * 8, clip_index=1),
             ]),
         ]

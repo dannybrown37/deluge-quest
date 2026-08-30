@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { loadPyodide, inspectSong, type InspectorData, type InspectorTrack } from "../lib/pyodide";
+  import { loadPyodide, inspectSong, type PreviewData, type PreviewTrack } from "../lib/pyodide";
   import { SongPlayer } from "../lib/songAudio";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
@@ -9,7 +9,7 @@
   let progressPct = $state(0);
   let errorMsg = $state("");
   let fileName = $state("");
-  let data: InspectorData | null = $state(null);
+  let data: PreviewData | null = $state(null);
   let dragOver = $state(false);
   let hoveredClip: { track: number; clip: number } | null = $state(null);
   let tooltip = $state({ visible: false, x: 0, y: 0, text: "" });
@@ -24,6 +24,35 @@
     "#7AC48A", "#D4977A", "#7ACAC4", "#C4B07A", "#AD7AC4",
     "#7AC4A8", "#C47AAD",
   ];
+
+  const TYPE_COLORS: Record<string, string> = {
+    synth: "#D4A847",
+    kit: "#5AABAC",
+    midi: "#7A9EC4",
+    cv: "#A87AD4",
+  };
+
+  const TYPE_LABELS: Record<string, string> = {
+    synth: "Synth",
+    kit: "Kit",
+    midi: "MIDI",
+    cv: "CV",
+  };
+
+  let typeCounts = $derived.by(() => {
+    if (!data) return [];
+    const counts: Record<string, number> = {};
+    for (const t of data.tracks) {
+      const type = t.instrumentType ?? (t.isKit ? "kit" : "synth");
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+    return Object.entries(counts).map(([type, count]) => ({
+      type,
+      count,
+      label: TYPE_LABELS[type] ?? type,
+      color: TYPE_COLORS[type] ?? "#888",
+    }));
+  });
 
   const TRACK_HEIGHT = 32;
   const HEADER_HEIGHT = 28;
@@ -72,7 +101,8 @@
 
     const tracks = data.tracks.map((t, i) => {
       const y = RULER_HEIGHT + i * TRACK_HEIGHT;
-      const color = TRACK_COLORS[i % TRACK_COLORS.length];
+      const type = t.instrumentType ?? (t.isKit ? "kit" : "synth");
+      const color = TYPE_COLORS[type] ?? TRACK_COLORS[i % TRACK_COLORS.length];
       const clips = t.clips.map((c, ci) => {
         const x = LABEL_WIDTH + (c.positionTicks / ticksPerMeasure) * pxPerMeasure;
         const w = Math.max((c.lengthTicks / ticksPerMeasure) * pxPerMeasure, 2);
@@ -126,9 +156,9 @@
 
   $effect(() => {
     try {
-      const stored = sessionStorage.getItem("deluge-inspector-file");
+      const stored = sessionStorage.getItem("deluge-preview-file");
       if (stored) {
-        sessionStorage.removeItem("deluge-inspector-file");
+        sessionStorage.removeItem("deluge-preview-file");
         const { name, content } = JSON.parse(stored);
         if (name && content) inspect(name, content);
       }
@@ -278,12 +308,12 @@
     ondrop={handleDrop}
     ondragover={handleDragOver}
     ondragleave={handleDragLeave}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById('inspector-file-input')?.click(); }}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById('preview-file-input')?.click(); }}
   >
     <div class="dropzone-content">
       <span class="dropzone-icon">&#9703;</span>
       <p class="dropzone-title">Drop a Deluge song file</p>
-      <p class="dropzone-sub">or <label class="dropzone-browse">browse<input id="inspector-file-input" type="file" accept=".xml,.XML" onchange={handleInputChange} hidden /></label></p>
+      <p class="dropzone-sub">or <label class="dropzone-browse">browse<input id="preview-file-input" type="file" accept=".xml,.XML" onchange={handleInputChange} hidden /></label></p>
       <p class="dropzone-hint">Visualize your arrangement as a timeline</p>
     </div>
   </div>
@@ -315,8 +345,8 @@
   </div>
 
 {:else if state === "done" && data && layout}
-  <div class="inspector">
-    <div class="inspector-header">
+  <div class="preview-panel">
+    <div class="preview-panel-header">
       <div class="meta">
         <h2 class="song-name">{fileName.replace(/\.XML$/i, '')}</h2>
         <div class="meta-chips">
@@ -329,6 +359,39 @@
       </div>
       <button class="btn btn-secondary" onclick={reset}>Inspect another</button>
     </div>
+
+    {#if typeCounts.length > 0}
+      <div class="type-breakdown">
+        <h3 class="type-breakdown-title">Instruments</h3>
+        <div class="type-grid">
+          {#each typeCounts as tc}
+            <div class="type-card">
+              <span class="type-dot" style="background: {tc.color}"></span>
+              <span class="type-label">{tc.label}</span>
+              <span class="type-count">{tc.count}</span>
+            </div>
+          {/each}
+        </div>
+        <div class="track-list">
+          {#each data!.tracks as track}
+            {@const type = track.instrumentType ?? (track.isKit ? "kit" : "synth")}
+            {@const totalNotes = track.clips.reduce((s, c) => s + c.noteCount, 0)}
+            <div class="track-row">
+              <span class="track-row-dot" style="background: {TYPE_COLORS[type] ?? '#888'}"></span>
+              <span class="track-row-name">{track.name}</span>
+              <span class="track-row-type">{TYPE_LABELS[type] ?? type}</span>
+              {#if track.midiChannel != null}
+                <span class="track-row-detail">Ch {track.midiChannel + 1}</span>
+              {/if}
+              {#if track.cvChannel != null}
+                <span class="track-row-detail">Ch {track.cvChannel + 1}</span>
+              {/if}
+              <span class="track-row-notes">{totalNotes} notes</span>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <div class="transport">
       <button class="transport-btn" onclick={togglePlay} title={playState === 'playing' ? 'Pause' : 'Play'}>
@@ -417,7 +480,7 @@
               text-anchor="end"
               class="track-label"
               fill="var(--text)"
-            >{track.name}{track.isKit ? ' (kit)' : ''}</text>
+            >{track.name}</text>
 
             <!-- Clip instances -->
             {#each track.clips as clip, ci}
@@ -605,14 +668,14 @@
     color: var(--text-secondary);
   }
 
-  /* Inspector result */
-  .inspector {
+  /* Preview result */
+  .preview-panel {
     display: flex;
     flex-direction: column;
     gap: 1rem;
   }
 
-  .inspector-header {
+  .preview-panel-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -788,4 +851,90 @@
     border: 1px solid var(--border);
   }
   .btn-secondary:hover { background: var(--surface); }
+
+  .type-breakdown {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+  }
+  .type-breakdown-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .type-grid {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+  .type-card {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+  }
+  .type-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .type-label {
+    color: var(--text-secondary);
+  }
+  .type-count {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .track-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+  }
+  .track-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    padding: 0.2rem 0;
+  }
+  .track-row-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .track-row-name {
+    color: var(--text);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .track-row-type {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+  }
+  .track-row-detail {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    opacity: 0.7;
+  }
+  .track-row-notes {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
 </style>

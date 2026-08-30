@@ -106,3 +106,51 @@ class TestParseSong:
 
     def test_bpm_reasonable(self, song):
         assert 20 < song.bpm < 300
+
+    def test_instrument_type_synth(self, song):
+        synths = [i for i in song.instruments if i.instrument_type == "synth"]
+        assert len(synths) >= 1
+
+    def test_instrument_type_kit(self, song):
+        kits = [i for i in song.instruments if i.instrument_type == "kit"]
+        assert len(kits) >= 1
+
+
+class TestInstrumentTypes:
+    @pytest.fixture
+    def song_with_all_types(self, tmp_path):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<song firmwareVersion="4.0.0" timePerTimerTick="917" timerTickFraction="3006477107"
+      rootNote="0" inArrangementView="1">
+  <modeNotes><modeNote>0</modeNote><modeNote>2</modeNote><modeNote>4</modeNote>
+  <modeNote>5</modeNote><modeNote>7</modeNote><modeNote>9</modeNote><modeNote>11</modeNote></modeNotes>
+  <instruments>
+    <sound presetSlot="0" presetSubSlot="-1" />
+    <kit presetSlot="1" presetSubSlot="-1">
+      <soundSources><sound name="kick"/></soundSources>
+    </kit>
+    <midiChannel presetSlot="2" presetSubSlot="-1" channel="0" />
+    <cv presetSlot="3" presetSubSlot="-1" channel="0" />
+  </instruments>
+  <sessionClips></sessionClips>
+</song>"""
+        p = tmp_path / "test.XML"
+        p.write_text(xml)
+        return parse_song(p)
+
+    @pytest.mark.parametrize(
+        "expected_type,expected_count",
+        [("synth", 1), ("kit", 1), ("midi", 1), ("cv", 1)],
+        ids=["synth", "kit", "midi", "cv"],
+    )
+    def test_all_types_detected(self, song_with_all_types, expected_type, expected_count):
+        matched = [i for i in song_with_all_types.instruments if i.instrument_type == expected_type]
+        assert len(matched) == expected_count
+
+    def test_midi_channel_stored(self, song_with_all_types):
+        midi = [i for i in song_with_all_types.instruments if i.instrument_type == "midi"][0]
+        assert midi.midi_channel == 0
+
+    def test_cv_channel_stored(self, song_with_all_types):
+        cv = [i for i in song_with_all_types.instruments if i.instrument_type == "cv"][0]
+        assert cv.cv_channel == 0

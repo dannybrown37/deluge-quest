@@ -1,15 +1,15 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import SongInspector from '../components/SongInspector.svelte';
+import SongPreview from '../components/SongPreview.svelte';
 ---
 
-<BaseLayout title="Song Inspector" description="Visualize your Deluge song arrangement — clips, instruments, structure.">
+<BaseLayout title="Song Preview" description="Preview your Deluge song arrangement — clips, instruments, playback.">
   <section class="page-section">
     <div class="page-header">
-      <h1 class="page-title">Song Inspector</h1>
-      <p class="page-desc">Visualize your Deluge arrangement as a timeline — see clips, instruments, and song structure without a DAW.</p>
+      <h1 class="page-title">Song Preview</h1>
+      <p class="page-desc">Preview your Deluge arrangement — see clips, instruments, and song structure, and hear it in the browser.</p>
     </div>
-    <SongInspector client:load />
+    <SongPreview client:load />
   </section>
 </BaseLayout>
 

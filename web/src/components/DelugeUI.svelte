@@ -70,7 +70,7 @@
 
   const TOOLS: { group: string; label: string; link: string; color: string; subtext: string }[] = [
     { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: AUDITION_PALETTE[0], subtext: 'library analysis & stats' },
-    { group: 'inspector', label: 'Song Inspector',   link: '/inspector', color: AUDITION_PALETTE[1], subtext: 'visual arrangement timeline' },
+    { group: 'preview',   label: 'Song Preview',     link: '/preview',   color: AUDITION_PALETTE[1], subtext: 'arrangement preview & playback' },
     { group: 'score',     label: 'Score Converter',  link: '/score',     color: AUDITION_PALETTE[2], subtext: 'Deluge XML → MusicXML' },
     { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: AUDITION_PALETTE[3], subtext: 'MIDI → Deluge XML' },
     { group: 'clean',     label: 'Card Analysis',    link: '/clean',     color: AUDITION_PALETTE[4], subtext: 'find unused samples' },
@@ -608,7 +608,7 @@
       <div class="grid-label grid-label--stats"># Stats</div>
       <div class="grid-label grid-label--score">&#9835; Score</div>
       <div class="grid-label grid-label--midi">&#9834; Import</div>
-      <div class="grid-label grid-label--inspector">&#9703; Inspector</div>
+      <div class="grid-label grid-label--preview">&#9703; Preview</div>
       <div class="grid-labels-gap"></div>
       <div class="grid-label grid-label--sidebar">MUTE<br/>LAUNCH</div>
       <div class="grid-label grid-label--sidebar">AUDITION<br/>SECTION</div>
@@ -975,7 +975,7 @@
   .grid-label--stats { grid-column: 1 / 5; }
   .grid-label--score { grid-column: 5 / 9; }
   .grid-label--midi { grid-column: 9 / 13; }
-  .grid-label--inspector { grid-column: 13 / 17; }
+  .grid-label--preview { grid-column: 13 / 17; }
   .grid-label--sidebar {
     font-size: 0.36rem;
     letter-spacing: 0.04em;

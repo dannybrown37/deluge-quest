@@ -17,10 +17,10 @@ import DelugeUI from '../components/DelugeUI.svelte';
           <span class="tool-name">Song Stats</span>
           <span class="tool-desc">Library analysis &amp; stats</span>
         </a>
-        <a href="/inspector" class="tool-card tool-card--inspector">
+        <a href="/preview" class="tool-card tool-card--preview">
           <span class="tool-icon">&#9703;</span>
-          <span class="tool-name">Song Inspector</span>
-          <span class="tool-desc">Visual arrangement timeline</span>
+          <span class="tool-name">Song Preview</span>
+          <span class="tool-desc">Arrangement preview &amp; playback</span>
         </a>
         <a href="/score" class="tool-card tool-card--score">
           <span class="tool-icon">&#9835;</span>
@@ -114,7 +114,7 @@ import DelugeUI from '../components/DelugeUI.svelte';
   }
   .tool-card--score .tool-icon { color: var(--accent); }
   .tool-card--stats .tool-icon { color: var(--accent); font-family: 'DM Mono', monospace; }
-  .tool-card--inspector .tool-icon { color: var(--teal); }
+  .tool-card--preview .tool-icon { color: var(--teal); }
   .tool-card--clean .tool-icon { color: var(--text-secondary); font-family: 'DM Mono', monospace; }
   .tool-card--patch .tool-icon { color: var(--teal); }
   .tool-card--github .tool-icon { color: var(--text-secondary); }

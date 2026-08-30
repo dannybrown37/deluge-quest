@@ -123,18 +123,70 @@
   );
 
   const CACHE_KEY_RESULTS = "deluge-stats-results";
-  const CACHE_KEY_FILES = "deluge-stats-files";
+  const IDB_NAME = "deluge-stats";
+  const IDB_STORE = "files";
 
-  function saveToSession() {
+  function openIdb(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function idbPut(db: IDBDatabase, key: string, value: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  function idbGetAll(db: IDBDatabase): Promise<Map<string, string>> {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const store = tx.objectStore(IDB_STORE);
+      const map = new Map<string, string>();
+      const req = store.openCursor();
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (cursor) {
+          map.set(cursor.key as string, cursor.value);
+          cursor.continue();
+        } else {
+          resolve(map);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function idbClear(db: IDBDatabase): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function saveToSession() {
     try {
       sessionStorage.setItem(CACHE_KEY_RESULTS, JSON.stringify(results));
     } catch {}
     try {
-      sessionStorage.setItem(CACHE_KEY_FILES, JSON.stringify(Object.fromEntries(fileContents)));
+      const db = await openIdb();
+      await idbClear(db);
+      for (const [name, content] of fileContents) {
+        await idbPut(db, name, content);
+      }
+      db.close();
     } catch {}
   }
 
-  function restoreFromSession(): boolean {
+  async function restoreFromSession(): Promise<boolean> {
     try {
       const raw = sessionStorage.getItem(CACHE_KEY_RESULTS);
       if (!raw) return false;
@@ -147,8 +199,9 @@
       return false;
     }
     try {
-      const raw = sessionStorage.getItem(CACHE_KEY_FILES);
-      if (raw) fileContents = new Map(Object.entries(JSON.parse(raw)));
+      const db = await openIdb();
+      fileContents = await idbGetAll(db);
+      db.close();
     } catch {}
     return true;
   }
@@ -181,7 +234,7 @@
     URL.revokeObjectURL(url);
   }
 
-  restoreFromSession();
+  restoreFromSession().catch(() => {});
 
   async function readEntryRecursive(entry: FileSystemEntry): Promise<File[]> {
     if (entry.isFile) {
@@ -340,11 +393,11 @@
     URL.revokeObjectURL(url);
   }
 
-  function openInInspector(filename: string) {
+  function openInPreview(filename: string) {
     const content = fileContents.get(filename);
     if (!content) return;
-    sessionStorage.setItem("deluge-inspector-file", JSON.stringify({ name: filename, content }));
-    window.location.href = "/inspector";
+    sessionStorage.setItem("deluge-preview-file", JSON.stringify({ name: filename, content }));
+    window.location.href = "/preview";
   }
 
   function reset() {
@@ -356,8 +409,8 @@
     clearFilters();
     try {
       sessionStorage.removeItem(CACHE_KEY_RESULTS);
-      sessionStorage.removeItem(CACHE_KEY_FILES);
     } catch {}
+    openIdb().then(db => idbClear(db).then(() => db.close())).catch(() => {});
   }
 </script>
 
@@ -499,7 +552,7 @@
                         {convertedFiles.has(s.filename) ? "Download" : "Score"}
                       </button>
                     {/if}
-                    <button class="score-btn inspect-btn" title="View arrangement timeline" onclick={() => openInInspector(s.filename)}>Inspect</button>
+                    <button class="score-btn inspect-btn" title="Preview arrangement" onclick={() => openInPreview(s.filename)}>Preview</button>
                   </span>
                 {/if}
               </td>
