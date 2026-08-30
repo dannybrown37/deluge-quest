@@ -69,12 +69,12 @@
     { group: 'score',     label: 'Score Converter',  link: '/score',     color: GOLD,   subtext: 'Deluge XML → MusicXML' },
     { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: GREEN,  subtext: 'MIDI → Deluge XML' },
     { group: 'clean',     label: 'Card Analysis',    link: '/clean',     color: WHITE,  subtext: 'find unused samples' },
+    { group: 'patch',     label: 'Patch Generator',  link: '/patch',     color: TEAL,   subtext: 'random synth presets' },
   ];
 
   const FUTURE_TOOLS: { group: string; label: string; subtext: string }[] = [
     { group: 'future-1', label: 'Coming Soon', subtext: '' },
     { group: 'future-2', label: 'Coming Soon', subtext: '' },
-    { group: 'future-3', label: 'Coming Soon', subtext: '' },
   ];
 
   function toolAt(r: number, c: number): typeof TOOLS[number] | undefined {

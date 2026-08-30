@@ -1,0 +1,79 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PatchGenerator from '../components/PatchGenerator.svelte';
+---
+
+<BaseLayout title="Patch Generator" description="Generate randomized but musically-sensible Deluge synth presets. Download as XML for your SD card.">
+  <section class="page-header">
+    <h1 class="page-title">Patch Generator</h1>
+    <p class="page-desc">Generate random Deluge synth presets tuned by category. Download as .XML and drop onto your SD card's SYNTHS folder.</p>
+  </section>
+  <section class="tool-area">
+    <PatchGenerator client:only="svelte" />
+  </section>
+  <section class="info">
+    <div class="info-inner">
+      <div class="info-block">
+        <h3>How it works</h3>
+        <p>Pick a category (pad, lead, bass, keys, FX) and hit generate. Each category constrains randomization to musically useful ranges — pads get slow attacks, bass gets low octaves, leads get bright filters.</p>
+      </div>
+      <div class="info-block">
+        <h3>Using patches</h3>
+        <p>Download the .XML file and place it in your Deluge SD card's <code>SYNTHS</code> folder. Load it as a new preset from the Deluge's preset browser.</p>
+      </div>
+      <div class="info-block">
+        <h3>Lock & iterate</h3>
+        <p>Click the lock icon on any section to keep it fixed while re-randomizing everything else. Use history to recall previous patches.</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page-header {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 2rem;
+    text-align: center;
+  }
+  .page-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  .page-desc {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  .tool-area {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+  }
+
+  .info {
+    border-top: 1px solid var(--border);
+    padding: 3rem 1.5rem;
+  }
+  .info-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+  }
+  .info-block h3 {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+  }
+  .info-block p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+</style>

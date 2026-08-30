@@ -32,6 +32,11 @@ import DelugeUI from '../components/DelugeUI.svelte';
           <span class="tool-name">Card Analysis</span>
           <span class="tool-desc">Find unused samples</span>
         </a>
+        <a href="/patch" class="tool-card tool-card--patch">
+          <span class="tool-icon">&#9881;</span>
+          <span class="tool-name">Patch Generator</span>
+          <span class="tool-desc">Random synth presets</span>
+        </a>
         <a href="https://github.com/dannybrown37/deluge" class="tool-card tool-card--github" target="_blank" rel="noopener">
           <span class="tool-icon">&#10097;</span>
           <span class="tool-name">Source</span>
@@ -111,6 +116,7 @@ import DelugeUI from '../components/DelugeUI.svelte';
   .tool-card--stats .tool-icon { color: var(--accent); font-family: 'DM Mono', monospace; }
   .tool-card--inspector .tool-icon { color: var(--teal); }
   .tool-card--clean .tool-icon { color: var(--text-secondary); font-family: 'DM Mono', monospace; }
+  .tool-card--patch .tool-icon { color: var(--teal); }
   .tool-card--github .tool-icon { color: var(--text-secondary); }
 
   .tool-name {
