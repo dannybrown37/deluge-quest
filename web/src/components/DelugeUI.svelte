@@ -33,7 +33,7 @@
     { name: 'delay',      style: 'black' },  // 0: left upper black — delay send
     { name: 'reverb',     style: 'black' },  // 1: left lower black — reverb send
     { name: 'filter',   style: 'gold'  },  // 2: left upper gold — filter cutoff
-    { name: 'res',      style: 'gold'  },  // 3: left lower gold — filter resonance
+    { name: 'resonance',      style: 'gold'  },  // 3: left lower gold — filter resonance
     { name: 'scrub',    style: 'black' },  // 4: black knob left of screen
     { name: 'tempo',    style: 'black' },  // 5: right black (left position)
     { name: 'output',   style: 'gold'  },  // 6: right gold (rightmost)
