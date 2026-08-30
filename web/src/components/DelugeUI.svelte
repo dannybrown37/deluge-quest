@@ -626,23 +626,17 @@
       </div>
     {/if}
 
-    <div class="grid-labels grid-labels--top">
-      <div class="grid-label grid-label--stats">Stats</div>
-      <div class="grid-label grid-label--preview">Preview</div>
-      <div class="grid-label grid-label--score">Score</div>
-      <div class="grid-label grid-label--midi">Import</div>
-      <div class="grid-labels-gap"></div>
-      <div class="grid-label grid-label--sidebar"></div>
-      <div class="grid-label grid-label--sidebar"></div>
-    </div>
     <div class="grid-labels">
-      <div class="grid-label grid-label--stats">Card</div>
-      <div class="grid-label grid-label--preview">Patch</div>
-      <div class="grid-label grid-label--score">Kits</div>
-      <div class="grid-label grid-label--midi"></div>
+      <div class="grid-label-group grid-label-group--stats-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Songs</span></div>
+      <div class="grid-label-group grid-label-group--stats-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Card</span></div>
+      <div class="grid-label-group grid-label-group--preview-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Preview</span></div>
+      <div class="grid-label-group grid-label-group--preview-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Patch</span></div>
+      <div class="grid-label-group grid-label-group--score-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Score</span></div>
+      <div class="grid-label-group grid-label-group--score-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Kits</span></div>
+      <div class="grid-label-group grid-label-group--midi-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Import</span></div>
       <div class="grid-labels-gap"></div>
-      <div class="grid-label grid-label--sidebar">GitHub</div>
-      <div class="grid-label grid-label--sidebar">About</div>
+      <div class="grid-label-group grid-label-group--github"><span class="grid-label-text">GitHub</span></div>
+      <div class="grid-label-group grid-label-group--about"><span class="grid-label-text">About</span></div>
     </div>
   </div>
 
@@ -695,7 +689,7 @@
   .deluge-body {
     flex: 1;
     background: #111114;
-    padding: 0.6rem 1rem 1rem;
+    padding: 0.6rem 1rem 0.3rem;
     position: relative;
     min-width: 0;
   }
@@ -986,35 +980,47 @@
     display: grid;
     grid-template-columns: repeat(16, 1fr) 8px repeat(2, 1fr);
     gap: 3px;
-    margin-top: 0;
-    line-height: 1;
-  }
-  .grid-labels--top {
     margin-top: 1px;
+    line-height: 1;
+    height: 18px;
   }
   .grid-labels-gap {
     grid-column: 17;
     width: 8px;
   }
-  .grid-label {
+  .grid-label-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
     font-family: 'DM Mono', monospace;
     font-size: 0.42rem;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    white-space: nowrap;
     color: rgba(255,255,255,0.3);
-    text-align: center;
-    padding-top: 1px;
   }
-  .grid-label--stats { grid-column: 1 / 5; }
-  .grid-label--preview { grid-column: 5 / 9; }
-  .grid-label--score { grid-column: 9 / 13; }
-  .grid-label--midi { grid-column: 13 / 17; }
-  .grid-label--sidebar {
+  .grid-label-arrow {
+    font-size: 0.35rem;
+    line-height: 1;
+  }
+  .grid-label-text {
+    line-height: 1;
+  }
+  .grid-label-group--stats-up { grid-column: 1 / 3; }
+  .grid-label-group--stats-down { grid-column: 3 / 5; }
+  .grid-label-group--preview-up { grid-column: 5 / 7; }
+  .grid-label-group--preview-down { grid-column: 7 / 9; }
+  .grid-label-group--score-up { grid-column: 9 / 11; }
+  .grid-label-group--score-down { grid-column: 11 / 13; }
+  .grid-label-group--midi-up { grid-column: 13 / 15; }
+  .grid-label-group--github,
+  .grid-label-group--about {
     font-size: 0.36rem;
     letter-spacing: 0.04em;
     color: rgba(255,255,255,0.25);
   }
+  .grid-label-group--github { grid-column: 18; }
+  .grid-label-group--about { grid-column: 19; }
 
 </style>
