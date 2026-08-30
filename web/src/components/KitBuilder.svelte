@@ -63,6 +63,8 @@
   $effect(() => { containerEl?.focus(); });
 
   $effect(() => {
+    void browseIndex;
+    void kit.selectedIndex;
     if (activePane === "browser" && browserListEl) {
       const sel = browserListEl.querySelector(".browse-entry--selected");
       sel?.scrollIntoView({ block: "nearest" });
@@ -692,15 +694,18 @@
   .panes {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
     border: 1px solid var(--border);
     border-top: none;
     min-height: 50vh;
     max-height: 70vh;
+    overflow: hidden;
   }
   .pane {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
   }
   .pane-browser { border-right: 1px solid var(--border); }
   .pane--active .pane-header { border-bottom-color: var(--accent); }
