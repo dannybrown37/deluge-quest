@@ -63,6 +63,7 @@
   let patch: Patch | null = $state(null);
   let history: Patch[] = $state([]);
   let locked: Set<string> = $state(new Set());
+  let bulkCount: number = $state(10);
 
   function hex(value: number): string {
     const clamped = Math.max(-2147483648, Math.min(2147483647, Math.round(value)));
@@ -433,6 +434,83 @@ ${cables}
     URL.revokeObjectURL(url);
   }
 
+  function buildZip(files: { name: string; data: Uint8Array }[]): Uint8Array {
+    const centralDir: Uint8Array[] = [];
+    const parts: Uint8Array[] = [];
+    let offset = 0;
+
+    for (const file of files) {
+      const nameBytes = new TextEncoder().encode(file.name);
+      const localHeader = new Uint8Array(30 + nameBytes.length);
+      const lv = new DataView(localHeader.buffer);
+      lv.setUint32(0, 0x04034b50, true);
+      lv.setUint16(4, 20, true);
+      lv.setUint32(18, file.data.length, true);
+      lv.setUint32(22, file.data.length, true);
+      lv.setUint16(26, nameBytes.length, true);
+      localHeader.set(nameBytes, 30);
+
+      const cdEntry = new Uint8Array(46 + nameBytes.length);
+      const cv = new DataView(cdEntry.buffer);
+      cv.setUint32(0, 0x02014b50, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint32(20, file.data.length, true);
+      cv.setUint32(24, file.data.length, true);
+      cv.setUint16(28, nameBytes.length, true);
+      cv.setUint32(42, offset, true);
+      cdEntry.set(nameBytes, 46);
+
+      parts.push(localHeader, file.data);
+      centralDir.push(cdEntry);
+      offset += localHeader.length + file.data.length;
+    }
+
+    const cdSize = centralDir.reduce((a, b) => a + b.length, 0);
+    const eocd = new Uint8Array(22);
+    const ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true);
+    ev.setUint16(8, files.length, true);
+    ev.setUint16(10, files.length, true);
+    ev.setUint32(12, cdSize, true);
+    ev.setUint32(16, offset, true);
+
+    const total = offset + cdSize + 22;
+    const result = new Uint8Array(total);
+    let pos = 0;
+    for (const p of parts) { result.set(p, pos); pos += p.length; }
+    for (const c of centralDir) { result.set(c, pos); pos += c.length; }
+    result.set(eocd, pos);
+    return result;
+  }
+
+  function bulkDownload() {
+    const count = Math.max(1, Math.min(100, bulkCount));
+    const files: { name: string; data: Uint8Array }[] = [];
+    const usedNames = new Set<string>();
+
+    for (let i = 0; i < count; i++) {
+      const p = generatePatch(selectedCategory);
+      let fileName = `${p.name.replace(/\s+/g, '_')}.XML`;
+      while (usedNames.has(fileName)) {
+        fileName = `${p.name.replace(/\s+/g, '_')}_${i}.XML`;
+      }
+      usedNames.add(fileName);
+      files.push({ name: fileName, data: new TextEncoder().encode(toXML(p)) });
+      history = [p, ...history.slice(0, 19)];
+    }
+    if (files.length > 0) patch = files[0] ? history[0] : patch;
+
+    const zip = buildZip(files);
+    const blob = new Blob([zip], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `deluge_${selectedCategory}_patches.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function toggleLock(key: string) {
     const next = new Set(locked);
     if (next.has(key)) next.delete(key);
@@ -518,6 +596,18 @@ ${cables}
         Download .XML
       </button>
     {/if}
+    <div class="bulk-group">
+      <input
+        type="number"
+        class="bulk-input"
+        bind:value={bulkCount}
+        min="1"
+        max="100"
+      />
+      <button class="download-btn" onclick={bulkDownload}>
+        Bulk Download .ZIP
+      </button>
+    </div>
   </div>
 
   {#if patch}
@@ -758,6 +848,24 @@ ${cables}
     background: var(--accent-dim);
   }
 
+  .bulk-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-left: auto;
+  }
+  .bulk-input {
+    width: 60px;
+    padding: 0.55rem 0.5rem;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
   .patch-display {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -965,5 +1073,7 @@ ${cables}
     .patch-grid { grid-template-columns: 1fr; }
     .actions { flex-direction: column; }
     .generate-btn, .download-btn { width: 100%; }
+    .bulk-group { margin-left: 0; width: 100%; }
+    .bulk-input { flex-shrink: 0; }
   }
 </style>

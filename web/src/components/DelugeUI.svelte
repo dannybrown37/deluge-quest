@@ -63,18 +63,20 @@
   let housingHeight = 0;
   $: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH);
 
+  const AUDITION_PALETTE = ['#4488DD','#DD55AA','#DDBB33','#5AABAC','#CC3030','#AACC30','#3355CC','#FF6622'];
+
   const TOOLS: { group: string; label: string; link: string; color: string; subtext: string }[] = [
-    { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: PURPLE, subtext: 'library analysis & stats' },
-    { group: 'inspector', label: 'Song Inspector',   link: '/inspector', color: TEAL,   subtext: 'visual arrangement timeline' },
-    { group: 'score',     label: 'Score Converter',  link: '/score',     color: GOLD,   subtext: 'Deluge XML → MusicXML' },
-    { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: GREEN,  subtext: 'MIDI → Deluge XML' },
-    { group: 'clean',     label: 'Card Analysis',    link: '/clean',     color: WHITE,  subtext: 'find unused samples' },
-    { group: 'patch',     label: 'Patch Generator',  link: '/patch',     color: TEAL,   subtext: 'random synth presets' },
+    { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: AUDITION_PALETTE[0], subtext: 'library analysis & stats' },
+    { group: 'inspector', label: 'Song Inspector',   link: '/inspector', color: AUDITION_PALETTE[1], subtext: 'visual arrangement timeline' },
+    { group: 'score',     label: 'Score Converter',  link: '/score',     color: AUDITION_PALETTE[2], subtext: 'Deluge XML → MusicXML' },
+    { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: AUDITION_PALETTE[3], subtext: 'MIDI → Deluge XML' },
+    { group: 'clean',     label: 'Card Analysis',    link: '/clean',     color: AUDITION_PALETTE[4], subtext: 'find unused samples' },
+    { group: 'patch',     label: 'Patch Generator',  link: '/patch',     color: AUDITION_PALETTE[5], subtext: 'random synth presets' },
   ];
 
-  const FUTURE_TOOLS: { group: string; label: string; subtext: string }[] = [
-    { group: 'future-1', label: 'Coming Soon', subtext: '' },
-    { group: 'future-2', label: 'Coming Soon', subtext: '' },
+  const FUTURE_TOOLS: { group: string; label: string; subtext: string; color: string }[] = [
+    { group: 'future-1', label: 'Coming Soon', subtext: '', color: AUDITION_PALETTE[6] },
+    { group: 'future-2', label: 'Coming Soon', subtext: '', color: AUDITION_PALETTE[7] },
   ];
 
   function toolAt(r: number, c: number): typeof TOOLS[number] | undefined {
@@ -113,7 +115,7 @@
         } else {
           const future = futureAt(r, c);
           if (future) {
-            color = WHITE; glowIntensity = 0.08;
+            color = future.color; glowIntensity = 0.08;
             group = future.group; label = future.label;
           }
         }
@@ -134,7 +136,7 @@
         let label: string | undefined;
         let group: string | undefined;
 
-        const MUTE_COLORS = ['#40A060','#CC3030','#40A060','#CC3030','#40A060','#CC3030','#40A060','#CC3030'];
+        const MUTE_COLORS = ['#40A060','#CC3030','#CC3030','#CC3030','#CC3030','#CC3030','#CC3030','#CC3030'];
         const AUDITION_COLORS = ['#4488DD','#DD55AA','#DDBB33','#5AABAC','#CC3030','#AACC30','#3355CC','#FF6622'];
 
         if (c === 0) {
