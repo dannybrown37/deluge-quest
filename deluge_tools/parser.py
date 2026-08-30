@@ -7,6 +7,7 @@ from pathlib import Path
 
 TICKS_PER_QUARTER = 48
 NOTE_RECORD_SIZE = 10
+NOTE_RECORD_SIZE_WITH_LIFT = 11
 CLIP_INSTANCE_SIZE = 12
 
 
@@ -75,21 +76,29 @@ class Song:
     in_arrangement_view: bool = False
 
 
-def parse_note_data(hex_str: str | None) -> list[Note]:
+def _parse_note_records(hex_str: str | None, record_size: int) -> list[Note]:
     if not hex_str:
         return []
     raw = hex_str.removeprefix("0x")
     data = bytes.fromhex(raw)
     notes = []
-    for i in range(0, len(data), NOTE_RECORD_SIZE):
-        chunk = data[i : i + NOTE_RECORD_SIZE]
-        if len(chunk) < NOTE_RECORD_SIZE:
+    for i in range(0, len(data), record_size):
+        chunk = data[i : i + record_size]
+        if len(chunk) < record_size:
             break
         pos, length = struct.unpack(">II", chunk[:8])
         velocity = chunk[8]
         lift = chunk[9]
         notes.append(Note(position=pos, length=length, velocity=velocity, lift_velocity=lift))
     return notes
+
+
+def parse_note_data(hex_str: str | None) -> list[Note]:
+    return _parse_note_records(hex_str, NOTE_RECORD_SIZE)
+
+
+def parse_note_data_with_lift(hex_str: str | None) -> list[Note]:
+    return _parse_note_records(hex_str, NOTE_RECORD_SIZE_WITH_LIFT)
 
 
 def parse_clip_instances(hex_str: str | None) -> list[ClipInstance]:
@@ -131,9 +140,21 @@ def _parse_clip_note_rows(
             row.drum_index = int(nr.get("drumIndex"))
             if drum_names and 0 <= row.drum_index < len(drum_names):
                 row.drum_name = drum_names[row.drum_index]
-        row.notes = parse_note_data(nr.get("noteData"))
+        note_data = nr.get("noteData")
+        if note_data is not None:
+            row.notes = parse_note_data(note_data)
+        else:
+            row.notes = parse_note_data_with_lift(nr.get("noteDataWithLift"))
         rows.append(row)
     return rows
+
+
+def _instrument_key(
+    slot: int, sub: int, preset_name: str | None, preset_folder: str | None
+) -> tuple:
+    if slot == -1 and preset_name is not None:
+        return ("name", preset_name, preset_folder)
+    return ("slot", slot, sub)
 
 
 def parse_song(path: Path | str) -> Song:
@@ -161,6 +182,8 @@ def parse_song(path: Path | str) -> Song:
 
         slot = int(inst_el.get("presetSlot", "-1"))
         sub = int(inst_el.get("presetSubSlot", "-1"))
+        preset_name = inst_el.get("presetName")
+        preset_folder = inst_el.get("presetFolder")
 
         instrument = Instrument(
             is_kit=(inst_type == "kit"),
@@ -187,9 +210,9 @@ def parse_song(path: Path | str) -> Song:
             instrument.cv_channel = int(inst_el.get("channel", "0"))
             instrument.name = f"CV {instrument.cv_channel + 1}"
         else:
-            instrument.name = f"Synth {slot}"
+            instrument.name = preset_name or f"Synth {slot}"
 
-        instrument_map[(slot, sub)] = instrument
+        instrument_map[_instrument_key(slot, sub, preset_name, preset_folder)] = instrument
 
     song.instruments = list(instrument_map.values())
 
@@ -206,7 +229,9 @@ def parse_song(path: Path | str) -> Song:
     for clip_idx, clip_el in enumerate(root.findall("sessionClips/instrumentClip")):
         slot = int(clip_el.get("instrumentPresetSlot", "-1"))
         sub = int(clip_el.get("instrumentPresetSubSlot", "-1"))
-        key = (slot, sub)
+        preset_name = clip_el.get("instrumentPresetName")
+        preset_folder = clip_el.get("instrumentPresetFolder")
+        key = _instrument_key(slot, sub, preset_name, preset_folder)
         inst = instrument_map.get(key)
         if inst is None:
             continue

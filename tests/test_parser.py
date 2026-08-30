@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from deluge_tools.parser import Note, parse_clip_instances, parse_note_data, parse_song
+from deluge_tools.parser import (
+    Note,
+    parse_clip_instances,
+    parse_note_data,
+    parse_note_data_with_lift,
+    parse_song,
+)
 
 SAMPLE_SONG = Path(__file__).parent.parent / "Square Spelunking.XML"
 
@@ -36,6 +42,32 @@ class TestParseNoteData:
     def test_empty(self):
         assert parse_note_data("") == []
         assert parse_note_data(None) == []
+
+
+class TestParseNoteDataWithLift:
+    @pytest.mark.parametrize(
+        "hex_data, expected",
+        [
+            (
+                "0x000000000000000C634014",
+                [Note(position=0, length=12, velocity=99, lift_velocity=64)],
+            ),
+            (
+                "0x000000000000000C634014000000300000000C634014",
+                [
+                    Note(position=0, length=12, velocity=99, lift_velocity=64),
+                    Note(position=48, length=12, velocity=99, lift_velocity=64),
+                ],
+            ),
+        ],
+        ids=["single-note", "two-notes"],
+    )
+    def test_decode(self, hex_data: str, expected: list[Note]):
+        assert parse_note_data_with_lift(hex_data) == expected
+
+    def test_empty(self):
+        assert parse_note_data_with_lift("") == []
+        assert parse_note_data_with_lift(None) == []
 
 
 class TestParseClipInstances:
@@ -214,3 +246,86 @@ class TestAudioClips:
         audio_outputs = [i for i in song_with_audio.instruments if i.instrument_type == "audio"]
         assert audio_outputs[0].name == "Audio 1"
         assert audio_outputs[1].name == "Audio 2"
+
+
+class TestNoteDataWithLift:
+    @pytest.fixture
+    def song_with_lift_notes(self, tmp_path):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<song firmwareVersion="4.0.0" timePerTimerTick="917" timerTickFraction="3006477107"
+      rootNote="0" inArrangementView="1">
+  <modeNotes><modeNote>0</modeNote><modeNote>2</modeNote><modeNote>4</modeNote>
+  <modeNote>5</modeNote><modeNote>7</modeNote><modeNote>9</modeNote><modeNote>11</modeNote></modeNotes>
+  <instruments>
+    <sound presetSlot="0" presetSubSlot="-1" clipInstances="0x000000000000030000000000" />
+  </instruments>
+  <sessionClips>
+    <instrumentClip instrumentPresetSlot="0" instrumentPresetSubSlot="-1" length="768">
+      <noteRows>
+        <noteRow y="60" noteDataWithLift="0x000000000000000C634014000000300000000C634014" />
+      </noteRows>
+    </instrumentClip>
+  </sessionClips>
+</song>"""
+        p = tmp_path / "test.XML"
+        p.write_text(xml)
+        return parse_song(p)
+
+    def test_notes_decoded_from_lift_format(self, song_with_lift_notes):
+        clip = song_with_lift_notes.clips[0]
+        assert sum(len(r.notes) for r in clip.rows) == 2
+
+    def test_note_fields(self, song_with_lift_notes):
+        clip = song_with_lift_notes.clips[0]
+        note = clip.rows[0].notes[0]
+        assert note.position == 0
+        assert note.length == 12
+        assert note.velocity == 99
+
+
+class TestNamedPresetInstruments:
+    @pytest.fixture
+    def song_with_named_presets(self, tmp_path):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<song firmwareVersion="4.0.0" timePerTimerTick="917" timerTickFraction="3006477107"
+      rootNote="0" inArrangementView="1">
+  <modeNotes><modeNote>0</modeNote><modeNote>2</modeNote><modeNote>4</modeNote>
+  <modeNote>5</modeNote><modeNote>7</modeNote><modeNote>9</modeNote><modeNote>11</modeNote></modeNotes>
+  <instruments>
+    <sound presetName="Alpha" presetFolder="SYNTHS/A" clipInstances="0x0000000000000A0000000000" />
+    <sound presetName="Beta" presetFolder="SYNTHS/B" clipInstances="0x0000180000000A0000000001" />
+  </instruments>
+  <sessionClips>
+    <instrumentClip instrumentPresetName="Alpha" instrumentPresetFolder="SYNTHS/A" length="768">
+      <noteRows>
+        <noteRow y="60" noteData="0x00000000000000604014" />
+      </noteRows>
+    </instrumentClip>
+    <instrumentClip instrumentPresetName="Beta" instrumentPresetFolder="SYNTHS/B" length="768">
+      <noteRows>
+        <noteRow y="72" noteData="0x00000000000000404020000000C0000000404020" />
+      </noteRows>
+    </instrumentClip>
+  </sessionClips>
+</song>"""
+        p = tmp_path / "test.XML"
+        p.write_text(xml)
+        return parse_song(p)
+
+    def test_both_instruments_kept(self, song_with_named_presets):
+        assert len(song_with_named_presets.instruments) == 2
+
+    def test_instrument_names(self, song_with_named_presets):
+        names = {i.name for i in song_with_named_presets.instruments}
+        assert names == {"Alpha", "Beta"}
+
+    def test_clips_matched_to_correct_instrument(self, song_with_named_presets):
+        assert len(song_with_named_presets.clips) == 2
+        alpha_clip = song_with_named_presets.clips[0]
+        beta_clip = song_with_named_presets.clips[1]
+        assert sum(len(r.notes) for r in alpha_clip.rows) == 1
+        assert sum(len(r.notes) for r in beta_clip.rows) == 2
+
+    def test_instruments_not_merged(self, song_with_named_presets):
+        for inst in song_with_named_presets.instruments:
+            assert len(inst.clip_instances) == 1
