@@ -560,7 +560,11 @@
               </td>
               <td class="cell-num" title={s.bpm > 0 ? s.bpm.toFixed(1) : ''}>{s.bpm > 0 ? s.bpm.toFixed(0) : '-'}</td>
               <td title={s.key}>
-                <button class="key-chip" class:key-chip--active={filterKey === s.key} onclick={() => filterByKey(s.key)}>{s.key}</button>
+                {#if s.key.startsWith('Error')}
+                  <span class="key-error">Error</span>
+                {:else}
+                  <button class="key-chip" class:key-chip--active={filterKey === s.key} onclick={() => filterByKey(s.key)}>{s.key}</button>
+                {/if}
               </td>
               <td class="cell-num" title={s.durationStr}>{s.durationStr}</td>
               <td class="cell-type" title="I = Internal synth, K = Kit, M = MIDI out, C = CV out, A = Audio">
@@ -848,8 +852,6 @@
   /* Table */
   .table-wrap {
     overflow-x: auto;
-    overflow-y: auto;
-    max-height: 70vh;
     border: 1px solid var(--border);
     border-radius: 8px;
   }
@@ -861,9 +863,6 @@
     white-space: nowrap;
   }
   thead {
-    position: sticky;
-    top: 0;
-    z-index: 1;
     background: var(--surface);
     box-shadow: inset 0 -1px 0 var(--border);
   }
@@ -1029,6 +1028,11 @@
   .key-chip:hover {
     border-color: var(--accent);
     background: var(--accent-dim);
+  }
+  .key-error {
+    font-size: 0.7rem;
+    color: #c47a7a;
+    cursor: default;
   }
   .key-chip--active {
     border-color: var(--accent);

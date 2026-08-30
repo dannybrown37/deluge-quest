@@ -1,0 +1,87 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import KitBuilder from '../components/KitBuilder.svelte';
+---
+
+<BaseLayout title="Kit Builder" description="Build and edit Deluge drum kits in your browser.">
+  <section class="page-header">
+    <h1 class="page-title">Kit Builder</h1>
+    <p class="page-desc">Browse your SD card samples and build Deluge drum kits. Two-pane keyboard-driven interface — press <kbd>?</kbd> for shortcuts.</p>
+  </section>
+  <section class="tool-area">
+    <KitBuilder client:only="svelte" />
+  </section>
+  <section class="info">
+    <div class="info-inner">
+      <div class="info-block">
+        <h3>How it works</h3>
+        <p>Drop a kit <code>.XML</code> to edit, or start fresh. Browse your SD card's <code>SAMPLES</code> folder to pick sounds for each row. Export a valid kit XML ready for your Deluge.</p>
+      </div>
+      <div class="info-block">
+        <h3>Keyboard driven</h3>
+        <p><kbd>j</kbd>/<kbd>k</kbd> to navigate, <kbd>Space</kbd> to preview, <kbd>o</kbd> to add, <kbd>dd</kbd> to delete, <kbd>l</kbd>/<kbd>p</kbd> to cycle modes, <kbd>Enter</kbd> to browse samples.</p>
+      </div>
+      <div class="info-block">
+        <h3>Privacy</h3>
+        <p>Everything runs in your browser. No files are uploaded. Kit XML is generated client-side from a template matching firmware 4.0.0.</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page-header {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 2rem;
+    text-align: center;
+  }
+  .page-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  .page-desc {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+  .page-desc kbd {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.1rem 0.35rem;
+  }
+
+  .tool-area {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+  }
+
+  .info {
+    border-top: 1px solid var(--border);
+    padding: 3rem 1.5rem;
+  }
+  .info-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+  }
+  .info-block h3 {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+  }
+  .info-block p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+</style>

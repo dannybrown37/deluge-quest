@@ -78,11 +78,11 @@
     { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: AUDITION_PALETTE[3], subtext: 'MIDI → Deluge XML' },
     { group: 'clean',     label: 'Card Analysis',    link: '/clean',     color: AUDITION_PALETTE[4], subtext: 'find unused samples' },
     { group: 'patch',     label: 'Patch Generator',  link: '/patch',     color: AUDITION_PALETTE[5], subtext: 'random synth presets' },
+    { group: 'kits',      label: 'Kit Builder',      link: '/kits',      color: AUDITION_PALETTE[6], subtext: 'build & edit drum kits' },
   ];
 
   const FUTURE_TOOLS: { group: string; label: string; subtext: string; color: string }[] = [
-    { group: 'future-1', label: 'Coming Soon', subtext: '', color: AUDITION_PALETTE[6] },
-    { group: 'future-2', label: 'Coming Soon', subtext: '', color: AUDITION_PALETTE[7] },
+    { group: 'future-1', label: 'Coming Soon', subtext: '', color: AUDITION_PALETTE[7] },
   ];
 
   function toolAt(r: number, c: number): typeof TOOLS[number] | undefined {
@@ -98,7 +98,7 @@
     const blockCol = Math.floor(c / 4);
     const toolsOnRow1 = TOOLS.length - 4;
     const idx = blockCol - toolsOnRow1;
-    if (idx < 0) return undefined;
+    if (idx < 0 || idx >= FUTURE_TOOLS.length) return undefined;
     return FUTURE_TOOLS[idx];
   }
 
@@ -626,14 +626,23 @@
       </div>
     {/if}
 
-    <div class="grid-labels">
-      <div class="grid-label grid-label--stats"># Stats</div>
-      <div class="grid-label grid-label--score">&#9835; Score</div>
-      <div class="grid-label grid-label--midi">&#9834; Import</div>
-      <div class="grid-label grid-label--preview">&#9703; Preview</div>
+    <div class="grid-labels grid-labels--top">
+      <div class="grid-label grid-label--stats">Stats</div>
+      <div class="grid-label grid-label--preview">Preview</div>
+      <div class="grid-label grid-label--score">Score</div>
+      <div class="grid-label grid-label--midi">Import</div>
       <div class="grid-labels-gap"></div>
-      <div class="grid-label grid-label--sidebar">MUTE<br/>LAUNCH</div>
-      <div class="grid-label grid-label--sidebar">AUDITION<br/>SECTION</div>
+      <div class="grid-label grid-label--sidebar"></div>
+      <div class="grid-label grid-label--sidebar"></div>
+    </div>
+    <div class="grid-labels">
+      <div class="grid-label grid-label--stats">Card</div>
+      <div class="grid-label grid-label--preview">Patch</div>
+      <div class="grid-label grid-label--score">Kits</div>
+      <div class="grid-label grid-label--midi"></div>
+      <div class="grid-labels-gap"></div>
+      <div class="grid-label grid-label--sidebar">GitHub</div>
+      <div class="grid-label grid-label--sidebar">About</div>
     </div>
   </div>
 
@@ -972,13 +981,16 @@
       0 2px 4px rgba(0,0,0,0.3);
   }
 
-  /* Grid labels — same grid as pads so sidebar labels align */
   .grid-labels {
     pointer-events: none;
     display: grid;
     grid-template-columns: repeat(16, 1fr) 8px repeat(2, 1fr);
     gap: 3px;
-    margin-top: 4px;
+    margin-top: 0;
+    line-height: 1;
+  }
+  .grid-labels--top {
+    margin-top: 1px;
   }
   .grid-labels-gap {
     grid-column: 17;
@@ -986,23 +998,23 @@
   }
   .grid-label {
     font-family: 'DM Mono', monospace;
-    font-size: 0.48rem;
+    font-size: 0.42rem;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     white-space: nowrap;
     color: rgba(255,255,255,0.3);
     text-align: center;
+    padding-top: 1px;
   }
   .grid-label--stats { grid-column: 1 / 5; }
-  .grid-label--score { grid-column: 5 / 9; }
-  .grid-label--midi { grid-column: 9 / 13; }
-  .grid-label--preview { grid-column: 13 / 17; }
+  .grid-label--preview { grid-column: 5 / 9; }
+  .grid-label--score { grid-column: 9 / 13; }
+  .grid-label--midi { grid-column: 13 / 17; }
   .grid-label--sidebar {
     font-size: 0.36rem;
     letter-spacing: 0.04em;
     color: rgba(255,255,255,0.25);
-    line-height: 1.3;
   }
 
 </style>
