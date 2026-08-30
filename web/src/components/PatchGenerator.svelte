@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { playPreview, stopPreview, isPlaying, type AudioPatch } from '../lib/patchAudio';
+
   type Category = 'pad' | 'lead' | 'bass' | 'keys' | 'fx';
   type SynthMode = 'subtractive' | 'fm';
 
@@ -316,6 +318,8 @@
   }
 
   function generate() {
+    stopPreview();
+    playing = false;
     const p = generatePatch(selectedCategory);
     if (patch && locked.size > 0) {
       for (const key of locked) {
@@ -568,6 +572,18 @@ ${cables}
     };
   }
 
+  let playing = $state(false);
+
+  function togglePreview() {
+    if (playing) {
+      stopPreview();
+      playing = false;
+    } else if (patch) {
+      playing = true;
+      playPreview(patch as unknown as AudioPatch, () => { playing = false; });
+    }
+  }
+
   let e1 = $derived(patch ? envDisplay(patch.envelope1) : { a: 0, d: 0, s: 0, r: 0 });
   let e2 = $derived(patch ? envDisplay(patch.envelope2) : { a: 0, d: 0, s: 0, r: 0 });
   let displayParams = $derived(patch ? getDisplayParams(patch) : []);
@@ -592,6 +608,9 @@ ${cables}
       Generate Patch
     </button>
     {#if patch}
+      <button class="preview-btn" class:playing onclick={togglePreview}>
+        {playing ? '■ Stop' : '▶ Preview'}
+      </button>
       <button class="download-btn" onclick={download}>
         Download .XML
       </button>
@@ -832,6 +851,25 @@ ${cables}
     transition: background 0.08s;
   }
   .generate-btn:hover { background: var(--accent-hover); }
+
+  .preview-btn {
+    padding: 0.7rem 1.5rem;
+    background: transparent;
+    color: var(--teal);
+    border: 1px solid var(--teal);
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.08s;
+  }
+  .preview-btn:hover {
+    background: color-mix(in srgb, var(--teal) 12%, transparent);
+  }
+  .preview-btn.playing {
+    background: var(--teal);
+    color: #fff;
+  }
 
   .download-btn {
     padding: 0.7rem 1.5rem;

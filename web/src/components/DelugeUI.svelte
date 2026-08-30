@@ -111,13 +111,13 @@
         const tool = toolAt(r, c);
         if (tool) {
           const localR = r % 4, localC = c % 4;
-          color = tool.color; glowIntensity = 0.9 - (localR + localC) * 0.1; active = true;
+          color = tool.color; glowIntensity = 0.9 - (localR * 4 + localC) * 0.05; active = true;
           link = tool.link; label = tool.label; group = tool.group;
         } else {
           const future = futureAt(r, c);
           if (future) {
             const fLocalR = r % 4, fLocalC = c % 4;
-            color = future.color; glowIntensity = 0.15 - (fLocalR + fLocalC) * 0.015;
+            color = future.color; glowIntensity = 0.15 - (fLocalR * 4 + fLocalC) * 0.008;
             group = future.group; label = future.label;
           }
         }
@@ -307,7 +307,6 @@
   }
 
   function handleKnobWheel(idx: number, e: WheelEvent) {
-    e.preventDefault();
     const delta = e.deltaY > 0 ? -5 : 5;
     knobAngles[idx] = Math.max(-135, Math.min(135, knobAngles[idx] + delta));
     knobValues[idx] = Math.round(((knobAngles[idx] + 135) / 270) * 127);
@@ -356,11 +355,13 @@
           aria-valuenow={knobValues[0]}
           on:mousedown={(e) => handleKnobStart(0, e)}
           on:touchstart={(e) => handleKnobStart(0, e)}
-          on:wheel={(e) => handleKnobWheel(0, e)}
+          on:wheel|preventDefault={(e) => handleKnobWheel(0, e)}
         >
-          <div class="knob-3d">
+          <div class="knob-3d" style="transform: rotate({knobAngles[0]}deg)">
             <div class="knob-barrel knob-barrel--black"></div>
-            <div class="knob-top knob-top--black"></div>
+            <div class="knob-top knob-top--black">
+              <div class="knob-notch"></div>
+            </div>
           </div>
         </div>
         <!-- Knob 1: lower black — bottom row, far left (anchor) -->
@@ -372,11 +373,13 @@
           aria-valuenow={knobValues[1]}
           on:mousedown={(e) => handleKnobStart(1, e)}
           on:touchstart={(e) => handleKnobStart(1, e)}
-          on:wheel={(e) => handleKnobWheel(1, e)}
+          on:wheel|preventDefault={(e) => handleKnobWheel(1, e)}
         >
-          <div class="knob-3d">
+          <div class="knob-3d" style="transform: rotate({knobAngles[1]}deg)">
             <div class="knob-barrel knob-barrel--black"></div>
-            <div class="knob-top knob-top--black"></div>
+            <div class="knob-top knob-top--black">
+              <div class="knob-notch"></div>
+            </div>
           </div>
         </div>
         <!-- Knob 2: upper gold — top row, right -->
@@ -388,11 +391,13 @@
           aria-valuenow={knobValues[2]}
           on:mousedown={(e) => handleKnobStart(2, e)}
           on:touchstart={(e) => handleKnobStart(2, e)}
-          on:wheel={(e) => handleKnobWheel(2, e)}
+          on:wheel|preventDefault={(e) => handleKnobWheel(2, e)}
         >
-          <div class="knob-3d">
+          <div class="knob-3d" style="transform: rotate({knobAngles[2]}deg)">
             <div class="knob-barrel knob-barrel--gold"></div>
-            <div class="knob-top knob-top--gold"></div>
+            <div class="knob-top knob-top--gold">
+              <div class="knob-notch knob-notch--dark"></div>
+            </div>
           </div>
         </div>
         <!-- Knob 3: lower gold — bottom row, middle -->
@@ -404,11 +409,13 @@
           aria-valuenow={knobValues[3]}
           on:mousedown={(e) => handleKnobStart(3, e)}
           on:touchstart={(e) => handleKnobStart(3, e)}
-          on:wheel={(e) => handleKnobWheel(3, e)}
+          on:wheel|preventDefault={(e) => handleKnobWheel(3, e)}
         >
-          <div class="knob-3d">
+          <div class="knob-3d" style="transform: rotate({knobAngles[3]}deg)">
             <div class="knob-barrel knob-barrel--gold"></div>
-            <div class="knob-top knob-top--gold"></div>
+            <div class="knob-top knob-top--gold">
+              <div class="knob-notch knob-notch--dark"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -423,11 +430,13 @@
             aria-valuenow={knobValues[4]}
             on:mousedown={(e) => handleKnobStart(4, e)}
             on:touchstart={(e) => handleKnobStart(4, e)}
-            on:wheel={(e) => handleKnobWheel(4, e)}
+            on:wheel|preventDefault={(e) => handleKnobWheel(4, e)}
           >
-            <div class="knob-3d">
+            <div class="knob-3d" style="transform: rotate({knobAngles[4]}deg)">
               <div class="knob-barrel knob-barrel--black"></div>
-              <div class="knob-top knob-top--black"></div>
+              <div class="knob-top knob-top--black">
+                <div class="knob-notch"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -452,11 +461,13 @@
             aria-valuenow={knobValues[5]}
             on:mousedown={(e) => handleKnobStart(5, e)}
             on:touchstart={(e) => handleKnobStart(5, e)}
-            on:wheel={(e) => handleKnobWheel(5, e)}
+            on:wheel|preventDefault={(e) => handleKnobWheel(5, e)}
           >
-            <div class="knob-3d">
+            <div class="knob-3d" style="transform: rotate({knobAngles[5]}deg)">
               <div class="knob-barrel knob-barrel--black"></div>
-              <div class="knob-top knob-top--black"></div>
+              <div class="knob-top knob-top--black">
+                <div class="knob-notch"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -469,7 +480,7 @@
             aria-valuenow={knobValues[6]}
             on:mousedown={(e) => handleKnobStart(6, e)}
             on:touchstart={(e) => handleKnobStart(6, e)}
-            on:wheel={(e) => handleKnobWheel(6, e)}
+            on:wheel|preventDefault={(e) => handleKnobWheel(6, e)}
           >
             <div class="knob-3d" style="transform: rotate({knobAngles[6]}deg)">
               <div class="knob-barrel knob-barrel--gold"></div>
