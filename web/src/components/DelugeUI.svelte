@@ -27,14 +27,14 @@
   // Left: 2 black diagonal + 2 gold diagonal to their right
   // Center-left: 1 black knob next to screen
   // Right: 1 gold + 1 black, horizontally parallel
-  let knobValues = [64, 0, 127, 0, 64, 64, 100];
+  let knobValues = [0, 0, 127, 0, 64, 64, 100];
   let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
   const knobMeta = [
-    { name: 'scrub',      style: 'black' },  // 0: left upper black — time scrub
+    { name: 'delay',      style: 'black' },  // 0: left upper black — delay send
     { name: 'reverb',     style: 'black' },  // 1: left lower black — reverb send
     { name: 'filter',   style: 'gold'  },  // 2: left upper gold — filter cutoff
     { name: 'res',      style: 'gold'  },  // 3: left lower gold — filter resonance
-    { name: 'navigate', style: 'black' },  // 4: black knob left of screen
+    { name: 'scrub',    style: 'black' },  // 4: black knob left of screen
     { name: 'tempo',    style: 'black' },  // 5: right black (left position)
     { name: 'output',   style: 'gold'  },  // 6: right gold (rightmost)
   ];
@@ -57,6 +57,9 @@
   let reverbNode: ConvolverNode | null = null;
   let dryGain: GainNode | null = null;
   let wetGain: GainNode | null = null;
+  let delayNode: DelayNode | null = null;
+  let delayFeedback: GainNode | null = null;
+  let delayWet: GainNode | null = null;
   let isPlaying = false;
   let playStartTime = 0;
   let playOffset = 0;
@@ -216,15 +219,27 @@
     wetGain = audioCtx.createGain();
     reverbNode = audioCtx.createConvolver();
     reverbNode.buffer = createImpulse(audioCtx);
+    delayNode = audioCtx.createDelay(2.0);
+    delayNode.delayTime.value = 0.375;
+    delayFeedback = audioCtx.createGain();
+    delayFeedback.gain.value = 0.35;
+    delayWet = audioCtx.createGain();
+    delayWet.gain.value = 0;
     filterNode.connect(dryGain);
     filterNode.connect(reverbNode);
+    filterNode.connect(delayNode);
+    delayNode.connect(delayFeedback);
+    delayFeedback.connect(delayNode);
+    delayNode.connect(delayWet);
     reverbNode.connect(wetGain);
     dryGain.connect(gainNode);
     wetGain.connect(gainNode);
+    delayWet.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     updateVolume();
     updateFilter();
     updateReverb();
+    updateDelay();
     try {
       const resp = await fetch('/audio/demo.mp3');
       if (!resp.ok) { console.warn('No audio file at /audio/demo.mp3'); return; }
@@ -245,6 +260,11 @@
     wetGain.gain.value = mix;
   }
 
+  function updateDelay() {
+    if (!delayWet) return;
+    delayWet.gain.value = knobValues[0] / 127;
+  }
+
   function updateFilter() {
     if (!filterNode) return;
     const norm = knobValues[2] / 127;
@@ -255,7 +275,7 @@
 
   function scrubTo() {
     if (!audioBuffer) return;
-    const target = (knobValues[0] / 127) * audioBuffer.duration;
+    const target = (knobValues[4] / 127) * audioBuffer.duration;
     screenSubtext = formatTime(target, audioBuffer.duration);
     if (isPlaying && sourceNode && audioCtx) {
       sourceNode.onended = null;
@@ -348,11 +368,12 @@
     knobValues[draggingKnob] = Math.round(((knobAngles[draggingKnob] + 135) / 270) * 127);
     screenText = knobMeta[draggingKnob].name.toUpperCase();
     screenSubtext = `${knobValues[draggingKnob]}`;
-    if (draggingKnob === 0) scrubTo();
+    if (draggingKnob === 0) updateDelay();
     if (draggingKnob === 1) updateReverb();
     if (draggingKnob === 6) updateVolume();
     if (draggingKnob === 5) updatePlaybackRate();
     if (draggingKnob === 2 || draggingKnob === 3) updateFilter();
+    if (draggingKnob === 4) scrubTo();
   }
 
   function handleKnobEnd() {
@@ -374,7 +395,8 @@
     knobValues[idx] = Math.round(((knobAngles[idx] + 135) / 270) * 127);
     screenText = knobMeta[idx].name.toUpperCase();
     screenSubtext = `${knobValues[idx]}`;
-    if (idx === 0) scrubTo();
+    if (idx === 0) updateDelay();
+    if (idx === 4) scrubTo();
     if (idx === 1) updateReverb();
     if (idx === 6) updateVolume();
     if (idx === 5) updatePlaybackRate();

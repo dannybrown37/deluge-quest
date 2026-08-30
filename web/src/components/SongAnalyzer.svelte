@@ -207,12 +207,13 @@
   }
 
   function exportCsv() {
-    const headers = ["Song", "BPM", "Key", "Duration", "Instruments", "Synths", "Kits", "Clips", "Notes", "Arrangement", "Modified"];
+    const headers = ["Song", "BPM", "Key", "Duration", "Type", "Instruments", "Synths", "Kits", "Clips", "Notes", "Arrangement", "Modified"];
     const rows = sorted.map(s => [
       s.filename.replace(/\.XML$/i, ""),
       s.bpm > 0 ? s.bpm.toFixed(1) : "",
       s.key,
       s.durationStr,
+      [s.synthCount ? "I" : "", s.kitCount ? "K" : "", s.midiCount ? "M" : "", s.cvCount ? "C" : ""].filter(Boolean).join("") || "-",
       s.instrumentCount,
       s.synthCount,
       s.kitCount,
@@ -513,12 +514,13 @@
               { id: 'bpm', label: 'BPM' },
               { id: 'key', label: 'Key' },
               { id: 'duration', label: 'Duration' },
+              { id: 'type', label: 'Type' },
               { id: 'instruments', label: 'Inst' },
               { id: 'clips', label: 'Clips' },
               { id: 'notes', label: 'Notes' },
               { id: 'modified', label: 'Modified' },
             ] as col}
-              <th>
+              <th title={col.id === 'type' ? 'I = Internal synth, K = Kit, M = MIDI out, C = CV out' : undefined}>
                 {#if sortFns[col.id] || col.id === 'arr'}
                   <button
                     class="sort-btn"
@@ -561,14 +563,21 @@
                 <button class="key-chip" class:key-chip--active={filterKey === s.key} onclick={() => filterByKey(s.key)}>{s.key}</button>
               </td>
               <td class="cell-num" title={s.durationStr}>{s.durationStr}</td>
-              <td class="cell-num" title={`${s.synthCount} synth, ${s.kitCount} kit`}>{s.instrumentCount || '-'}</td>
+              <td class="cell-type" title="I = Internal synth, K = Kit, M = MIDI out, C = CV out">
+                {#if s.synthCount}<span class="type-badge type-badge--synth">I</span>{/if}
+                {#if s.kitCount}<span class="type-badge type-badge--kit">K</span>{/if}
+                {#if s.midiCount}<span class="type-badge type-badge--midi">M</span>{/if}
+                {#if s.cvCount}<span class="type-badge type-badge--cv">C</span>{/if}
+                {#if !s.synthCount && !s.kitCount && !s.midiCount && !s.cvCount}-{/if}
+              </td>
+              <td class="cell-num" title={`${s.synthCount} synth, ${s.kitCount} kit${s.midiCount ? `, ${s.midiCount} MIDI` : ''}${s.cvCount ? `, ${s.cvCount} CV` : ''}`}>{s.instrumentCount || '-'}</td>
               <td class="cell-num" title={`${s.clipCount} clips`}>{s.clipCount || '-'}</td>
               <td class="cell-num" title={s.totalNotes.toLocaleString()}>{s.totalNotes > 0 ? s.totalNotes.toLocaleString() : '-'}</td>
               <td class="cell-date" title={formatDateFull(s.lastModified)}>{formatDate(s.lastModified)}</td>
             </tr>
           {/each}
           {#if sorted.length === 0}
-            <tr><td colspan="8" class="cell-empty">No songs match filters</td></tr>
+            <tr><td colspan="9" class="cell-empty">No songs match filters</td></tr>
           {/if}
         </tbody>
       </table>
@@ -838,6 +847,8 @@
   /* Table */
   .table-wrap {
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 70vh;
     border: 1px solid var(--border);
     border-radius: 8px;
   }
@@ -849,8 +860,11 @@
     white-space: nowrap;
   }
   thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
     background: var(--surface);
-    border-bottom: 1px solid var(--border);
+    box-shadow: inset 0 -1px 0 var(--border);
   }
   th {
     font-family: 'DM Mono', monospace;
@@ -937,6 +951,25 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
+  .cell-type {
+    text-align: center;
+    white-space: nowrap;
+  }
+  .type-badge {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    width: 1.2em;
+    text-align: center;
+    border-radius: 2px;
+    padding: 0.05rem 0.1rem;
+    line-height: 1.2;
+  }
+  .type-badge--synth { color: #D4A847; }
+  .type-badge--kit { color: #5AABAC; }
+  .type-badge--midi { color: #7A9EC4; }
+  .type-badge--cv { color: #A87AD4; }
   .cell-center {
     text-align: center;
   }
