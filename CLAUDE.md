@@ -46,15 +46,18 @@ web/                 — Astro + Svelte website (Vercel static hosting)
 ## Binary Formats (Big-Endian)
 
 - **noteData**: 10-byte records — `uint32 position`, `uint32 length`, `uint8 velocity`, `uint8 lift_velocity`
-- **noteDataWithLift**: 11-byte records (newer firmware) — adds condition byte. Not yet supported.
-- **clipInstances**: 12-byte records — `uint32 position`, `uint32 length`, `uint32 clip_index` (bit 31 may flag section=255)
+- **noteDataWithLift**: 11-byte records (firmware 4.0+) — same fields + 1 trailing probability/condition byte (ignored). Used instead of `noteData` on newer-firmware songs; `_parse_clip_note_rows` falls back to it when `noteData` is absent.
+- **clipInstances**: 12-byte records — `uint32 position`, `uint32 length`, `uint32 clip_index`. Bit 31 set means `clip_index` points into `arrangementOnlyTracks` (masked-off low bits = index there), not `sessionClips` — see below.
 
 ## Known Issues
 
 - ~~**Quantization drift**~~ **FIXED** — was rounding all notes to 16th grid (12 ticks), destroying triplet positions. Now uses music21's `quantize(quarterLengthDivisors=(3, 4, 6, 12))` which preserves both straight and triplet rhythms with proper tuplet notation.
+- ~~**noteDataWithLift not supported**~~ **FIXED** — firmware 4.0+ note rows silently decoded to 0 notes.
+- ~~**Named-preset instrument collision**~~ **FIXED** — firmware 4.0+ synths address by `presetName`/`presetFolder` instead of numeric `presetSlot` (which is absent); all such instruments collided on key `(-1, -1)` and overwrote each other.
+- ~~**MIDI/CV channel collision**~~ **FIXED** — `midiChannel`/`cv` instruments also lack `presetSlot`; multiple channels collided the same way. Now keyed by `(type, channel)`.
+- ~~**`arrangementOnlyTracks` ignored**~~ **FIXED** — clips dropped straight into the arranger (no session-view slot) live in a separate top-level `<arrangementOnlyTracks>` block; `clip_index` values with bit 31 set reference it. Previously unparsed → those clips (and any instrument's notes routed through them) showed as 0.
 - **Only 2 scales** — major and minor. Should support all 14 firmware presets + USER_SCALE label.
-- **Missing instrument types** — `midiChannel` (external MIDI) and `cv` instruments skipped entirely.
-- **No `presetName`** — newer firmware stores patch names; we hardcode "Synth {slot}".
+- **`midiChannel`/`cv` instruments** parse correctly now but still render nothing in MusicXML/score output (`converter.py` skips them) — preview/inspector paths (`pyodide.ts`) are fine.
 - **Kit drums at C4** — no General MIDI mapping; all drums render as x-noteheads with lyric labels.
 - **Hardcoded 4/4** — Deluge has no native time signature, but the quantization issue makes this worse.
 - **No swing** — `swingAmount` is ignored in XML→score direction.
@@ -119,6 +122,14 @@ npm run build        # Static build → web/dist/
 bash build-wheel.sh  # Rebuild Python wheel into web/public/py/
 npx vercel           # Deploy to Vercel
 ```
+
+**⚠️ The site loads `deluge_tools` from the checked-in wheel, not live source.** Any change to
+`deluge_tools/*.py` (parser, converter, analyzer, musicxml_writer) is invisible in the browser —
+including `npm run dev` — until you run `bash build-wheel.sh` to regenerate
+`web/public/py/deluge_tools-0.1.0-py3-none-any.whl`. `git status` will show the `.whl` as
+modified; commit it alongside the source change. Symptom of forgetting: preview/converter
+behaves as if the old bug is still there even though `pytest` passes and the fix is correct —
+always rebuild the wheel before trusting a browser repro of a `deluge_tools` change.
 
 ### Design System
 - **Typography:** DM Mono (headers, code, labels) + DM Sans (body, UI)

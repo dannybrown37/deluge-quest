@@ -329,3 +329,90 @@ class TestNamedPresetInstruments:
     def test_instruments_not_merged(self, song_with_named_presets):
         for inst in song_with_named_presets.instruments:
             assert len(inst.clip_instances) == 1
+
+
+class TestMultipleMidiChannels:
+    @pytest.fixture
+    def song_with_multiple_midi(self, tmp_path):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<song firmwareVersion="4.0.0" timePerTimerTick="917" timerTickFraction="3006477107"
+      rootNote="0" inArrangementView="1">
+  <modeNotes><modeNote>0</modeNote><modeNote>2</modeNote><modeNote>4</modeNote>
+  <modeNote>5</modeNote><modeNote>7</modeNote><modeNote>9</modeNote><modeNote>11</modeNote></modeNotes>
+  <instruments>
+    <midiChannel channel="5" clipInstances="0x000000000000030000000000" />
+    <midiChannel channel="8" clipInstances="0x000000000000030000000001" />
+  </instruments>
+  <sessionClips>
+    <instrumentClip length="768">
+      <noteRows><noteRow y="1" noteData="0x00000000000000604014" /></noteRows>
+    </instrumentClip>
+    <instrumentClip length="768">
+      <noteRows><noteRow y="2" noteData="0x00000000000000604014" /></noteRows>
+    </instrumentClip>
+  </sessionClips>
+</song>"""
+        p = tmp_path / "test.XML"
+        p.write_text(xml)
+        return parse_song(p)
+
+    def test_both_channels_kept(self, song_with_multiple_midi):
+        midis = [i for i in song_with_multiple_midi.instruments if i.instrument_type == "midi"]
+        assert len(midis) == 2
+
+    def test_channel_numbers_distinct(self, song_with_multiple_midi):
+        channels = {i.midi_channel for i in song_with_multiple_midi.instruments}
+        assert channels == {5, 8}
+
+    def test_each_channel_keeps_own_clip_instances(self, song_with_multiple_midi):
+        for inst in song_with_multiple_midi.instruments:
+            assert len(inst.clip_instances) == 1
+
+    def test_clips_not_dropped(self, song_with_multiple_midi):
+        assert len(song_with_multiple_midi.clips) == 2
+        assert sum(len(r.notes) for c in song_with_multiple_midi.clips for r in c.rows) == 2
+
+
+class TestArrangementOnlyTracks:
+    @pytest.fixture
+    def song_with_arrangement_only(self, tmp_path):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<song firmwareVersion="4.0.0" timePerTimerTick="917" timerTickFraction="3006477107"
+      rootNote="0" inArrangementView="1">
+  <modeNotes><modeNote>0</modeNote><modeNote>2</modeNote><modeNote>4</modeNote>
+  <modeNote>5</modeNote><modeNote>7</modeNote><modeNote>9</modeNote><modeNote>11</modeNote></modeNotes>
+  <instruments>
+    <kit presetName="808" presetFolder="KITS"
+         clipInstances="0x000000000000030080000000000003000000030000000001" />
+  </instruments>
+  <sessionClips>
+    <instrumentClip length="768">
+      <noteRows><noteRow y="1" noteData="0x00000000000000604014" /></noteRows>
+    </instrumentClip>
+    <instrumentClip length="768">
+      <noteRows><noteRow y="2" noteData="0x00000000000000604014" /></noteRows>
+    </instrumentClip>
+  </sessionClips>
+  <arrangementOnlyTracks>
+    <instrumentClip instrumentPresetName="808" instrumentPresetFolder="KITS" length="768">
+      <noteRows>
+        <noteRow y="3" noteData="0x00000000000000604014000000C0000000604014" />
+      </noteRows>
+    </instrumentClip>
+  </arrangementOnlyTracks>
+</song>"""
+        p = tmp_path / "test.XML"
+        p.write_text(xml)
+        return parse_song(p)
+
+    def test_arrangement_only_clip_added(self, song_with_arrangement_only):
+        assert len(song_with_arrangement_only.clips) == 3
+
+    def test_arrangement_only_clip_has_notes(self, song_with_arrangement_only):
+        clip = song_with_arrangement_only.clips[2]
+        assert sum(len(r.notes) for r in clip.rows) == 2
+
+    def test_flagged_clip_index_resolves_to_arrangement_only_clip(self, song_with_arrangement_only):
+        kit = song_with_arrangement_only.instruments[0]
+        assert kit.clip_instances[0].clip_index == 2
+        assert kit.clip_instances[1].clip_index == 1

@@ -9,6 +9,7 @@ TICKS_PER_QUARTER = 48
 NOTE_RECORD_SIZE = 10
 NOTE_RECORD_SIZE_WITH_LIFT = 11
 CLIP_INSTANCE_SIZE = 12
+ARRANGEMENT_ONLY_FLAG = 0x80000000
 
 
 @dataclass
@@ -206,9 +207,13 @@ def parse_song(path: Path | str) -> Song:
         elif inst_type == "midi":
             instrument.midi_channel = int(inst_el.get("channel", "0"))
             instrument.name = f"MIDI Ch {instrument.midi_channel + 1}"
+            instrument_map[("midi", instrument.midi_channel)] = instrument
+            continue
         elif inst_type == "cv":
             instrument.cv_channel = int(inst_el.get("channel", "0"))
             instrument.name = f"CV {instrument.cv_channel + 1}"
+            instrument_map[("cv", instrument.cv_channel)] = instrument
+            continue
         else:
             instrument.name = preset_name or f"Synth {slot}"
 
@@ -226,24 +231,47 @@ def parse_song(path: Path | str) -> Song:
                 length=int(el.get("length", "0")),
             ))
 
-    for clip_idx, clip_el in enumerate(root.findall("sessionClips/instrumentClip")):
+    session_instrument_clips = root.findall("sessionClips/instrumentClip")
+    for clip_idx, clip_el in enumerate(session_instrument_clips):
         slot = int(clip_el.get("instrumentPresetSlot", "-1"))
         sub = int(clip_el.get("instrumentPresetSubSlot", "-1"))
         preset_name = clip_el.get("instrumentPresetName")
         preset_folder = clip_el.get("instrumentPresetFolder")
         key = _instrument_key(slot, sub, preset_name, preset_folder)
         inst = instrument_map.get(key)
-        if inst is None:
-            continue
 
         clip = Clip(
             index=clip_idx,
             instrument_slot=slot,
             instrument_sub_slot=sub,
-            is_kit=inst.is_kit,
+            is_kit=inst.is_kit if inst else False,
             length=int(clip_el.get("length", "0")),
-            rows=_parse_clip_note_rows(clip_el, inst.drum_names if inst.is_kit else None),
+            rows=_parse_clip_note_rows(clip_el, inst.drum_names if inst and inst.is_kit else None),
         )
         song.clips.append(clip)
+
+    num_session_clips = len(session_instrument_clips)
+    for local_idx, clip_el in enumerate(root.findall("arrangementOnlyTracks/instrumentClip")):
+        slot = int(clip_el.get("instrumentPresetSlot", "-1"))
+        sub = int(clip_el.get("instrumentPresetSubSlot", "-1"))
+        preset_name = clip_el.get("instrumentPresetName")
+        preset_folder = clip_el.get("instrumentPresetFolder")
+        key = _instrument_key(slot, sub, preset_name, preset_folder)
+        inst = instrument_map.get(key)
+
+        clip = Clip(
+            index=num_session_clips + local_idx,
+            instrument_slot=slot,
+            instrument_sub_slot=sub,
+            is_kit=inst.is_kit if inst else False,
+            length=int(clip_el.get("length", "0")),
+            rows=_parse_clip_note_rows(clip_el, inst.drum_names if inst and inst.is_kit else None),
+        )
+        song.clips.append(clip)
+
+    for inst in song.instruments:
+        for ci in inst.clip_instances:
+            if ci.clip_index & ARRANGEMENT_ONLY_FLAG:
+                ci.clip_index = num_session_clips + (ci.clip_index & ~ARRANGEMENT_ONLY_FLAG)
 
     return song
