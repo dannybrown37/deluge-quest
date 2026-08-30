@@ -1,5 +1,6 @@
 <script lang="ts">
   import { loadPyodide, inspectSong, type InspectorData, type InspectorTrack } from "../lib/pyodide";
+  import { SongPlayer } from "../lib/songAudio";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -12,6 +13,11 @@
   let dragOver = $state(false);
   let hoveredClip: { track: number; clip: number } | null = $state(null);
   let tooltip = $state({ visible: false, x: 0, y: 0, text: "" });
+
+  let player: SongPlayer | null = $state(null);
+  let playState: 'stopped' | 'playing' | 'paused' = $state('stopped');
+  let playheadTick = $state(0);
+  let scrollEl: HTMLDivElement | undefined = $state();
 
   const TRACK_COLORS = [
     "#D4A847", "#5AABAC", "#C47A7A", "#7A9EC4", "#A87AD4",
@@ -188,7 +194,74 @@
     tooltip = { ...tooltip, visible: false };
   }
 
+  function createPlayer() {
+    if (!data) return null;
+    return new SongPlayer({
+      bpm: data.bpm,
+      ticksPerQuarter: data.ticksPerQuarter,
+      tracks: data.tracks,
+      durationTicks: data.durationTicks,
+      onTick: (tick) => {
+        playheadTick = tick;
+        autoScrollToPlayhead();
+      },
+      onEnd: () => { playState = 'stopped'; },
+    });
+  }
+
+  function togglePlay() {
+    if (playState === 'playing') {
+      player?.pause();
+      playState = 'paused';
+    } else {
+      if (!player || playState === 'stopped') {
+        player?.dispose();
+        player = createPlayer();
+      }
+      player?.play();
+      playState = 'playing';
+    }
+  }
+
+  function stopPlayback() {
+    player?.stop();
+    playState = 'stopped';
+    playheadTick = 0;
+  }
+
+  function handleTimelineClick(e: MouseEvent) {
+    if (!layout || !data) return;
+    const svg = e.currentTarget as SVGSVGElement;
+    const rect = svg.getBoundingClientRect();
+    const scrollLeft = scrollEl?.scrollLeft ?? 0;
+    const x = e.clientX - rect.left + scrollLeft;
+    const timelineX = x - LABEL_WIDTH;
+    if (timelineX < 0) return;
+    const tick = (timelineX / layout.pxPerMeasure) * layout.ticksPerMeasure;
+    const clampedTick = Math.max(0, Math.min(tick, data.durationTicks));
+    if (!player || playState === 'stopped') {
+      player?.dispose();
+      player = createPlayer();
+    }
+    player?.seek(clampedTick);
+    playState = 'playing';
+  }
+
+  function autoScrollToPlayhead() {
+    if (!scrollEl || !layout) return;
+    const px = LABEL_WIDTH + (playheadTick / layout.ticksPerMeasure) * layout.pxPerMeasure;
+    const viewLeft = scrollEl.scrollLeft;
+    const viewRight = viewLeft + scrollEl.clientWidth;
+    if (px < viewLeft + 60 || px > viewRight - 60) {
+      scrollEl.scrollLeft = px - scrollEl.clientWidth / 3;
+    }
+  }
+
   function reset() {
+    player?.dispose();
+    player = null;
+    playState = 'stopped';
+    playheadTick = 0;
     state = "idle";
     data = null;
     fileName = "";
@@ -257,13 +330,33 @@
       <button class="btn btn-secondary" onclick={reset}>Inspect another</button>
     </div>
 
+    <div class="transport">
+      <button class="transport-btn" onclick={togglePlay} title={playState === 'playing' ? 'Pause' : 'Play'}>
+        {#if playState === 'playing'}
+          <svg width="16" height="16" viewBox="0 0 16 16"><rect x="3" y="2" width="4" height="12" fill="currentColor"/><rect x="9" y="2" width="4" height="12" fill="currentColor"/></svg>
+        {:else}
+          <svg width="16" height="16" viewBox="0 0 16 16"><polygon points="3,1 14,8 3,15" fill="currentColor"/></svg>
+        {/if}
+      </button>
+      <button class="transport-btn" onclick={stopPlayback} title="Stop" disabled={playState === 'stopped'}>
+        <svg width="16" height="16" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10" fill="currentColor"/></svg>
+      </button>
+      {#if layout}
+        <span class="transport-time">
+          {Math.floor(playheadTick / layout.ticksPerMeasure) + 1}:{Math.floor((playheadTick % layout.ticksPerMeasure) / (layout.ticksPerMeasure / 4)) + 1}
+        </span>
+      {/if}
+    </div>
+
     <div class="timeline-container" bind:this={containerEl}>
-      <div class="timeline-scroll">
+      <div class="timeline-scroll" bind:this={scrollEl}>
         <svg
           width={layout.svgWidth}
           height={layout.svgHeight}
           viewBox="0 0 {layout.svgWidth} {layout.svgHeight}"
           class="timeline-svg"
+          onclick={handleTimelineClick}
+          role="none"
         >
           <!-- Ruler -->
           {#each layout.rulerMarks as mark}
@@ -356,6 +449,25 @@
               {/if}
             {/each}
           {/each}
+
+          <!-- Playhead -->
+          {#if playState !== 'stopped' && playheadTick > 0}
+            {@const px = LABEL_WIDTH + (playheadTick / layout.ticksPerMeasure) * layout.pxPerMeasure}
+            <line
+              x1={px} y1={RULER_HEIGHT}
+              x2={px} y2={layout.svgHeight}
+              stroke="var(--accent)"
+              stroke-width="2"
+              opacity="0.9"
+              style="pointer-events: none"
+            />
+            <circle
+              cx={px} cy={RULER_HEIGHT}
+              r="4"
+              fill="var(--accent)"
+              style="pointer-events: none"
+            />
+          {/if}
         </svg>
       </div>
     </div>
@@ -529,6 +641,41 @@
     border: 1px solid var(--border);
     border-radius: 4px;
     color: var(--text-secondary);
+  }
+
+  .transport {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .transport-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.05s, border-color 0.05s;
+  }
+  .transport-btn:hover:not(:disabled) {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+  .transport-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .transport-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    min-width: 4ch;
   }
 
   .timeline-container {
