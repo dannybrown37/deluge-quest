@@ -30,6 +30,10 @@ def _root_note_to_pitch_name(root_note: int) -> str:
     return MIDI_NOTE_NAMES[midi % 12]
 
 
+def _synthetic_instance(clip: Clip) -> ClipInstance:
+    return ClipInstance(position=0, length=clip.length, clip_index=clip.index)
+
+
 def _iter_clip_notes(
     clip: Clip, ci: ClipInstance,
 ) -> list[tuple[int, int, int, int | None, str | None]]:
@@ -140,26 +144,49 @@ def _build_drum_part(
     return part
 
 
-def song_to_musicxml(song: Song) -> str:
-    has_any_arrangement = any(inst.clip_instances for inst in song.instruments)
-    if not has_any_arrangement:
-        raise NoArrangementError(
-            "This file has no Song arrangement (no clipInstances on any instrument). "
-            "Only Clips view data was found — there is no timeline to convert."
-        )
+def _clips_for_instrument(
+    inst: Instrument, clips: list[Clip],
+) -> list[Clip]:
+    return [
+        c for c in clips
+        if c.instrument_slot == inst.slot and c.instrument_sub_slot == inst.sub_slot
+    ]
 
+
+def song_to_musicxml(song: Song) -> str:
+    has_arrangement = any(inst.clip_instances for inst in song.instruments)
     clips_by_index = {c.index: c for c in song.clips}
     writer = MusicXMLWriter()
 
-    for inst in song.instruments:
-        if not inst.clip_instances:
-            continue
-        if inst.is_kit:
-            part = _build_drum_part(inst, clips_by_index, song)
-        else:
-            part = _build_synth_part(inst, clips_by_index, song)
-        if part is not None:
-            writer.add_part(part)
+    if has_arrangement:
+        for inst in song.instruments:
+            if not inst.clip_instances:
+                continue
+            if inst.is_kit:
+                part = _build_drum_part(inst, clips_by_index, song)
+            else:
+                part = _build_synth_part(inst, clips_by_index, song)
+            if part is not None:
+                writer.add_part(part)
+    else:
+        for inst in song.instruments:
+            for clip in _clips_for_instrument(inst, song.clips):
+                synth_inst = Instrument(
+                    name=inst.name,
+                    is_kit=inst.is_kit,
+                    instrument_type=inst.instrument_type,
+                    slot=inst.slot,
+                    sub_slot=inst.sub_slot,
+                    clip_instances=[_synthetic_instance(clip)],
+                    drum_names=inst.drum_names,
+                )
+                cb = {clip.index: clip}
+                if inst.is_kit:
+                    part = _build_drum_part(synth_inst, cb, song)
+                else:
+                    part = _build_synth_part(synth_inst, cb, song)
+                if part is not None:
+                    writer.add_part(part)
 
     return writer.to_xml()
 
@@ -180,19 +207,31 @@ def song_to_score(song: Song):
         tempo,
     )
 
-    has_any_arrangement = any(inst.clip_instances for inst in song.instruments)
-    if not has_any_arrangement:
-        raise NoArrangementError(
-            "This file has no Song arrangement (no clipInstances on any instrument). "
-            "Only Clips view data was found — there is no timeline to convert."
-        )
-
     clips_by_index = {c.index: c for c in song.clips}
+    has_arrangement = any(inst.clip_instances for inst in song.instruments)
+
+    iter_items: list[tuple[Instrument, dict[int, Clip]]] = []
+    if has_arrangement:
+        for inst in song.instruments:
+            if not inst.clip_instances:
+                continue
+            iter_items.append((inst, clips_by_index))
+    else:
+        for inst in song.instruments:
+            for clip in _clips_for_instrument(inst, song.clips):
+                synth_inst = Instrument(
+                    name=inst.name,
+                    is_kit=inst.is_kit,
+                    instrument_type=inst.instrument_type,
+                    slot=inst.slot,
+                    sub_slot=inst.sub_slot,
+                    clip_instances=[_synthetic_instance(clip)],
+                    drum_names=inst.drum_names,
+                )
+                iter_items.append((synth_inst, {clip.index: clip}))
 
     parts = []
-    for inst in song.instruments:
-        if not inst.clip_instances:
-            continue
+    for inst, cb in iter_items:
 
         part = stream.Part()
         part.partName = inst.name or f"Instrument {inst.slot}"
@@ -213,7 +252,7 @@ def song_to_score(song: Song):
         by_pos: dict[int, list[tuple[int, int, int]]] = defaultdict(list)
         has_notes = False
         for ci in inst.clip_instances:
-            clip = clips_by_index.get(ci.clip_index)
+            clip = cb.get(ci.clip_index)
             if clip is None:
                 continue
             for abs_pos, length, velocity, y, name in _iter_clip_notes(clip, ci):

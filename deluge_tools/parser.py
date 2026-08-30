@@ -57,6 +57,13 @@ class Instrument:
 
 
 @dataclass
+class AudioClip:
+    index: int
+    file_path: str = ""
+    length: int = 0
+
+
+@dataclass
 class Song:
     firmware_version: str = ""
     root_note: int = 0
@@ -64,6 +71,7 @@ class Song:
     bpm: float = 120.0
     instruments: list[Instrument] = field(default_factory=list)
     clips: list[Clip] = field(default_factory=list)
+    audio_clips: list[AudioClip] = field(default_factory=list)
     in_arrangement_view: bool = False
 
 
@@ -141,9 +149,10 @@ def parse_song(path: Path | str) -> Song:
     song.bpm = _parse_bpm(root)
     song.in_arrangement_view = root.get("inArrangementView", "0") == "1"
 
-    _TAG_TO_TYPE = {"sound": "synth", "kit": "kit", "midiChannel": "midi", "cv": "cv"}
+    _TAG_TO_TYPE = {"sound": "synth", "kit": "kit", "midiChannel": "midi", "cv": "cv", "audioOutput": "audio"}
 
-    instrument_map: dict[tuple[int, int], Instrument] = {}
+    instrument_map: dict[tuple, Instrument] = {}
+    audio_output_count = 0
     for inst_el in root.findall("instruments/*"):
         tag = inst_el.tag
         inst_type = _TAG_TO_TYPE.get(tag)
@@ -161,7 +170,13 @@ def parse_song(path: Path | str) -> Song:
             clip_instances=parse_clip_instances(inst_el.get("clipInstances")),
         )
 
-        if inst_type == "kit":
+        if inst_type == "audio":
+            audio_output_count += 1
+            instrument.name = f"Audio {audio_output_count}"
+            audio_key = ("audio", audio_output_count)
+            instrument_map[audio_key] = instrument
+            continue
+        elif inst_type == "kit":
             instrument.name = "Kit"
             for sound in inst_el.findall("soundSources/sound"):
                 instrument.drum_names.append(sound.get("name", ""))
@@ -177,6 +192,16 @@ def parse_song(path: Path | str) -> Song:
         instrument_map[(slot, sub)] = instrument
 
     song.instruments = list(instrument_map.values())
+
+    session_clips_el = root.find("sessionClips")
+    all_session_clips = list(session_clips_el) if session_clips_el is not None else []
+    for global_idx, el in enumerate(all_session_clips):
+        if el.tag == "audioClip":
+            song.audio_clips.append(AudioClip(
+                index=global_idx,
+                file_path=el.get("filePath", ""),
+                length=int(el.get("length", "0")),
+            ))
 
     for clip_idx, clip_el in enumerate(root.findall("sessionClips/instrumentClip")):
         slot = int(clip_el.get("instrumentPresetSlot", "-1"))

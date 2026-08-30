@@ -61,7 +61,7 @@ def _make_song(
 
 
 class TestNoArrangement:
-    def test_raises_when_no_clip_instances(self):
+    def test_falls_back_to_clip_catalog(self):
         clip = Clip(
             index=0, instrument_slot=0, instrument_sub_slot=-1,
             length=192,
@@ -69,19 +69,93 @@ class TestNoArrangement:
         )
         inst = Instrument(name="Synth", slot=0, sub_slot=-1, clip_instances=[])
         song = _make_song([clip], [inst], in_arrangement_view=False)
-        with pytest.raises(NoArrangementError):
-            song_to_score(song)
+        score = song_to_score(song)
+        assert len(score.parts) == 1
 
-    def test_raises_even_with_clips_but_no_arrangement(self):
+    def test_empty_clips_produce_empty_score(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192, rows=[],
+        )
+        inst = Instrument(name="Synth", slot=0, sub_slot=-1, clip_instances=[])
+        song = _make_song([clip], [inst], in_arrangement_view=True)
+        score = song_to_score(song)
+        assert len(score.parts) == 0
+
+
+class TestClipCatalog:
+    """When no arrangement exists, render each clip as a standalone part."""
+
+    def test_clip_mode_song_produces_parts(self):
         clip = Clip(
             index=0, instrument_slot=0, instrument_sub_slot=-1,
             length=192,
             rows=[NoteRow(y=60, notes=[Note(0, 96, 80, 20)])],
         )
-        inst = Instrument(name="Synth", slot=0, sub_slot=-1, clip_instances=[])
-        song = _make_song([clip], [inst], in_arrangement_view=True)
-        with pytest.raises(NoArrangementError):
-            song_to_score(song)
+        inst = Instrument(name="Synth 0", slot=0, sub_slot=-1, clip_instances=[])
+        song = _make_song([clip], [inst], in_arrangement_view=False)
+        score = song_to_score(song)
+        assert len(score.parts) == 1
+
+    def test_clip_mode_multiple_clips_same_instrument(self):
+        clips = [
+            Clip(index=0, instrument_slot=0, instrument_sub_slot=-1, length=192,
+                 rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20)])]),
+            Clip(index=1, instrument_slot=0, instrument_sub_slot=-1, length=96,
+                 rows=[NoteRow(y=64, notes=[Note(0, 48, 80, 20)])]),
+        ]
+        inst = Instrument(name="Synth 0", slot=0, sub_slot=-1, clip_instances=[])
+        song = _make_song(clips, [inst], in_arrangement_view=False)
+        score = song_to_score(song)
+        assert len(score.parts) == 2
+
+    def test_clip_mode_note_offsets_start_at_zero(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20), Note(48, 48, 80, 20)])],
+        )
+        inst = Instrument(name="Synth 0", slot=0, sub_slot=-1, clip_instances=[])
+        song = _make_song([clip], [inst], in_arrangement_view=False)
+        score = song_to_score(song)
+        notes = list(score.parts[0].flatten().notes)
+        assert len(notes) == 2
+        assert float(notes[0].offset) == 0.0
+        assert float(notes[1].offset) == 1.0
+
+    def test_clip_mode_musicxml(self):
+        from deluge_tools.converter import song_to_musicxml
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20)])],
+        )
+        inst = Instrument(name="Synth 0", slot=0, sub_slot=-1, clip_instances=[])
+        song = _make_song([clip], [inst], in_arrangement_view=False)
+        xml = song_to_musicxml(song)
+        assert "<part" in xml
+        assert "<note" in xml
+
+    def test_clip_mode_kit(self):
+        clip = Clip(
+            index=0, instrument_slot=1, instrument_sub_slot=-1,
+            is_kit=True, length=192,
+            rows=[NoteRow(drum_index=0, drum_name="Kick", notes=[Note(0, 12, 100, 20)])],
+        )
+        inst = Instrument(name="Kit", slot=1, sub_slot=-1, is_kit=True, clip_instances=[])
+        song = _make_song([clip], [inst], in_arrangement_view=False)
+        score = song_to_score(song)
+        assert len(score.parts) == 1
+
+    def test_clip_mode_empty_clips_skipped(self):
+        clip = Clip(
+            index=0, instrument_slot=0, instrument_sub_slot=-1,
+            length=192, rows=[],
+        )
+        inst = Instrument(name="Synth 0", slot=0, sub_slot=-1, clip_instances=[])
+        song = _make_song([clip], [inst], in_arrangement_view=False)
+        score = song_to_score(song)
+        assert len(score.parts) == 0
 
 
 class TestClipLooping:

@@ -213,7 +213,7 @@
       s.bpm > 0 ? s.bpm.toFixed(1) : "",
       s.key,
       s.durationStr,
-      [s.synthCount ? "I" : "", s.kitCount ? "K" : "", s.midiCount ? "M" : "", s.cvCount ? "C" : ""].filter(Boolean).join("") || "-",
+      [s.synthCount ? "I" : "", s.kitCount ? "K" : "", s.midiCount ? "M" : "", s.cvCount ? "C" : "", s.audioCount ? "A" : ""].filter(Boolean).join("") || "-",
       s.instrumentCount,
       s.synthCount,
       s.kitCount,
@@ -518,9 +518,9 @@
               { id: 'instruments', label: 'Inst' },
               { id: 'clips', label: 'Clips' },
               { id: 'notes', label: 'Notes' },
-              { id: 'modified', label: 'Modified' },
+              { id: 'modified', label: 'Modified', hide: 'col-hide-narrow' },
             ] as col}
-              <th title={col.id === 'type' ? 'I = Internal synth, K = Kit, M = MIDI out, C = CV out' : undefined}>
+              <th class={col.hide ?? ''} title={col.id === 'type' ? 'I = Internal synth, K = Kit, M = MIDI out, C = CV out, A = Audio' : undefined}>
                 {#if sortFns[col.id] || col.id === 'arr'}
                   <button
                     class="sort-btn"
@@ -545,7 +545,7 @@
             <tr class:row--error={s.key.startsWith('Error')}>
               <td class="cell-name">
                 <span class="cell-name-text" title={name}>{name}</span>
-                {#if s.hasArrangement && fileContents.has(s.filename)}
+                {#if (s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)}
                   <span class="cell-name-actions">
                     {#if convertingFile === s.filename}
                       <span class="score-btn score-btn--busy">Converting…</span>
@@ -554,7 +554,7 @@
                         {convertedFiles.has(s.filename) ? "Download" : "Score"}
                       </button>
                     {/if}
-                    <button class="score-btn inspect-btn" title="Preview arrangement" onclick={() => openInPreview(s.filename)}>Preview</button>
+                    <button class="score-btn inspect-btn" title="Preview song" onclick={() => openInPreview(s.filename)}>Preview</button>
                   </span>
                 {/if}
               </td>
@@ -563,21 +563,22 @@
                 <button class="key-chip" class:key-chip--active={filterKey === s.key} onclick={() => filterByKey(s.key)}>{s.key}</button>
               </td>
               <td class="cell-num" title={s.durationStr}>{s.durationStr}</td>
-              <td class="cell-type" title="I = Internal synth, K = Kit, M = MIDI out, C = CV out">
+              <td class="cell-type" title="I = Internal synth, K = Kit, M = MIDI out, C = CV out, A = Audio">
                 {#if s.synthCount}<span class="type-badge type-badge--synth">I</span>{/if}
                 {#if s.kitCount}<span class="type-badge type-badge--kit">K</span>{/if}
                 {#if s.midiCount}<span class="type-badge type-badge--midi">M</span>{/if}
                 {#if s.cvCount}<span class="type-badge type-badge--cv">C</span>{/if}
-                {#if !s.synthCount && !s.kitCount && !s.midiCount && !s.cvCount}-{/if}
+                {#if s.audioCount}<span class="type-badge type-badge--audio">A</span>{/if}
+                {#if !s.synthCount && !s.kitCount && !s.midiCount && !s.cvCount && !s.audioCount}-{/if}
               </td>
-              <td class="cell-num" title={`${s.synthCount} synth, ${s.kitCount} kit${s.midiCount ? `, ${s.midiCount} MIDI` : ''}${s.cvCount ? `, ${s.cvCount} CV` : ''}`}>{s.instrumentCount || '-'}</td>
+              <td class="cell-num" title={`${s.synthCount} synth, ${s.kitCount} kit${s.midiCount ? `, ${s.midiCount} MIDI` : ''}${s.cvCount ? `, ${s.cvCount} CV` : ''}${s.audioCount ? `, ${s.audioCount} audio` : ''}`}>{s.instrumentCount || '-'}</td>
               <td class="cell-num" title={`${s.clipCount} clips`}>{s.clipCount || '-'}</td>
               <td class="cell-num" title={s.totalNotes.toLocaleString()}>{s.totalNotes > 0 ? s.totalNotes.toLocaleString() : '-'}</td>
-              <td class="cell-date" title={formatDateFull(s.lastModified)}>{formatDate(s.lastModified)}</td>
+              <td class="cell-date col-hide-narrow" title={formatDateFull(s.lastModified)}>{formatDate(s.lastModified)}</td>
             </tr>
           {/each}
           {#if sorted.length === 0}
-            <tr><td colspan="9" class="cell-empty">No songs match filters</td></tr>
+            <tr><td colspan="99" class="cell-empty">No songs match filters</td></tr>
           {/if}
         </tbody>
       </table>
@@ -871,11 +872,11 @@
     font-weight: 500;
     font-size: 0.78rem;
     text-align: left;
-    padding: 0.6rem 0.75rem;
+    padding: 0.6rem 0.5rem;
     color: var(--text-secondary);
   }
   td {
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.5rem;
     border-top: 1px solid var(--border);
     color: var(--text);
   }
@@ -886,7 +887,7 @@
   .cell-name {
     font-family: 'DM Mono', monospace;
     font-weight: 500;
-    max-width: 300px;
+    max-width: 220px;
     display: flex;
     align-items: center;
     gap: 0.4rem;
@@ -970,6 +971,7 @@
   .type-badge--kit { color: #5AABAC; }
   .type-badge--midi { color: #7A9EC4; }
   .type-badge--cv { color: #A87AD4; }
+  .type-badge--audio { color: #C47A7A; }
   .cell-center {
     text-align: center;
   }
@@ -978,6 +980,9 @@
     font-size: 0.78rem;
     color: var(--text-secondary);
     white-space: nowrap;
+  }
+  @media (max-width: 900px) {
+    .col-hide-narrow { display: none; }
   }
   .cell-empty {
     text-align: center;

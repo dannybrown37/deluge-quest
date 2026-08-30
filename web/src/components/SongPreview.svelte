@@ -30,6 +30,7 @@
     kit: "#5AABAC",
     midi: "#7A9EC4",
     cv: "#A87AD4",
+    audio: "#C47A7A",
   };
 
   const TYPE_LABELS: Record<string, string> = {
@@ -37,6 +38,7 @@
     kit: "Kit",
     midi: "MIDI",
     cv: "CV",
+    audio: "Audio",
   };
 
   let typeCounts = $derived.by(() => {
@@ -125,14 +127,14 @@
       });
 
       state = "processing";
-      progress = "Parsing arrangement";
+      progress = "Parsing song";
       progressPct = 85;
 
       const result = await inspectSong(xmlContent, pyodide);
 
       if (result.tracks.length === 0) {
         state = "error";
-        errorMsg = "No arrangement data found. This song may not have an arrangement view.";
+        errorMsg = "No tracks found. This song has no clips or arrangement data.";
         return;
       }
 

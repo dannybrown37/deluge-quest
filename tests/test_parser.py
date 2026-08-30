@@ -154,3 +154,63 @@ class TestInstrumentTypes:
     def test_cv_channel_stored(self, song_with_all_types):
         cv = [i for i in song_with_all_types.instruments if i.instrument_type == "cv"][0]
         assert cv.cv_channel == 0
+
+
+class TestAudioClips:
+    @pytest.fixture
+    def song_with_audio(self, tmp_path):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<song firmwareVersion="4.0.0" timePerTimerTick="917" timerTickFraction="3006477107"
+      rootNote="0" inArrangementView="1">
+  <modeNotes><modeNote>0</modeNote><modeNote>2</modeNote><modeNote>4</modeNote>
+  <modeNote>5</modeNote><modeNote>7</modeNote><modeNote>9</modeNote><modeNote>11</modeNote></modeNotes>
+  <instruments>
+    <sound presetSlot="0" presetSubSlot="-1" clipInstances="0x000000000000030000000000" />
+    <audioOutput clipInstances="0x000000000000060000000001000006000000060000000002" />
+    <audioOutput clipInstances="0x00000C000000030000000003" />
+  </instruments>
+  <sessionClips>
+    <instrumentClip instrumentPresetSlot="0" instrumentPresetSubSlot="-1" length="768">
+      <noteRows>
+        <noteRow y="60" noteData="0x00000000000000604014" />
+      </noteRows>
+    </instrumentClip>
+    <audioClip length="1152" filePath="SAMPLES/recording.wav" />
+    <audioClip length="1152" filePath="SAMPLES/vocals.wav" />
+    <audioClip length="576" filePath="SAMPLES/fx.wav" />
+  </sessionClips>
+</song>"""
+        p = tmp_path / "test.XML"
+        p.write_text(xml)
+        return parse_song(p)
+
+    def test_audio_clips_parsed(self, song_with_audio):
+        assert len(song_with_audio.audio_clips) == 3
+
+    def test_audio_clip_file_path(self, song_with_audio):
+        paths = [c.file_path for c in song_with_audio.audio_clips]
+        assert "SAMPLES/recording.wav" in paths
+        assert "SAMPLES/vocals.wav" in paths
+        assert "SAMPLES/fx.wav" in paths
+
+    def test_audio_clip_length(self, song_with_audio):
+        clip = next(c for c in song_with_audio.audio_clips if c.file_path == "SAMPLES/fx.wav")
+        assert clip.length == 576
+
+    def test_audio_clip_index(self, song_with_audio):
+        indices = [c.index for c in song_with_audio.audio_clips]
+        assert indices == [1, 2, 3]
+
+    def test_audio_outputs_parsed(self, song_with_audio):
+        audio_outputs = [i for i in song_with_audio.instruments if i.instrument_type == "audio"]
+        assert len(audio_outputs) == 2
+
+    def test_audio_output_clip_instances(self, song_with_audio):
+        audio_outputs = [i for i in song_with_audio.instruments if i.instrument_type == "audio"]
+        assert len(audio_outputs[0].clip_instances) == 2
+        assert len(audio_outputs[1].clip_instances) == 1
+
+    def test_audio_output_name(self, song_with_audio):
+        audio_outputs = [i for i in song_with_audio.instruments if i.instrument_type == "audio"]
+        assert audio_outputs[0].name == "Audio 1"
+        assert audio_outputs[1].name == "Audio 2"

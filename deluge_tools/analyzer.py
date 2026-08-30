@@ -53,6 +53,7 @@ class SongStats:
     kit_count: int = 0
     midi_count: int = 0
     cv_count: int = 0
+    audio_count: int = 0
     clip_count: int = 0
     total_notes: int = 0
     arrangement_length_ticks: int = 0
@@ -69,6 +70,7 @@ def analyze_song(song: Song) -> SongStats:
     kit_count = sum(1 for i in song.instruments if i.instrument_type == "kit")
     midi_count = sum(1 for i in song.instruments if i.instrument_type == "midi")
     cv_count = sum(1 for i in song.instruments if i.instrument_type == "cv")
+    audio_count = sum(1 for i in song.instruments if i.instrument_type == "audio")
 
     total_notes = sum(
         len(row.notes)
@@ -96,6 +98,7 @@ def analyze_song(song: Song) -> SongStats:
         kit_count=kit_count,
         midi_count=midi_count,
         cv_count=cv_count,
+        audio_count=audio_count,
         clip_count=len(song.clips),
         total_notes=total_notes,
         arrangement_length_ticks=arr_end,
