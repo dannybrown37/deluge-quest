@@ -44,6 +44,62 @@ class Clip:
     is_kit: bool = False
     length: int = 0
     rows: list[NoteRow] = field(default_factory=list)
+    sound_params: ClipSoundParams | None = None
+
+
+@dataclass
+class OscPatch:
+    type: str = "square"
+    transpose: int = 0
+    cents: int = 0
+
+
+@dataclass
+class ModulatorPatch:
+    transpose: int = 0
+    cents: int = 0
+    to_modulator1: bool = False
+
+
+@dataclass
+class SoundPatch:
+    mode: str = "subtractive"
+    polyphonic: str = "poly"
+    lpf_mode: str = "24dB"
+    osc1: OscPatch = field(default_factory=OscPatch)
+    osc2: OscPatch = field(default_factory=OscPatch)
+    lfo1_type: str = "sine"
+    lfo2_type: str = "sine"
+    unison_num: int = 1
+    unison_detune: int = 0
+    arp_mode: str = "off"
+    arp_octaves: int = 2
+    arp_sync_level: int = 0
+    modulator1: ModulatorPatch | None = None
+    modulator2: ModulatorPatch | None = None
+
+
+@dataclass
+class EnvelopePatch:
+    attack: str = "0x80000000"
+    decay: str = "0x80000000"
+    sustain: str = "0x7FFFFFFF"
+    release: str = "0x80000000"
+
+
+@dataclass
+class PatchCable:
+    source: str
+    destination: str
+    amount: str
+
+
+@dataclass
+class ClipSoundParams:
+    params: dict[str, str] = field(default_factory=dict)
+    envelope1: EnvelopePatch = field(default_factory=EnvelopePatch)
+    envelope2: EnvelopePatch = field(default_factory=EnvelopePatch)
+    patch_cables: list[PatchCable] = field(default_factory=list)
 
 
 @dataclass
@@ -58,6 +114,7 @@ class Instrument:
     clip_instances: list[ClipInstance] = field(default_factory=list)
     drum_names: list[str] = field(default_factory=list)
     drum_sample_paths: list[str | None] = field(default_factory=list)
+    sound: SoundPatch | None = None
 
 
 @dataclass
@@ -155,6 +212,89 @@ def _parse_clip_note_rows(
     return rows
 
 
+def _parse_sound_patch(sound_el: ET.Element) -> SoundPatch:
+    def osc(tag: str) -> OscPatch:
+        el = sound_el.find(tag)
+        if el is None:
+            return OscPatch()
+        return OscPatch(
+            type=el.get("type", "square"),
+            transpose=int(el.get("transpose", "0")),
+            cents=int(el.get("cents", "0")),
+        )
+
+    lfo1 = sound_el.find("lfo1")
+    lfo2 = sound_el.find("lfo2")
+    unison = sound_el.find("unison")
+    arp = sound_el.find("arpeggiator")
+    mod1_el = sound_el.find("modulator1")
+    mod2_el = sound_el.find("modulator2")
+    modulator1 = (
+        ModulatorPatch(transpose=int(mod1_el.get("transpose", "0")), cents=int(mod1_el.get("cents", "0")))
+        if mod1_el is not None
+        else None
+    )
+    modulator2 = (
+        ModulatorPatch(
+            transpose=int(mod2_el.get("transpose", "0")),
+            cents=int(mod2_el.get("cents", "0")),
+            to_modulator1=mod2_el.get("toModulator1", "0") == "1",
+        )
+        if mod2_el is not None
+        else None
+    )
+
+    return SoundPatch(
+        mode=sound_el.get("mode", "subtractive"),
+        polyphonic=sound_el.get("polyphonic", "poly"),
+        lpf_mode=sound_el.get("lpfMode", "24dB"),
+        osc1=osc("osc1"),
+        osc2=osc("osc2"),
+        lfo1_type=lfo1.get("type", "sine") if lfo1 is not None else "sine",
+        lfo2_type=lfo2.get("type", "sine") if lfo2 is not None else "sine",
+        unison_num=int(unison.get("num", "1")) if unison is not None else 1,
+        unison_detune=int(unison.get("detune", "0")) if unison is not None else 0,
+        arp_mode=arp.get("mode", "off") if arp is not None else "off",
+        arp_octaves=int(arp.get("numOctaves", "2")) if arp is not None else 2,
+        arp_sync_level=int(arp.get("syncLevel", "0")) if arp is not None else 0,
+        modulator1=modulator1,
+        modulator2=modulator2,
+    )
+
+
+def _parse_clip_sound_params(clip_el: ET.Element) -> ClipSoundParams | None:
+    sp_el = clip_el.find("soundParams")
+    if sp_el is None:
+        return None
+
+    def envelope(tag: str) -> EnvelopePatch:
+        el = sp_el.find(tag)
+        if el is None:
+            return EnvelopePatch()
+        return EnvelopePatch(
+            attack=el.get("attack", "0x80000000"),
+            decay=el.get("decay", "0x80000000"),
+            sustain=el.get("sustain", "0x7FFFFFFF"),
+            release=el.get("release", "0x80000000"),
+        )
+
+    patch_cables = [
+        PatchCable(
+            source=pc.get("source", ""),
+            destination=pc.get("destination", ""),
+            amount=pc.get("amount", "0x80000000"),
+        )
+        for pc in sp_el.findall("patchCables/patchCable")
+    ]
+
+    return ClipSoundParams(
+        params=dict(sp_el.attrib),
+        envelope1=envelope("envelope1"),
+        envelope2=envelope("envelope2"),
+        patch_cables=patch_cables,
+    )
+
+
 def _instrument_key(
     slot: int, sub: int, preset_name: str | None, preset_folder: str | None
 ) -> tuple:
@@ -224,6 +364,7 @@ def parse_song(path: Path | str) -> Song:
             continue
         else:
             instrument.name = preset_name or f"Synth {slot}"
+            instrument.sound = _parse_sound_patch(inst_el)
 
         instrument_map[_instrument_key(slot, sub, preset_name, preset_folder)] = instrument
 
@@ -259,6 +400,7 @@ def parse_song(path: Path | str) -> Song:
                 inst.drum_names if inst and inst.is_kit else None,
                 inst.drum_sample_paths if inst and inst.is_kit else None,
             ),
+            sound_params=_parse_clip_sound_params(clip_el),
         )
         song.clips.append(clip)
 
@@ -282,6 +424,7 @@ def parse_song(path: Path | str) -> Song:
                 inst.drum_names if inst and inst.is_kit else None,
                 inst.drum_sample_paths if inst and inst.is_kit else None,
             ),
+            sound_params=_parse_clip_sound_params(clip_el),
         )
         song.clips.append(clip)
 

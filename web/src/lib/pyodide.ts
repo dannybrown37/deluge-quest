@@ -154,12 +154,59 @@ export interface PreviewNoteRow {
   notes: PreviewNote[];
 }
 
+export interface PreviewOscPatch {
+  type: string;
+  transpose: number;
+  cents: number;
+}
+
+export interface PreviewEnvelope {
+  attack: string;
+  decay: string;
+  sustain: string;
+  release: string;
+}
+
+export interface PreviewPatchCable {
+  source: string;
+  destination: string;
+  amount: string;
+}
+
+export interface PreviewModulatorPatch {
+  transpose: number;
+  cents: number;
+  toModulator1: boolean;
+}
+
+export interface PreviewPatch {
+  mode: string;
+  polyphonic: string;
+  lpfMode: string;
+  osc1: PreviewOscPatch;
+  osc2: PreviewOscPatch;
+  modulator1: PreviewModulatorPatch | null;
+  modulator2: PreviewModulatorPatch | null;
+  lfo1Type: string;
+  lfo2Type: string;
+  unisonNum: number;
+  unisonDetune: number;
+  arpMode: string;
+  arpOctaves: number;
+  arpSyncLevel: number;
+  params: Record<string, string>;
+  envelope1: PreviewEnvelope;
+  envelope2: PreviewEnvelope;
+  patchCables: PreviewPatchCable[];
+}
+
 export interface PreviewTrack {
   name: string;
   isKit: boolean;
   instrumentType: "synth" | "kit" | "midi" | "cv" | "audio";
   midiChannel: number | null;
   cvChannel: number | null;
+  patch: PreviewPatch | null;
   clips: {
     positionTicks: number;
     lengthTicks: number;
@@ -218,6 +265,47 @@ try:
 
     _audio_clip_map = {_ac.index: _ac for _ac in _song.audio_clips}
 
+    def _envelope_dict(env):
+        return {"attack": env.attack, "decay": env.decay, "sustain": env.sustain, "release": env.release}
+
+    def _build_patch(inst, clip_indices):
+        if inst.sound is None:
+            return None
+        _sp = None
+        for _ci in clip_indices:
+            _c = next((_cc for _cc in _song.clips if _cc.index == _ci), None)
+            if _c and _c.sound_params:
+                _sp = _c.sound_params
+                break
+        if _sp is None:
+            return None
+
+        def _mod_dict(mod):
+            if mod is None:
+                return None
+            return {"transpose": mod.transpose, "cents": mod.cents, "toModulator1": mod.to_modulator1}
+
+        return {
+            "mode": inst.sound.mode,
+            "polyphonic": inst.sound.polyphonic,
+            "lpfMode": inst.sound.lpf_mode,
+            "osc1": {"type": inst.sound.osc1.type, "transpose": inst.sound.osc1.transpose, "cents": inst.sound.osc1.cents},
+            "osc2": {"type": inst.sound.osc2.type, "transpose": inst.sound.osc2.transpose, "cents": inst.sound.osc2.cents},
+            "modulator1": _mod_dict(inst.sound.modulator1),
+            "modulator2": _mod_dict(inst.sound.modulator2),
+            "lfo1Type": inst.sound.lfo1_type,
+            "lfo2Type": inst.sound.lfo2_type,
+            "unisonNum": inst.sound.unison_num,
+            "unisonDetune": inst.sound.unison_detune,
+            "arpMode": inst.sound.arp_mode,
+            "arpOctaves": inst.sound.arp_octaves,
+            "arpSyncLevel": inst.sound.arp_sync_level,
+            "params": _sp.params,
+            "envelope1": _envelope_dict(_sp.envelope1),
+            "envelope2": _envelope_dict(_sp.envelope2),
+            "patchCables": [{"source": pc.source, "destination": pc.destination, "amount": pc.amount} for pc in _sp.patch_cables],
+        }
+
     _has_arrangement = any(_inst.clip_instances for _inst in _song.instruments)
 
     _tracks = []
@@ -263,6 +351,7 @@ try:
             "instrumentType": _inst.instrument_type,
             "midiChannel": _inst.midi_channel,
             "cvChannel": _inst.cv_channel,
+            "patch": _build_patch(_inst, [_cl["clipIndex"] for _cl in _clips]),
             "clips": _clips,
         })
 

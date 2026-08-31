@@ -1,5 +1,13 @@
-import { midiToFreq } from './patchAudio';
-import type { PreviewTrack } from './pyodide';
+import {
+  midiToFreq,
+  createSubVoice,
+  createFMVoice,
+  envAttackTime,
+  envDecayReleaseTime,
+  envSustainLevel,
+  type AudioPatch,
+} from './patchAudio';
+import type { PreviewTrack, PreviewPatch } from './pyodide';
 
 export interface SongPlaybackOptions {
   bpm: number;
@@ -71,11 +79,13 @@ export class SongPlayer {
   private secPerTick: number;
   private totalDurationSec: number;
   private sampleBuffers = new Map<string, AudioBuffer>();
+  private trackPatches: (PreviewPatch | null)[];
 
   constructor(opts: SongPlaybackOptions) {
     this.opts = opts;
     this.secPerTick = 60 / (opts.bpm * opts.ticksPerQuarter);
     this.totalDurationSec = opts.durationTicks * this.secPerTick;
+    this.trackPatches = opts.tracks.map((t) => t.patch);
     this.flattenNotes();
   }
 
@@ -479,6 +489,37 @@ export class SongPlayer {
     this.scheduled.push({ source: src, gain: g });
   }
 
+  private schedulePatchVoice(
+    ctx: AudioContext, dest: AudioNode, patch: PreviewPatch,
+    midi: number, vel: number, when: number, durSec: number
+  ) {
+    const freq = midiToFreq(midi);
+    const a1 = envAttackTime(patch.envelope1.attack);
+    const d1 = envDecayReleaseTime(patch.envelope1.decay);
+    const s1 = envSustainLevel(patch.envelope1.sustain);
+    const r1 = envDecayReleaseTime(patch.envelope1.release);
+
+    const noteGain = ctx.createGain();
+    noteGain.gain.setValueAtTime(0, when);
+    noteGain.gain.linearRampToValueAtTime(vel, when + a1);
+    noteGain.gain.linearRampToValueAtTime(vel * s1, when + a1 + d1);
+    noteGain.gain.setValueAtTime(vel * s1, when + durSec);
+    noteGain.gain.linearRampToValueAtTime(0, when + durSec + r1);
+    noteGain.connect(dest);
+
+    const audioPatch = patch as unknown as AudioPatch;
+    const unisonCount = Math.max(1, patch.unisonNum);
+    const voiceDur = durSec + r1 + 0.1;
+    for (let u = 0; u < unisonCount; u++) {
+      const detuneOffset = unisonCount === 1 ? 0 : ((u / (unisonCount - 1)) - 0.5) * patch.unisonDetune;
+      if (patch.mode === 'fm') {
+        createFMVoice(ctx, freq, detuneOffset, audioPatch, noteGain, when, voiceDur, null, undefined);
+      } else {
+        createSubVoice(ctx, freq, detuneOffset, audioPatch, noteGain, when, voiceDur, null, undefined);
+      }
+    }
+  }
+
   private scheduleNote(
     note: { trackIdx: number; midi: number; isKit: boolean; drumType: DrumType; samplePath: string | null; startSec: number; durSec: number; vel: number },
     when: number
@@ -503,6 +544,12 @@ export class SongPlayer {
         case 'perc': this.schedulePerc(ctx, dest, vol, when, note.midi); break;
       }
     } else {
+      const patch = this.trackPatches[note.trackIdx];
+      if (patch) {
+        this.schedulePatchVoice(ctx, dest, patch, note.midi, vol, when, note.durSec);
+        return;
+      }
+
       const noteGain = ctx.createGain();
       noteGain.gain.setValueAtTime(0, when);
       noteGain.gain.linearRampToValueAtTime(vol, when + 0.002);

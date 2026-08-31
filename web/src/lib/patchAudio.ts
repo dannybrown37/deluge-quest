@@ -41,29 +41,29 @@ export interface AudioPatch {
   patchCables: PatchCable[];
 }
 
-function hexToNorm(h: string): number {
+export function hexToNorm(h: string): number {
   const n = parseInt(h, 16);
   const signed = n > 0x7FFFFFFF ? n - 0x100000000 : n;
   return (signed + 0x80000000) / 0xFFFFFFFF;
 }
 
-function envAttackTime(h: string): number {
+export function envAttackTime(h: string): number {
   return 0.001 * Math.pow(8000, hexToNorm(h));
 }
 
-function envDecayReleaseTime(h: string): number {
+export function envDecayReleaseTime(h: string): number {
   return 0.01 * Math.pow(2000, hexToNorm(h));
 }
 
-function envSustainLevel(h: string): number {
+export function envSustainLevel(h: string): number {
   return Math.max(0, Math.min(1, hexToNorm(h)));
 }
 
-function lpfFreqHz(h: string): number {
+export function lpfFreqHz(h: string): number {
   return 20 * Math.pow(1000, hexToNorm(h));
 }
 
-function lpfResQ(h: string): number {
+export function lpfResQ(h: string): number {
   return 0.5 + hexToNorm(h) * 20;
 }
 
@@ -296,7 +296,7 @@ export function playPreview(patch: AudioPatch, onStop?: () => void) {
   }, cleanupTime);
 }
 
-function createSubVoice(
+export function createSubVoice(
   ctx: AudioContext, freq: number, detuneCents: number,
   patch: AudioPatch, dest: AudioNode,
   start: number, dur: number,
@@ -365,7 +365,7 @@ function createSubVoice(
   }
 }
 
-function createFMVoice(
+export function createFMVoice(
   ctx: AudioContext, freq: number, detuneCents: number,
   patch: AudioPatch, dest: AudioNode,
   start: number, dur: number,

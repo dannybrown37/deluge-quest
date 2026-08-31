@@ -180,6 +180,9 @@ class TestKitSamplePaths:
         clip = song_with_kit_samples.clips[0]
         assert clip.rows[0].sample_path == "SAMPLES/DRUMS/Kick/808 Kick.wav"
 
+    def test_kit_instrument_has_no_sound_patch(self, song_with_kit_samples):
+        assert song_with_kit_samples.instruments[0].sound is None
+
     def test_sample_path_none_for_non_sample_osc(self, song_with_kit_samples):
         clip = song_with_kit_samples.clips[0]
         assert clip.rows[1].sample_path is None
@@ -453,3 +456,52 @@ class TestArrangementOnlyTracks:
         kit = song_with_arrangement_only.instruments[0]
         assert kit.clip_instances[0].clip_index == 2
         assert kit.clip_instances[1].clip_index == 1
+
+
+class TestSynthPatchParsing:
+    @pytest.fixture
+    def song_with_synth(self, tmp_path):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<song firmwareVersion="3.0.0" timePerTimerTick="459" timerTickFraction="1610612736"
+      rootNote="0" inArrangementView="0">
+  <instruments>
+    <sound presetSlot="0" presetSubSlot="-1" lpfMode="24dB" mode="subtractive" polyphonic="auto">
+      <osc1 type="square"/>
+      <osc2 type="square" transpose="12"/>
+      <lfo1 type="triangle"/>
+      <unison num="2" detune="8"/>
+      <arpeggiator mode="off" numOctaves="2"/>
+    </sound>
+  </instruments>
+  <sessionClips>
+    <instrumentClip instrumentPresetSlot="0" instrumentPresetSubSlot="-1" length="96">
+      <soundParams oscAVolume="0x7FFFFFFF" oscBVolume="0x80000000" lpfFrequency="0x7FFFFFFF">
+        <envelope1 attack="0x80000000" decay="0xE6666654" sustain="0x7FFFFFFF" release="0x80000000"/>
+        <envelope2 attack="0xE6666654" decay="0xE6666654" sustain="0xFFFFFFE9" release="0xE6666654"/>
+        <patchCables>
+          <patchCable source="velocity" destination="volume" amount="0x3FFFFFE8"/>
+        </patchCables>
+      </soundParams>
+      <noteRows>
+        <noteRow y="60" noteData="0x00000000000000C04014"/>
+      </noteRows>
+    </instrumentClip>
+  </sessionClips>
+</song>"""
+        p = tmp_path / "test.XML"
+        p.write_text(xml)
+        return parse_song(p)
+
+    def test_instrument_sound_patch_parsed(self, song_with_synth):
+        sound = song_with_synth.instruments[0].sound
+        assert sound.osc1.type == "square"
+        assert sound.osc2.transpose == 12
+        assert sound.unison_num == 2
+        assert sound.unison_detune == 8
+
+    def test_clip_sound_params_parsed(self, song_with_synth):
+        sp = song_with_synth.clips[0].sound_params
+        assert sp.envelope1.decay == "0xE6666654"
+        assert sp.params["oscAVolume"] == "0x7FFFFFFF"
+        assert len(sp.patch_cables) == 1
+        assert sp.patch_cables[0].destination == "volume"
