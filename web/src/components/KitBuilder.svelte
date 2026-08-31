@@ -7,6 +7,7 @@
     parseKitXml,
     generateKitXml,
   } from "../lib/kitXml";
+  import { cardStore } from "../lib/cardStore";
 
   type Pane = "browser" | "kit";
   type Mode = "normal" | "rename" | "help" | "search";
@@ -20,6 +21,7 @@
   let loadedFileName = $state("");
 
   let samplesDir: FileSystemDirectoryHandle | null = $state(null);
+  let reconnectAvailable = $state(false);
   let rootEntries: TreeEntry[] = $state([]);
   let flatEntries: TreeEntry[] = $state([]);
   let browseIndex = $state(0);
@@ -86,6 +88,40 @@
     browseIndex = 0;
     activePane = "browser";
   }
+
+  /** Loads the SAMPLES/ dir from an already-picked SD card root (from /stats or /clean) instead of prompting again. */
+  async function loadSamplesFromRoot(root: FileSystemDirectoryHandle) {
+    try {
+      samplesDir = await (root as any).getDirectoryHandle("SAMPLES");
+    } catch { return; }
+    rootEntries = await listDirectory(samplesDir!, "", 0, null);
+    rebuildFlat();
+    browseIndex = 0;
+    activePane = "browser";
+  }
+
+  async function tryAutoLoadFromCardStore() {
+    try {
+      const handle = await cardStore.reconnectHandleOnly();
+      if (handle) {
+        await loadSamplesFromRoot(handle);
+      } else if (await cardStore.hasPersistedHandle()) {
+        reconnectAvailable = true;
+      }
+    } catch {}
+  }
+
+  async function reconnectSamplesDir() {
+    try {
+      const handle = await cardStore.reconnectHandleOnly(true);
+      if (handle) {
+        reconnectAvailable = false;
+        await loadSamplesFromRoot(handle);
+      }
+    } catch {}
+  }
+
+  tryAutoLoadFromCardStore();
 
   async function listDirectory(
     dir: FileSystemDirectoryHandle, parentPath: string, depth: number, parent: TreeEntry | null
@@ -393,7 +429,10 @@
         <h2 class="landing-title">Kit Builder</h2>
         <p class="landing-desc">Browse your SD card samples and build Deluge drum kits.</p>
         <div class="landing-actions">
-          <button class="btn btn-primary" onclick={openSamplesDir}>Open SAMPLES Folder</button>
+          {#if reconnectAvailable}
+            <button class="btn btn-primary" onclick={reconnectSamplesDir}>Use loaded SD card</button>
+          {/if}
+          <button class="btn {reconnectAvailable ? 'btn-secondary' : 'btn-primary'}" onclick={openSamplesDir}>Open SAMPLES Folder</button>
           <label class="btn btn-secondary">
             Load Kit XML
             <input type="file" accept=".xml,.XML" hidden onchange={handleFileInput} />

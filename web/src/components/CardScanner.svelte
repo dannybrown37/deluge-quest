@@ -1,7 +1,8 @@
 <script lang="ts">
   import { TRASH_DIR, getOrCreateDir, moveToTrash } from "../lib/softDelete";
+  import { cardStore } from "../lib/cardStore";
 
-  type State = "idle" | "processing" | "done" | "error";
+  type State = "idle" | "indexing" | "processing" | "done" | "error";
 
   interface MissingRef {
     sample: string;
@@ -24,6 +25,11 @@
     reclaimableBytes: number;
     duplicates: DuplicateGroup[];
     duplicateWastedBytes: number;
+    songsByType: {
+      delugeOnly: string[];
+      mixed: string[];
+      externalOnly: string[];
+    };
   }
 
   const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
@@ -35,14 +41,17 @@
   let report: CardReport | null = $state(null);
   let dragOver = $state(false);
   let cardName = $state("");
-  let listCategory = $state<"all" | "samples" | "missing" | "presets" | "duplicates">("all");
+  let listCategory = $state<"all" | "samples" | "missing" | "presets" | "duplicates" | "gear">("all");
   let showList = $state(false);
   let progress = $state("");
+  let progressPct = $state(0);
   let canWrite = $state(false);
   let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
   let movedFiles = $state(new Set<string>());
   let movingFiles = $state(new Set<string>());
   let fileHandles = $state(new Map<string, File>());
+  let usingCardStore = $state(false);
+  let reconnectAvailable = $state(false);
   let playingFile = $state<string | null>(null);
   let currentAudio = $state<HTMLAudioElement | null>(null);
 
@@ -78,6 +87,18 @@
     return refs;
   }
 
+  function classifyInstrumentGear(xmlText: string): "delugeOnly" | "mixed" | "externalOnly" | null {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, "text/xml");
+    if (doc.querySelector("parsererror")) return null;
+    const hasExternal = doc.querySelector("midiChannel, cvChannel") !== null;
+    const hasInternal = doc.querySelector("sound, kit") !== null;
+    if (hasInternal && hasExternal) return "mixed";
+    if (hasExternal) return "externalOnly";
+    if (hasInternal) return "delugeOnly";
+    return null;
+  }
+
   function extractPresetRefs(xmlText: string): Set<string> {
     const names = new Set<string>();
     const parser = new DOMParser();
@@ -104,35 +125,71 @@
     return names;
   }
 
-  async function readDirHandle(
-    dirHandle: FileSystemDirectoryHandle,
-    path: string,
-    fileMap: Map<string, File>,
-  ) {
-    for await (const entry of (dirHandle as any).values()) {
-      const entryPath = path ? `${path}/${entry.name}` : entry.name;
-      if (entry.kind === "file") {
-        const file = await (entry as FileSystemFileHandle).getFile();
-        fileMap.set(entryPath, file);
-      } else if (entry.kind === "directory") {
-        if (entry.name === TRASH_DIR) continue;
-        await readDirHandle(entry as FileSystemDirectoryHandle, entryPath, fileMap);
-      }
+  async function scanFromHandle() {
+    state = "indexing";
+    progress = "Indexing card";
+    progressPct = 0;
+    await cardStore.pickDirectory((stage, done, total) => {
+      progress = total > 0 ? `${stage} (${done}/${total})` : stage;
+      progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+    });
+    await runScanFromCardStore();
+  }
+
+  async function reconnectFromCardStore() {
+    state = "indexing";
+    progress = "Reconnecting";
+    progressPct = 0;
+    const ok = await cardStore.requestReconnect((stage, done, total) => {
+      progress = total > 0 ? `${stage} (${done}/${total})` : stage;
+      progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+    });
+    if (ok) {
+      await runScanFromCardStore();
+    } else {
+      state = "idle";
     }
   }
 
-  async function scanFromHandle(handle: FileSystemDirectoryHandle) {
-    rootHandle = handle;
+  async function runScanFromCardStore() {
+    rootHandle = cardStore.rootHandle;
     canWrite = true;
-    cardName = handle.name;
+    cardName = rootHandle?.name ?? "";
+
+    if (cardStore.sampleIndex.size === 0) {
+      state = "error";
+      errorMsg = "Not a Deluge SD card: no SAMPLES directory found. Select the SD card root folder.";
+      return;
+    }
 
     state = "processing";
-    progress = "Indexing files...";
+    progress = "Scanning XML references...";
     await new Promise(r => setTimeout(r, 0));
 
-    const filesByPath = new Map<string, File>();
-    await readDirHandle(handle, "", filesByPath);
-    await runScan(filesByPath, "");
+    const allSamples = new Map<string, number>();
+    const sampleHandles = new Map<string, File>();
+    for (const info of cardStore.sampleIndex.values()) {
+      allSamples.set(info.path, info.size);
+    }
+
+    const xmlEntries: [string, string][] = [
+      ...[...cardStore.songXmls.entries()],
+      ...[...cardStore.presetIndex.entries()],
+    ];
+
+    const getSampleFile = async (path: string) => {
+      const cached = sampleHandles.get(path);
+      if (cached) return cached;
+      const info = cardStore.sampleIndex.get(path.toLowerCase());
+      if (!info) throw new Error(`Sample not indexed: ${path}`);
+      const file = await info.handle.getFile();
+      sampleHandles.set(path, file);
+      return file;
+    };
+
+    await computeReport(allSamples, xmlEntries, getSampleFile);
+    fileHandles = sampleHandles;
+    usingCardStore = true;
   }
 
   async function scanCard(files: File[]) {
@@ -157,14 +214,8 @@
       cardName = firstPath.split("/")[0];
     }
 
-    await runScan(filesByPath, rootPrefix);
-  }
-
-  async function runScan(filesByPath: Map<string, File>, rootPrefix: string) {
-    const stripRoot = (p: string) => rootPrefix && p.startsWith(rootPrefix) ? p.slice(rootPrefix.length) : p;
-
     const hasSamples = [...filesByPath.keys()].some(p => {
-      const rel = stripRoot(p);
+      const rel = stripRootPrefix(p, rootPrefix);
       return rel.toUpperCase().startsWith("SAMPLES/");
     });
     if (!hasSamples) {
@@ -174,37 +225,66 @@
     }
 
     const allSamples = new Map<string, number>();
+    const handles = new Map<string, File>();
     for (const [path, file] of filesByPath) {
-      const rel = stripRoot(path);
+      const rel = stripRootPrefix(path, rootPrefix);
       if (rel.toUpperCase().startsWith("SAMPLES/") && AUDIO_EXTENSIONS.has(ext(rel))) {
         allSamples.set(rel, file.size);
+        handles.set(rel, file);
       }
     }
+    fileHandles = handles;
+    usingCardStore = false;
+    movedFiles = new Set();
 
     progress = "Scanning XML references...";
     await new Promise(r => setTimeout(r, 0));
 
-    const refSources = new Map<string, Set<string>>();
-    const xmlFiles: [string, File][] = [];
+    const xmlEntries: [string, string][] = [];
+    const xmlFilePairs: [string, File][] = [];
     for (const [path, file] of filesByPath) {
-      const rel = stripRoot(path);
+      const rel = stripRootPrefix(path, rootPrefix);
       const dir = topDir(rel).toUpperCase();
-      if (XML_DIRS.includes(dir) && ext(rel) === "xml") {
-        xmlFiles.push([rel, file]);
+      if (XML_DIRS.includes(dir) && ext(rel) === "xml") xmlFilePairs.push([rel, file]);
+    }
+    let xmlDone = 0;
+    for (const [rel, file] of xmlFilePairs) {
+      xmlEntries.push([rel, await file.text()]);
+      xmlDone++;
+      if (xmlDone % 20 === 0) {
+        progress = `Scanning XML references... ${xmlDone}/${xmlFilePairs.length}`;
+        await new Promise(r => setTimeout(r, 0));
       }
     }
 
-    let xmlDone = 0;
-    for (const [rel, file] of xmlFiles) {
-      const text = await file.text();
+    await computeReport(allSamples, xmlEntries, async (rel) => {
+      const file = handles.get(rel);
+      if (!file) throw new Error(`Sample not indexed: ${rel}`);
+      return file;
+    });
+  }
+
+  function stripRootPrefix(p: string, rootPrefix: string): string {
+    return rootPrefix && p.startsWith(rootPrefix) ? p.slice(rootPrefix.length) : p;
+  }
+
+  /** Shared analysis: reference scanning, missing/unused detection, preset usage, duplicate hashing. */
+  async function computeReport(
+    allSamples: Map<string, number>,
+    xmlEntries: [string, string][],
+    getSampleFile: (relPath: string) => Promise<File>,
+  ) {
+    const refSources = new Map<string, Set<string>>();
+    const songsByType = { delugeOnly: [] as string[], mixed: [] as string[], externalOnly: [] as string[] };
+
+    for (const [rel, text] of xmlEntries) {
       for (const ref of extractFileRefs(text)) {
         if (!refSources.has(ref)) refSources.set(ref, new Set());
         refSources.get(ref)!.add(rel);
       }
-      xmlDone++;
-      if (xmlDone % 20 === 0) {
-        progress = `Scanning XML references... ${xmlDone}/${xmlFiles.length}`;
-        await new Promise(r => setTimeout(r, 0));
+      if (topDir(rel).toUpperCase() === "SONGS") {
+        const gearType = classifyInstrumentGear(text);
+        if (gearType) songsByType[gearType].push(rel);
       }
     }
 
@@ -225,9 +305,8 @@
     await new Promise(r => setTimeout(r, 0));
 
     const presetNames = new Set<string>();
-    for (const [rel, file] of xmlFiles) {
+    for (const [rel, text] of xmlEntries) {
       if (topDir(rel).toUpperCase() === "SONGS") {
-        const text = await file.text();
         for (const name of extractPresetRefs(text)) {
           presetNames.add(name);
         }
@@ -235,7 +314,7 @@
     }
 
     const unusedPresets: string[] = [];
-    for (const [rel, file] of xmlFiles) {
+    for (const [rel] of xmlEntries) {
       const dir = topDir(rel).toUpperCase();
       if (dir === "KITS" || dir === "SYNTHS") {
         const basename = rel.split("/").pop() ?? "";
@@ -248,16 +327,6 @@
     }
     unusedPresets.sort();
 
-    const handles = new Map<string, File>();
-    for (const [path, file] of filesByPath) {
-      const rel = stripRoot(path);
-      if (rel.toUpperCase().startsWith("SAMPLES/") && AUDIO_EXTENSIONS.has(ext(rel))) {
-        handles.set(rel, file);
-      }
-    }
-    fileHandles = handles;
-    movedFiles = new Set();
-
     progress = "Finding duplicates (grouping by size)...";
     await new Promise(r => setTimeout(r, 0));
 
@@ -268,20 +337,18 @@
       else sizeGroups.set(size, [path]);
     }
 
-    const candidates = new Map<string, File>();
+    const candidatePaths: string[] = [];
     for (const [size, paths] of sizeGroups) {
       if (paths.length < 2 || size === 0) continue;
-      for (const p of paths) {
-        const file = handles.get(p);
-        if (file) candidates.set(p, file);
-      }
+      candidatePaths.push(...paths);
     }
 
     const hashGroups = new Map<string, { size: number; files: string[] }>();
     let hashDone = 0;
-    const totalToHash = candidates.size;
+    const totalToHash = candidatePaths.length;
 
-    for (const [path, file] of candidates) {
+    for (const path of candidatePaths) {
+      const file = await getSampleFile(path);
       const buf = await file.arrayBuffer();
       const hashBuf = await crypto.subtle.digest("SHA-256", buf);
       const hashArr = new Uint8Array(hashBuf);
@@ -311,6 +378,10 @@
     }
     duplicates.sort((a, b) => (b.size * (b.files.length - 1)) - (a.size * (a.files.length - 1)));
 
+    songsByType.delugeOnly.sort();
+    songsByType.mixed.sort();
+    songsByType.externalOnly.sort();
+
     report = {
       totalSamples: allSamples.size,
       totalSamplesBytes: totalBytes,
@@ -321,6 +392,7 @@
       reclaimableBytes: reclaimable,
       duplicates,
       duplicateWastedBytes,
+      songsByType,
     };
     state = "done";
     saveToSession();
@@ -365,8 +437,7 @@
 
   async function openDirectoryPicker() {
     try {
-      const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
-      await scanFromHandle(handle);
+      await scanFromHandle();
     } catch (e: any) {
       if (e.name !== "AbortError") {
         state = "error";
@@ -467,6 +538,7 @@
       if (!cached) return false;
       cached.duplicates ??= [];
       cached.duplicateWastedBytes ??= 0;
+      cached.songsByType ??= { delugeOnly: [], mixed: [], externalOnly: [] };
       report = cached;
       cardName = sessionStorage.getItem(CACHE_KEY_NAME) ?? "";
       state = "done";
@@ -476,7 +548,22 @@
     }
   }
 
-  restoreFromSession();
+  async function tryReconnect() {
+    const hadCache = restoreFromSession();
+    try {
+      if (await cardStore.reconnect()) {
+        rootHandle = cardStore.rootHandle;
+        canWrite = true;
+        usingCardStore = true;
+        cardName = rootHandle?.name ?? cardName;
+        if (!hadCache) await runScanFromCardStore();
+      } else if (await cardStore.hasPersistedHandle()) {
+        reconnectAvailable = true;
+      }
+    } catch {}
+  }
+
+  tryReconnect();
 
   function reset() {
     if (currentAudio) {
@@ -493,6 +580,8 @@
     fileHandles = new Map();
     rootHandle = null;
     canWrite = false;
+    usingCardStore = false;
+    reconnectAvailable = false;
     movedFiles = new Set();
     movingFiles = new Set();
     try {
@@ -512,6 +601,11 @@
   );
   let filteredDuplicates = $derived(
     listCategory === "all" || listCategory === "duplicates" ? (report?.duplicates ?? []) : []
+  );
+  let filteredGearSongs = $derived(
+    listCategory === "all" || listCategory === "gear"
+      ? [...(report?.songsByType.mixed ?? []), ...(report?.songsByType.externalOnly ?? [])].sort()
+      : []
   );
 
   interface FolderNode {
@@ -591,7 +685,7 @@
     expandedDirs = next;
   }
 
-  function playSample(samplePath: string) {
+  async function playSample(samplePath: string) {
     if (currentAudio) {
       currentAudio.pause();
       URL.revokeObjectURL(currentAudio.src);
@@ -601,7 +695,12 @@
         return;
       }
     }
-    const file = fileHandles.get(samplePath);
+    let file = fileHandles.get(samplePath);
+    if (!file && usingCardStore) {
+      const info = cardStore.sampleIndex.get(samplePath.toLowerCase());
+      file = await info?.handle.getFile();
+      if (file) fileHandles.set(samplePath, file);
+    }
     if (!file) return;
     const url = URL.createObjectURL(file);
     const audio = new Audio(url);
@@ -649,6 +748,21 @@
           <br/><span class="dropzone-hint-warn">Use Chrome or Edge to enable sample playback and cleanup</span>
         {/if}
       </p>
+      {#if reconnectAvailable}
+        <p class="dropzone-hint">
+          <button type="button" class="dropzone-browse" onclick={(e) => { e.stopPropagation(); reconnectFromCardStore(); }}>
+            Reconnect previously loaded SD card
+          </button>
+        </p>
+      {/if}
+    </div>
+  </div>
+
+{:else if state === "indexing"}
+  <div class="status-card">
+    <div class="status-msg">{progress}</div>
+    <div class="progress-bar">
+      <div class="progress-fill" style="width: {progressPct}%"></div>
     </div>
   </div>
 
@@ -704,6 +818,12 @@
             </span>
           </div>
         {/if}
+        {#if report.songsByType.mixed.length + report.songsByType.externalOnly.length > 0}
+          <div class="stat">
+            <span class="stat-value">{(report.songsByType.mixed.length + report.songsByType.externalOnly.length).toLocaleString()}</span>
+            <span class="stat-label">songs use external gear (MIDI/CV)</span>
+          </div>
+        {/if}
       </div>
 
       {#if movedCount > 0}
@@ -747,6 +867,7 @@
             { id: "missing", label: `Missing (${report.missingReferences.length})` },
             { id: "presets", label: `Presets (${report.unusedPresets.length})` },
             { id: "duplicates", label: `Duplicates (${report.duplicates.length})` },
+            { id: "gear", label: `External gear (${report.songsByType.mixed.length + report.songsByType.externalOnly.length})` },
           ] as tab}
             <button
               class="list-tab"
@@ -899,7 +1020,18 @@
           </div>
         {/if}
 
-        {#if filteredUnused.length === 0 && filteredMissing.length === 0 && filteredPresets.length === 0 && filteredDuplicates.length === 0}
+        {#if filteredGearSongs.length > 0}
+          <div class="list-group">
+            <h4 class="list-heading">Songs using external gear ({filteredGearSongs.length})</h4>
+            <div class="file-tree">
+              {#each filteredGearSongs as song}
+                <div class="tree-file">{song}</div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if filteredUnused.length === 0 && filteredMissing.length === 0 && filteredPresets.length === 0 && filteredDuplicates.length === 0 && filteredGearSongs.length === 0}
           <p class="list-empty">Nothing to list in this category.</p>
         {/if}
       </div>
