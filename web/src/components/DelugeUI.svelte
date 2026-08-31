@@ -27,7 +27,8 @@
   // Left: 2 black diagonal + 2 gold diagonal to their right
   // Center-left: 1 black knob next to screen
   // Right: 1 gold + 1 black, horizontally parallel
-  let knobValues = [64, 40, 127, 0, 30, 64, 100];
+  const DEFAULT_KNOB_VALUES = [0, 0, 127, 0, 0, 64, 100];
+  let knobValues = [...DEFAULT_KNOB_VALUES];
   let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
   const knobMeta = [
     { name: 'delay time',     style: 'black' },  // 0: left upper black — delay time
@@ -283,9 +284,20 @@
     }
   }
 
+  function resetKnobs() {
+    knobValues = [...DEFAULT_KNOB_VALUES];
+    knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
+    updateVolume();
+    updateFilter();
+    updateReverb();
+    updateDelay();
+    updatePlaybackRate();
+  }
+
   async function handleLoad() {
     if (songs.length === 0) return;
     await initAudio();
+    resetKnobs();
     const nextIdx = (currentSongIndex + 1) % songs.length;
     await loadSong(nextIdx);
   }
