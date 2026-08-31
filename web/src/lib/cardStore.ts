@@ -10,7 +10,8 @@ export type ProgressCallback = (stage: string, done: number, total: number) => v
 const IDB_NAME = "deluge-card-store";
 const IDB_META = "meta";
 const KEY_HANDLE = "rootHandle";
-const SOFT_DELETE_DIR = "SOFT_DELETE";
+/** App-managed dirs — trash and pre-fix backups, not real card content. Never scanned. */
+const APP_MANAGED_DIRS = new Set(["SOFT_DELETE", "REPAIR_BACKUP"]);
 const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
 
 export function ext(name: string): string {
@@ -180,7 +181,7 @@ class CardStoreImpl {
     out: { path: string; handle: FileSystemFileHandle }[],
   ) {
     for await (const entry of (dirHandle as any).values()) {
-      if (entry.name === SOFT_DELETE_DIR && entry.kind === "directory") continue;
+      if (entry.kind === "directory" && APP_MANAGED_DIRS.has(entry.name)) continue;
       const entryPath = path ? `${path}/${entry.name}` : entry.name;
       if (entry.kind === "file") {
         out.push({ path: entryPath, handle: entry as FileSystemFileHandle });

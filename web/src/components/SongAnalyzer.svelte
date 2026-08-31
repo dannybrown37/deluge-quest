@@ -294,6 +294,7 @@
       });
     }
     if (entry.isDirectory) {
+      if (APP_MANAGED_DIRS.has(entry.name.toUpperCase())) return [];
       const reader = (entry as FileSystemDirectoryEntry).createReader();
       const entries = await new Promise<FileSystemEntry[]>((resolve) => {
         const all: FileSystemEntry[] = [];
@@ -312,15 +313,23 @@
     return [];
   }
 
+  const SOFT_DELETE_DIR_NAME = "SOFT_DELETE";
+  const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR_NAME, "REPAIR_BACKUP"]);
+
+  /** SOFT_DELETE/ and REPAIR_BACKUP/ are app-managed, not card content — never analyze or list them. */
+  function isSoftDeletePath(path: string): boolean {
+    const segments = new Set(path.toUpperCase().split("/"));
+    return [...APP_MANAGED_DIRS].some(d => segments.has(d));
+  }
+
   /** If any dropped/browsed file lives under a SONGS/ dir, keep only those — drops of the SD card
    * root otherwise pull in KITS/SYNTHS XMLs too. Falls back to everything when no SONGS/ dir is found
    * (e.g. the user dropped the SONGS folder's contents directly). */
   function filterToSongsDir(entries: DroppedFile[]): DroppedFile[] {
-    const songEntries = entries.filter(e => topDir(e.path).toUpperCase() === "SONGS");
-    return songEntries.length > 0 ? songEntries : entries;
+    const withoutTrash = entries.filter(e => !isSoftDeletePath(e.path));
+    const songEntries = withoutTrash.filter(e => topDir(e.path).toUpperCase() === "SONGS");
+    return songEntries.length > 0 ? songEntries : withoutTrash;
   }
-
-  const SOFT_DELETE_DIR_NAME = "SOFT_DELETE";
 
   async function openFolderWithAccess() {
     state = "indexing";

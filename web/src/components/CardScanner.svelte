@@ -15,6 +15,11 @@
     files: string[];
   }
 
+  interface InvalidXmlFile {
+    path: string;
+    autoFixable: boolean;
+  }
+
   interface CardReport {
     totalSamples: number;
     totalSamplesBytes: number;
@@ -30,25 +35,35 @@
       mixed: string[];
       externalOnly: string[];
     };
+    invalidXml: InvalidXmlFile[];
   }
 
   const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
   const XML_DIRS = ["SONGS", "KITS", "SYNTHS"];
   const FILE_ATTRS = ["fileName", "filePath"];
+  const SOFT_DELETE_DIR = "SOFT_DELETE";
+  const REPAIR_BACKUP_DIR = "REPAIR_BACKUP";
+  const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR, REPAIR_BACKUP_DIR]);
+
+  /** SOFT_DELETE/ and REPAIR_BACKUP/ are app-managed, not card content — never scan, report, or count them. */
+  function isAppManagedPath(relPath: string): boolean {
+    return APP_MANAGED_DIRS.has(relPath.toUpperCase().split("/")[0]);
+  }
 
   let state: State = $state("idle");
   let errorMsg = $state("");
   let report: CardReport | null = $state(null);
   let dragOver = $state(false);
   let cardName = $state("");
-  let listCategory = $state<"all" | "samples" | "missing" | "presets" | "duplicates" | "gear">("all");
-  let showList = $state(false);
+  let listCategory = $state<"all" | "samples" | "missing" | "presets" | "duplicates" | "songs" | "invalid">("all");
   let progress = $state("");
   let progressPct = $state(0);
   let canWrite = $state(false);
   let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
   let movedFiles = $state(new Set<string>());
   let movingFiles = $state(new Set<string>());
+  let movedSongs = $state(new Set<string>());
+  let movingSongs = $state(new Set<string>());
   let fileHandles = $state(new Map<string, File>());
   let usingCardStore = $state(false);
   let reconnectAvailable = $state(false);
@@ -68,10 +83,39 @@
     return i >= 0 ? path.slice(0, i) : path;
   }
 
+  /**
+   * Some firmware versions write duplicate attributes on the same element (observed on
+   * c1.2.1, e.g. repeated isPlaying/length/colourOffset on audioTrack clips) — not
+   * well-formed XML, so DOMParser rejects the whole document. Keep the last value per
+   * attribute, matching how the firmware likely intended incremental writes to land.
+   */
+  function dedupeAttributes(xml: string): string {
+    return xml.replace(/<[^!?/][^>]*>/gs, (tag) => {
+      const head = tag.match(/^<\/?[\w:.-]+/)?.[0];
+      if (!head) return tag;
+      const selfClose = /\/\s*>$/.test(tag);
+      const seen = new Map<string, string>();
+      const attrRe = /([\w:.-]+)="([^"]*)"/g;
+      let m: RegExpExecArray | null;
+      while ((m = attrRe.exec(tag)) !== null) seen.set(m[1], m[2]);
+      if (seen.size === 0) return tag;
+      const attrs = [...seen.entries()].map(([k, v]) => `${k}="${v}"`).join(" ");
+      return `${head} ${attrs}${selfClose ? " />" : ">"}`;
+    });
+  }
+
+  function parseSongXml(xmlText: string): Document {
+    const parser = new DOMParser();
+    let doc = parser.parseFromString(xmlText, "text/xml");
+    if (doc.querySelector("parsererror")) {
+      doc = parser.parseFromString(dedupeAttributes(xmlText), "text/xml");
+    }
+    return doc;
+  }
+
   function extractFileRefs(xmlText: string): Set<string> {
     const refs = new Set<string>();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, "text/xml");
+    const doc = parseSongXml(xmlText);
     if (doc.querySelector("parsererror")) return refs;
     const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_ELEMENT);
     let node: Node | null = walker.currentNode;
@@ -88,21 +132,22 @@
   }
 
   function classifyInstrumentGear(xmlText: string): "delugeOnly" | "mixed" | "externalOnly" | null {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, "text/xml");
+    const doc = parseSongXml(xmlText);
     if (doc.querySelector("parsererror")) return null;
-    const hasExternal = doc.querySelector("midiChannel, cvChannel") !== null;
+    // Tag names vary by firmware: older exports use midiChannel/cvChannel/audioOutput,
+    // firmware c1.2.1+ uses midi/cv/audioTrack. Check both.
+    const hasExternal = doc.querySelector("midi, midiChannel, cv, cvChannel") !== null;
     const hasInternal = doc.querySelector("sound, kit") !== null;
     if (hasInternal && hasExternal) return "mixed";
     if (hasExternal) return "externalOnly";
-    if (hasInternal) return "delugeOnly";
-    return null;
+    // No external-gear signal at all — native to the Deluge, whether it's synths/kits,
+    // audio-only clips (audioTrack/audioOutput), or an empty song.
+    return "delugeOnly";
   }
 
   function extractPresetRefs(xmlText: string): Set<string> {
     const names = new Set<string>();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlText, "text/xml");
+    const doc = parseSongXml(xmlText);
     if (doc.querySelector("parsererror")) return names;
     const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_ELEMENT);
     let node: Node | null = walker.currentNode;
@@ -151,7 +196,20 @@
     }
   }
 
+  /** Clears all move/fix tracking state — must run at the start of every fresh scan, not just
+   * full reset(), or stale entries from a prior run can silently no-op legitimate actions. */
+  function resetActionState() {
+    movedFiles = new Set();
+    movingFiles = new Set();
+    movedSongs = new Set();
+    movingSongs = new Set();
+    fixedXmlFiles = new Set();
+    fixingXmlFiles = new Set();
+    xmlFixErrors = new Map();
+  }
+
   async function runScanFromCardStore() {
+    resetActionState();
     rootHandle = cardStore.rootHandle;
     canWrite = true;
     cardName = rootHandle?.name ?? "";
@@ -203,15 +261,16 @@
     const filesByPath = new Map<string, File>();
     let rootPrefix = "";
 
-    for (const f of files) {
-      const rel = (f as any).webkitRelativePath as string || f.name;
-      filesByPath.set(rel, f);
-    }
-
     const firstPath = files[0] && ((files[0] as any).webkitRelativePath as string);
     if (firstPath) {
       rootPrefix = firstPath.split("/")[0] + "/";
       cardName = firstPath.split("/")[0];
+    }
+
+    for (const f of files) {
+      const rel = (f as any).webkitRelativePath as string || f.name;
+      if (isAppManagedPath(stripRootPrefix(rel, rootPrefix))) continue;
+      filesByPath.set(rel, f);
     }
 
     const hasSamples = [...filesByPath.keys()].some(p => {
@@ -235,7 +294,7 @@
     }
     fileHandles = handles;
     usingCardStore = false;
-    movedFiles = new Set();
+    resetActionState();
 
     progress = "Scanning XML references...";
     await new Promise(r => setTimeout(r, 0));
@@ -276,8 +335,15 @@
   ) {
     const refSources = new Map<string, Set<string>>();
     const songsByType = { delugeOnly: [] as string[], mixed: [] as string[], externalOnly: [] as string[] };
+    const invalidXml: InvalidXmlFile[] = [];
 
     for (const [rel, text] of xmlEntries) {
+      const wellFormed = new DOMParser().parseFromString(text, "text/xml").querySelector("parsererror") === null;
+      if (!wellFormed) {
+        const autoFixable = new DOMParser().parseFromString(dedupeAttributes(text), "text/xml").querySelector("parsererror") === null;
+        invalidXml.push({ path: rel, autoFixable });
+      }
+
       for (const ref of extractFileRefs(text)) {
         if (!refSources.has(ref)) refSources.set(ref, new Set());
         refSources.get(ref)!.add(rel);
@@ -287,6 +353,7 @@
         if (gearType) songsByType[gearType].push(rel);
       }
     }
+    invalidXml.sort((a, b) => a.path.localeCompare(b.path));
 
     const sampleRefs = new Map<string, Set<string>>();
     for (const [ref, sources] of refSources) {
@@ -393,6 +460,7 @@
       duplicates,
       duplicateWastedBytes,
       songsByType,
+      invalidXml,
     };
     state = "done";
     saveToSession();
@@ -420,11 +488,155 @@
     }
   }
 
-  async function moveAllUnused() {
+  const SONG_CATEGORY_DIRS = ["DELUGE_ONLY", "EXTERNAL_GEAR"];
+
+  /** Removes dirPath and any now-empty ancestors, stopping at (not including) stopAt. */
+  async function removeEmptyDirsUpTo(root: FileSystemDirectoryHandle, dirPath: string, stopAt: string) {
+    let path = dirPath;
+    while (path && path !== stopAt) {
+      const parts = path.split("/");
+      const name = parts.pop()!;
+      const parentPath = parts.join("/");
+      const parentHandle = parentPath ? await getOrCreateDir(root, parentPath) : root;
+
+      const dirHandle: any = await parentHandle.getDirectoryHandle(name, { create: true });
+      let isEmpty = true;
+      for await (const _ of dirHandle.values()) {
+        isEmpty = false;
+        break;
+      }
+      if (!isEmpty) return;
+
+      await parentHandle.removeEntry(name);
+      path = parentPath;
+    }
+  }
+
+  async function moveSongToCategory(songPath: string, category: "DELUGE_ONLY" | "EXTERNAL_GEAR") {
+    if (!rootHandle || movedSongs.has(songPath) || movingSongs.has(songPath)) return;
+
+    const next = new Set(movingSongs);
+    next.add(songPath);
+    movingSongs = next;
+
+    try {
+      const parts = songPath.split("/");
+      parts.shift(); // drop leading "SONGS"
+      if (SONG_CATEGORY_DIRS.includes(parts[0])) parts.shift();
+      const fileName = parts.pop()!;
+      const relDir = parts.join("/");
+
+      const sourceParts = songPath.split("/");
+      const sourceFileName = sourceParts.pop()!;
+      const sourceDir = sourceParts.join("/");
+      const destDirPath = ["SONGS", category, relDir].filter(Boolean).join("/");
+
+      // Already in the correct category folder — nothing to move. Do NOT read/write/delete:
+      // writing then deleting the same path is what destroyed songs already sorted correctly.
+      if (sourceDir === destDirPath && sourceFileName === fileName) {
+        const moved = new Set(movedSongs);
+        moved.add(songPath);
+        movedSongs = moved;
+        return;
+      }
+
+      const sourceDirHandle = await getOrCreateDir(rootHandle, sourceDir);
+      const sourceFileHandle = await sourceDirHandle.getFileHandle(sourceFileName);
+      const file = await sourceFileHandle.getFile();
+      const data = await file.arrayBuffer();
+
+      const destDirHandle = await getOrCreateDir(rootHandle, destDirPath);
+      const destFileHandle = await destDirHandle.getFileHandle(fileName, { create: true });
+      const writable = await destFileHandle.createWritable();
+      await writable.write(data);
+      await writable.close();
+
+      await sourceDirHandle.removeEntry(sourceFileName);
+      await removeEmptyDirsUpTo(rootHandle, sourceDir, "SONGS");
+
+      const moved = new Set(movedSongs);
+      moved.add(songPath);
+      movedSongs = moved;
+    } catch (e: any) {
+      console.error(`Failed to move ${songPath}:`, e);
+    } finally {
+      const rm = new Set(movingSongs);
+      rm.delete(songPath);
+      movingSongs = rm;
+    }
+  }
+
+  async function sortAllSongs() {
     if (!rootHandle || !report) return;
-    const toMove = report.unusedSamples.filter(s => !movedFiles.has(s));
-    for (const s of toMove) {
-      await moveSample(s);
+    const all = [
+      ...report.songsByType.delugeOnly.map(s => ({ path: s, category: "DELUGE_ONLY" as const })),
+      ...report.songsByType.mixed.map(s => ({ path: s, category: "EXTERNAL_GEAR" as const })),
+      ...report.songsByType.externalOnly.map(s => ({ path: s, category: "EXTERNAL_GEAR" as const })),
+    ];
+    for (const { path, category } of all) {
+      if (!movedSongs.has(path)) await moveSongToCategory(path, category);
+    }
+  }
+
+  let fixedXmlFiles = $state(new Set<string>());
+  let fixingXmlFiles = $state(new Set<string>());
+  let xmlFixErrors = $state(new Map<string, string>());
+
+  async function fixXmlFile(path: string) {
+    if (!rootHandle || fixedXmlFiles.has(path) || fixingXmlFiles.has(path)) return;
+
+    const next = new Set(fixingXmlFiles);
+    next.add(path);
+    fixingXmlFiles = next;
+
+    try {
+      const parts = path.split("/");
+      const fileName = parts.pop()!;
+      const dirPath = parts.join("/");
+
+      const dirHandle = await getOrCreateDir(rootHandle, dirPath);
+      const fileHandle = await dirHandle.getFileHandle(fileName);
+      const file = await fileHandle.getFile();
+      const rawText = await file.text();
+
+      const fixedText = dedupeAttributes(rawText);
+      const stillBroken = new DOMParser().parseFromString(fixedText, "text/xml").querySelector("parsererror") !== null;
+      if (stillBroken) {
+        throw new Error("Automatic fix did not produce valid XML — needs manual review");
+      }
+
+      const backupDirHandle = await getOrCreateDir(rootHandle, `${REPAIR_BACKUP_DIR}/${dirPath}`);
+      const backupFileHandle = await backupDirHandle.getFileHandle(fileName, { create: true });
+      const backupWritable = await backupFileHandle.createWritable();
+      await backupWritable.write(rawText);
+      await backupWritable.close();
+
+      const destWritable = await (await dirHandle.getFileHandle(fileName, { create: true })).createWritable();
+      await destWritable.write(fixedText);
+      await destWritable.close();
+
+      const fixed = new Set(fixedXmlFiles);
+      fixed.add(path);
+      fixedXmlFiles = fixed;
+      const errs = new Map(xmlFixErrors);
+      errs.delete(path);
+      xmlFixErrors = errs;
+    } catch (e: any) {
+      console.error(`Failed to fix ${path}:`, e);
+      const errs = new Map(xmlFixErrors);
+      errs.set(path, e.message || "Fix failed");
+      xmlFixErrors = errs;
+    } finally {
+      const rm = new Set(fixingXmlFiles);
+      rm.delete(path);
+      fixingXmlFiles = rm;
+    }
+  }
+
+  async function fixAllXml() {
+    if (!rootHandle || !report) return;
+    for (const { path, autoFixable } of report.invalidXml) {
+      if (autoFixable && !fixedXmlFiles.has(path)) await fixXmlFile(path);
     }
   }
 
@@ -462,6 +674,7 @@
       });
     }
     if (entry.isDirectory) {
+      if (APP_MANAGED_DIRS.has(entry.name.toUpperCase())) return [];
       const reader = (entry as FileSystemDirectoryEntry).createReader();
       const entries = await new Promise<FileSystemEntry[]>((resolve) => {
         const all: FileSystemEntry[] = [];
@@ -539,6 +752,7 @@
       cached.duplicates ??= [];
       cached.duplicateWastedBytes ??= 0;
       cached.songsByType ??= { delugeOnly: [], mixed: [], externalOnly: [] };
+      cached.invalidXml ??= [];
       report = cached;
       cardName = sessionStorage.getItem(CACHE_KEY_NAME) ?? "";
       state = "done";
@@ -576,14 +790,12 @@
     report = null;
     errorMsg = "";
     cardName = "";
-    showList = false;
     fileHandles = new Map();
     rootHandle = null;
     canWrite = false;
     usingCardStore = false;
     reconnectAvailable = false;
-    movedFiles = new Set();
-    movingFiles = new Set();
+    resetActionState();
     try {
       sessionStorage.removeItem(CACHE_KEY);
       sessionStorage.removeItem(CACHE_KEY_NAME);
@@ -602,10 +814,18 @@
   let filteredDuplicates = $derived(
     listCategory === "all" || listCategory === "duplicates" ? (report?.duplicates ?? []) : []
   );
-  let filteredGearSongs = $derived(
-    listCategory === "all" || listCategory === "gear"
+  let filteredDelugeOnlySongs = $derived(
+    listCategory === "all" || listCategory === "songs"
+      ? [...(report?.songsByType.delugeOnly ?? [])].sort()
+      : []
+  );
+  let filteredExternalSongs = $derived(
+    listCategory === "all" || listCategory === "songs"
       ? [...(report?.songsByType.mixed ?? []), ...(report?.songsByType.externalOnly ?? [])].sort()
       : []
+  );
+  let filteredInvalidXml = $derived(
+    listCategory === "all" || listCategory === "invalid" ? (report?.invalidXml ?? []) : []
   );
 
   interface FolderNode {
@@ -824,6 +1044,12 @@
             <span class="stat-label">songs use external gear (MIDI/CV)</span>
           </div>
         {/if}
+        {#if report.invalidXml.length > 0}
+          <div class="stat stat--error">
+            <span class="stat-value">{report.invalidXml.length.toLocaleString()}</span>
+            <span class="stat-label">invalid XML files (not well-formed)</span>
+          </div>
+        {/if}
       </div>
 
       {#if movedCount > 0}
@@ -838,27 +1064,11 @@
     </div>
 
     <div class="actions">
-      <button class="btn btn-secondary btn-sm" onclick={() => { showList = !showList; }}>
-        {showList ? "Hide" : "Show"} file list
-      </button>
-      {#if canWrite && report.unusedSamples.length > 0}
-        <button
-          class="btn btn-accent btn-sm"
-          onclick={moveAllUnused}
-          disabled={movedCount === report.unusedSamples.length}
-        >
-          {movedCount === report.unusedSamples.length
-            ? `All moved to ${TRASH_DIR}/`
-            : movedCount > 0
-              ? `Move remaining ${report.unusedSamples.length - movedCount} to ${TRASH_DIR}/`
-              : `Move all ${report.unusedSamples.length} unused to ${TRASH_DIR}/`}
-        </button>
-      {/if}
       <button class="btn btn-secondary btn-sm" onclick={exportJson}>Export JSON</button>
       <button class="btn btn-secondary btn-sm" onclick={reset}>Scan another</button>
     </div>
 
-    {#if showList}
+    {#if report.unusedSamples.length + report.missingReferences.length + report.unusedPresets.length + report.duplicates.length + report.songsByType.delugeOnly.length + report.songsByType.mixed.length + report.songsByType.externalOnly.length + report.invalidXml.length > 0}
       <div class="list-section">
         <div class="list-tabs">
           {#each [
@@ -867,7 +1077,8 @@
             { id: "missing", label: `Missing (${report.missingReferences.length})` },
             { id: "presets", label: `Presets (${report.unusedPresets.length})` },
             { id: "duplicates", label: `Duplicates (${report.duplicates.length})` },
-            { id: "gear", label: `External gear (${report.songsByType.mixed.length + report.songsByType.externalOnly.length})` },
+            { id: "songs", label: `Organize Songs (${report.songsByType.delugeOnly.length + report.songsByType.mixed.length + report.songsByType.externalOnly.length})` },
+            { id: "invalid", label: `Invalid XML (${report.invalidXml.length})` },
           ] as tab}
             <button
               class="list-tab"
@@ -1020,18 +1231,102 @@
           </div>
         {/if}
 
-        {#if filteredGearSongs.length > 0}
+        {#if filteredDelugeOnlySongs.length > 0 || filteredExternalSongs.length > 0}
           <div class="list-group">
-            <h4 class="list-heading">Songs using external gear ({filteredGearSongs.length})</h4>
+            <div class="songs-header">
+              <h4 class="list-heading">Organize songs</h4>
+              {#if canWrite}
+                <button class="btn btn-secondary btn-sm" onclick={sortAllSongs}>Sort all songs</button>
+              {/if}
+            </div>
+
+            {#if filteredDelugeOnlySongs.length > 0}
+              <h5 class="list-subheading">Deluge-only ({filteredDelugeOnlySongs.length})</h5>
+              <div class="file-tree">
+                {#each filteredDelugeOnlySongs as song}
+                  {@const isMoved = movedSongs.has(song)}
+                  {@const isMoving = movingSongs.has(song)}
+                  <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
+                    <span class="tree-file-name" title={song}>{song}</span>
+                    {#if isMoved}
+                      <span class="tree-file-badge">moved</span>
+                    {:else if canWrite}
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        onclick={() => moveSongToCategory(song, "DELUGE_ONLY")}
+                        disabled={isMoving}
+                      >{isMoving ? "..." : "Move"}</button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+
+            {#if filteredExternalSongs.length > 0}
+              <h5 class="list-subheading">External gear ({filteredExternalSongs.length})</h5>
+              <div class="file-tree">
+                {#each filteredExternalSongs as song}
+                  {@const isMoved = movedSongs.has(song)}
+                  {@const isMoving = movingSongs.has(song)}
+                  <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
+                    <span class="tree-file-name" title={song}>{song}</span>
+                    {#if isMoved}
+                      <span class="tree-file-badge">moved</span>
+                    {:else if canWrite}
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        onclick={() => moveSongToCategory(song, "EXTERNAL_GEAR")}
+                        disabled={isMoving}
+                      >{isMoving ? "..." : "Move"}</button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+
+        {#if filteredInvalidXml.length > 0}
+          <div class="list-group">
+            <div class="songs-header">
+              <h4 class="list-heading">Invalid XML files ({filteredInvalidXml.length})</h4>
+              {#if canWrite && filteredInvalidXml.some(f => f.autoFixable && !fixedXmlFiles.has(f.path))}
+                <button class="btn btn-secondary btn-sm" onclick={fixAllXml}>Fix all</button>
+              {/if}
+            </div>
+            <p class="list-subtext">
+              Not well-formed XML (e.g. duplicate attributes from a firmware write quirk) — the app can't
+              reliably read these until fixed. "Fix" backs up the original to {REPAIR_BACKUP_DIR}/ first,
+              then rewrites the file with duplicate attributes collapsed to their last value.
+            </p>
             <div class="file-tree">
-              {#each filteredGearSongs as song}
-                <div class="tree-file">{song}</div>
+              {#each filteredInvalidXml as f}
+                {@const isFixed = fixedXmlFiles.has(f.path)}
+                {@const isFixing = fixingXmlFiles.has(f.path)}
+                {@const error = xmlFixErrors.get(f.path)}
+                <div class="tree-file tree-file--sample" class:tree-file--moved={isFixed}>
+                  <span class="tree-file-name" title={f.path}>{f.path}</span>
+                  {#if isFixed}
+                    <span class="tree-file-badge">fixed</span>
+                  {:else if !f.autoFixable}
+                    <span class="tree-file-badge tree-file-badge--error">needs manual review</span>
+                  {:else if canWrite}
+                    <button
+                      class="btn btn-secondary btn-sm"
+                      onclick={() => fixXmlFile(f.path)}
+                      disabled={isFixing}
+                    >{isFixing ? "..." : "Fix"}</button>
+                  {/if}
+                  {#if error}
+                    <span class="missing-source">{error}</span>
+                  {/if}
+                </div>
               {/each}
             </div>
           </div>
         {/if}
 
-        {#if filteredUnused.length === 0 && filteredMissing.length === 0 && filteredPresets.length === 0 && filteredDuplicates.length === 0 && filteredGearSongs.length === 0}
+        {#if filteredUnused.length === 0 && filteredMissing.length === 0 && filteredPresets.length === 0 && filteredDuplicates.length === 0 && filteredDelugeOnlySongs.length === 0 && filteredExternalSongs.length === 0 && filteredInvalidXml.length === 0}
           <p class="list-empty">Nothing to list in this category.</p>
         {/if}
       </div>
@@ -1320,6 +1615,15 @@
     padding: 0 0.3rem;
     flex-shrink: 0;
   }
+  .tree-file-badge--error {
+    color: #c47a7a;
+    border-color: #c47a7a;
+  }
+  .list-subtext {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin: 0 0 0.5rem;
+  }
   .play-btn {
     flex-shrink: 0;
     width: 1.4rem;
@@ -1374,6 +1678,20 @@
     flex-wrap: wrap;
     gap: 0 0.5rem;
     color: var(--text);
+  }
+
+  .songs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.4rem;
+  }
+  .list-subheading {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0.6rem 0 0.3rem;
   }
 
   .dup-list {

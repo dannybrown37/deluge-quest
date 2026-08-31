@@ -65,6 +65,14 @@ def _prompt_for_path() -> Path:
     return p
 
 
+_APP_MANAGED_DIRS = {"SOFT_DELETE", "REPAIR_BACKUP"}
+
+
+def _is_app_managed(path: Path) -> bool:
+    """SOFT_DELETE/ and REPAIR_BACKUP/ are app-managed, not card content — never scan them."""
+    return bool(_APP_MANAGED_DIRS & {part.upper() for part in path.parts})
+
+
 def _collect_songs(paths: list[Path]) -> list[Path]:
     songs: list[Path] = []
     for p in paths:
@@ -73,7 +81,7 @@ def _collect_songs(paths: list[Path]) -> list[Path]:
             songs.extend(sorted(p.rglob("*.xml")))
         elif p.is_file():
             songs.append(p)
-    return songs
+    return [s for s in songs if not _is_app_managed(s)]
 
 
 def _is_deluge_xml(path: Path) -> bool:
