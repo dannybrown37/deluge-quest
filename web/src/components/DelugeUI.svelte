@@ -27,14 +27,14 @@
   // Left: 2 black diagonal + 2 gold diagonal to their right
   // Center-left: 1 black knob next to screen
   // Right: 1 gold + 1 black, horizontally parallel
-  let knobValues = [0, 0, 127, 0, 64, 64, 100];
+  let knobValues = [64, 40, 127, 0, 30, 64, 100];
   let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
   const knobMeta = [
-    { name: 'delay',      style: 'black' },  // 0: left upper black — delay send
-    { name: 'reverb',     style: 'black' },  // 1: left lower black — reverb send
+    { name: 'delay time',     style: 'black' },  // 0: left upper black — delay time
+    { name: 'delay fdbk',     style: 'black' },  // 1: left lower black — delay feedback
     { name: 'filter',   style: 'gold'  },  // 2: left upper gold — filter cutoff
     { name: 'resonance',      style: 'gold'  },  // 3: left lower gold — filter resonance
-    { name: 'scrub',    style: 'black' },  // 4: black knob left of screen
+    { name: 'reverb',    style: 'black' },  // 4: black knob left of screen — reverb send
     { name: 'tempo',    style: 'black' },  // 5: right black (left position)
     { name: 'output',   style: 'gold'  },  // 6: right gold (rightmost)
   ];
@@ -236,7 +236,7 @@
     delayFeedback = audioCtx.createGain();
     delayFeedback.gain.value = 0.35;
     delayWet = audioCtx.createGain();
-    delayWet.gain.value = 0;
+    delayWet.gain.value = 0.4;
     filterNode.connect(dryGain);
     filterNode.connect(reverbNode);
     filterNode.connect(delayNode);
@@ -297,14 +297,15 @@
 
   function updateReverb() {
     if (!dryGain || !wetGain) return;
-    const mix = knobValues[1] / 127;
+    const mix = knobValues[4] / 127;
     dryGain.gain.value = 1 - mix * 0.5;
     wetGain.gain.value = mix;
   }
 
   function updateDelay() {
-    if (!delayWet) return;
-    delayWet.gain.value = knobValues[0] / 127;
+    if (!delayNode || !delayFeedback) return;
+    delayNode.delayTime.value = 0.05 + (knobValues[0] / 127) * 0.75; // 0.05s – 0.8s
+    delayFeedback.gain.value = (knobValues[1] / 127) * 0.85; // 0 – 0.85, avoids runaway feedback
   }
 
   function updateFilter() {
@@ -313,34 +314,6 @@
     filterNode.frequency.value = 80 * Math.pow(280, norm); // 80 Hz – 22400 Hz exponential
     const resNorm = knobValues[3] / 127;
     filterNode.Q.value = 0.5 + resNorm * 24.5; // 0.5 – 25
-  }
-
-  function scrubTo() {
-    if (!audioBuffer) return;
-    const target = (knobValues[4] / 127) * audioBuffer.duration;
-    screenSubtext = formatTime(target, audioBuffer.duration);
-    if (isPlaying && sourceNode && audioCtx) {
-      sourceNode.onended = null;
-      sourceNode.stop();
-      playOffset = target;
-      sourceNode = audioCtx.createBufferSource();
-      sourceNode.buffer = audioBuffer;
-      sourceNode.playbackRate.value = getPlaybackRate();
-      sourceNode.connect(filterNode!);
-      sourceNode.onended = () => {
-        if (isPlaying) {
-          isPlaying = false;
-          playOffset = 0;
-          sourceNode = null;
-          screenText = 'DELUGE TOOLS';
-          screenSubtext = 'drop a song to begin';
-        }
-      };
-      sourceNode.start(0, playOffset);
-      playStartTime = audioCtx.currentTime;
-    } else {
-      playOffset = target;
-    }
   }
 
   function getPlaybackRate(): number {
@@ -410,12 +383,11 @@
     knobValues[draggingKnob] = Math.round(((knobAngles[draggingKnob] + 135) / 270) * 127);
     screenText = knobMeta[draggingKnob].name.toUpperCase();
     screenSubtext = `${knobValues[draggingKnob]}`;
-    if (draggingKnob === 0) updateDelay();
-    if (draggingKnob === 1) updateReverb();
+    if (draggingKnob === 0 || draggingKnob === 1) updateDelay();
+    if (draggingKnob === 4) updateReverb();
     if (draggingKnob === 6) updateVolume();
     if (draggingKnob === 5) updatePlaybackRate();
     if (draggingKnob === 2 || draggingKnob === 3) updateFilter();
-    if (draggingKnob === 4) scrubTo();
   }
 
   function handleKnobEnd() {
@@ -437,9 +409,8 @@
     knobValues[idx] = Math.round(((knobAngles[idx] + 135) / 270) * 127);
     screenText = knobMeta[idx].name.toUpperCase();
     screenSubtext = `${knobValues[idx]}`;
-    if (idx === 0) updateDelay();
-    if (idx === 4) scrubTo();
-    if (idx === 1) updateReverb();
+    if (idx === 0 || idx === 1) updateDelay();
+    if (idx === 4) updateReverb();
     if (idx === 6) updateVolume();
     if (idx === 5) updatePlaybackRate();
     if (idx === 2 || idx === 3) updateFilter();
