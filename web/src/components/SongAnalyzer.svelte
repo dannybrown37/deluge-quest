@@ -1,5 +1,6 @@
 <script lang="ts">
   import { loadPyodide, analyzeStats, convertToMusicXML, type SongStats } from "../lib/pyodide";
+  import { moveToTrash } from "../lib/softDelete";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -16,6 +17,14 @@
 
   let convertingFile = $state("");
   let convertedFiles = $state(new Map<string, string>());
+
+  let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
+  let filePaths = $state(new Map<string, string>());
+  let deletingFiles = $state(new Set<string>());
+  let reconnectHandle = $state<FileSystemDirectoryHandle | null>(null);
+  let reconnectPaths = $state(new Map<string, string>());
+  let reconnecting = $state(false);
+  let hasFileSystemAccess = $derived(typeof window !== "undefined" && "showDirectoryPicker" in window);
 
   let filterArr = $state<"all" | "yes" | "no">("all");
   let filterKey = $state("");
@@ -125,22 +134,38 @@
   const CACHE_KEY_RESULTS = "deluge-stats-results";
   const IDB_NAME = "deluge-stats";
   const IDB_STORE = "files";
+  const IDB_META_STORE = "meta";
+  const META_KEY_HANDLE = "rootHandle";
+  const META_KEY_PATHS = "filePaths";
 
   function openIdb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open(IDB_NAME, 1);
-      req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+      const req = indexedDB.open(IDB_NAME, 2);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+        if (!db.objectStoreNames.contains(IDB_META_STORE)) db.createObjectStore(IDB_META_STORE);
+      };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
   }
 
-  function idbPut(db: IDBDatabase, key: string, value: string): Promise<void> {
+  function idbPut(db: IDBDatabase, key: string, value: string, store = IDB_STORE): Promise<void> {
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      tx.objectStore(IDB_STORE).put(value, key);
+      const tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).put(value, key);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  function idbGet<T>(db: IDBDatabase, key: string, store = IDB_STORE): Promise<T | undefined> {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(store, "readonly");
+      const req = tx.objectStore(store).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
     });
   }
 
@@ -163,10 +188,10 @@
     });
   }
 
-  function idbClear(db: IDBDatabase): Promise<void> {
+  function idbClear(db: IDBDatabase, store = IDB_STORE): Promise<void> {
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      tx.objectStore(IDB_STORE).clear();
+      const tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).clear();
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -186,6 +211,16 @@
     } catch {}
   }
 
+  async function saveFolderConnection() {
+    if (!rootHandle) return;
+    try {
+      const db = await openIdb();
+      await idbPut(db, META_KEY_HANDLE, rootHandle as any, IDB_META_STORE);
+      await idbPut(db, META_KEY_PATHS, JSON.stringify([...filePaths]), IDB_META_STORE);
+      db.close();
+    } catch {}
+  }
+
   async function restoreFromSession(): Promise<boolean> {
     try {
       const raw = sessionStorage.getItem(CACHE_KEY_RESULTS);
@@ -201,9 +236,32 @@
     try {
       const db = await openIdb();
       fileContents = await idbGetAll(db);
+      reconnectHandle = await idbGet<FileSystemDirectoryHandle>(db, META_KEY_HANDLE, IDB_META_STORE) ?? null;
+      const pathsJson = await idbGet<string>(db, META_KEY_PATHS, IDB_META_STORE);
+      reconnectPaths = pathsJson ? new Map(JSON.parse(pathsJson)) : new Map();
       db.close();
+      if (reconnectHandle && (await (reconnectHandle as any).queryPermission?.({ mode: "readwrite" })) === "granted") {
+        rootHandle = reconnectHandle;
+        filePaths = reconnectPaths;
+        reconnectHandle = null;
+      }
     } catch {}
     return true;
+  }
+
+  async function reconnectFolder() {
+    if (!reconnectHandle || reconnecting) return;
+    reconnecting = true;
+    try {
+      const perm = await (reconnectHandle as any).requestPermission({ mode: "readwrite" });
+      if (perm === "granted") {
+        rootHandle = reconnectHandle;
+        filePaths = reconnectPaths;
+        reconnectHandle = null;
+      }
+    } catch {} finally {
+      reconnecting = false;
+    }
   }
 
   function exportCsv() {
@@ -263,6 +321,82 @@
       return nested.flat();
     }
     return [];
+  }
+
+  const SOFT_DELETE_DIR_NAME = "SOFT_DELETE";
+
+  async function scanDirHandle(
+    dirHandle: FileSystemDirectoryHandle,
+    path: string,
+    out: { file: File; path: string }[],
+  ) {
+    for await (const entry of (dirHandle as any).values()) {
+      const entryPath = path ? `${path}/${entry.name}` : entry.name;
+      if (entry.kind === "file") {
+        if (entry.name.toLowerCase().endsWith(".xml")) {
+          const file = await (entry as FileSystemFileHandle).getFile();
+          out.push({ file, path: entryPath });
+        }
+      } else if (entry.kind === "directory") {
+        if (entry.name === SOFT_DELETE_DIR_NAME) continue;
+        await scanDirHandle(entry as FileSystemDirectoryHandle, entryPath, out);
+      }
+    }
+  }
+
+  async function openFolderWithAccess() {
+    try {
+      const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+      const collected: { file: File; path: string }[] = [];
+      await scanDirHandle(handle, "", collected);
+
+      const hasSongsDir = collected.some(c => c.path.toUpperCase().startsWith("SONGS/"));
+      if (!hasSongsDir) {
+        state = "error";
+        errorMsg = "Not a Deluge SD card: no SONGS directory found. Select the SD card root folder so deleted songs land in SOFT_DELETE/SONGS/... at the root.";
+        return;
+      }
+
+      rootHandle = handle;
+      filePaths = new Map(collected.map(c => [c.file.name, c.path]));
+      await processFiles(collected.map(c => c.file));
+      saveFolderConnection();
+    } catch (e: any) {
+      if (e?.name !== "AbortError") {
+        state = "error";
+        errorMsg = e.message || "Failed to open folder";
+      }
+    }
+  }
+
+  async function deleteSong(filename: string) {
+    if (!rootHandle || deletingFiles.has(filename)) return;
+    const path = filePaths.get(filename);
+    if (!path) return;
+    if (!confirm(`Move "${filename}" to ${SOFT_DELETE_DIR_NAME}/? You can restore it from there later.`)) return;
+
+    const next = new Set(deletingFiles);
+    next.add(filename);
+    deletingFiles = next;
+
+    try {
+      await moveToTrash(rootHandle, path);
+      results = results.filter(s => s.filename !== filename);
+      const contents = new Map(fileContents);
+      contents.delete(filename);
+      fileContents = contents;
+      const paths = new Map(filePaths);
+      paths.delete(filename);
+      filePaths = paths;
+      saveToSession();
+      saveFolderConnection();
+    } catch (e: any) {
+      console.error(`Failed to delete ${filename}:`, e);
+    } finally {
+      const rm = new Set(deletingFiles);
+      rm.delete(filename);
+      deletingFiles = rm;
+    }
   }
 
   async function processFiles(files: File[]) {
@@ -407,11 +541,15 @@
     errorMsg = "";
     fileCount = 0;
     fileContents = new Map();
+    rootHandle = null;
+    filePaths = new Map();
+    reconnectHandle = null;
+    reconnectPaths = new Map();
     clearFilters();
     try {
       sessionStorage.removeItem(CACHE_KEY_RESULTS);
     } catch {}
-    openIdb().then(db => idbClear(db).then(() => db.close())).catch(() => {});
+    openIdb().then(db => Promise.all([idbClear(db), idbClear(db, IDB_META_STORE)]).then(() => db.close())).catch(() => {});
   }
 </script>
 
@@ -431,6 +569,13 @@
       <p class="dropzone-title">Drop your SONGS folder</p>
       <p class="dropzone-sub">or browse for a <label class="dropzone-browse">folder<input id="stats-folder-input" type="file" webkitdirectory onchange={handleInputChange} hidden /></label> or <label class="dropzone-browse">files<input id="stats-file-input" type="file" accept=".xml,.XML" multiple onchange={handleInputChange} hidden /></label></p>
       <p class="dropzone-hint">Recursively scans for .XML song files</p>
+      {#if hasFileSystemAccess}
+        <p class="dropzone-hint">
+          <button type="button" class="dropzone-browse dropzone-browse--btn" onclick={(e) => { e.stopPropagation(); openFolderWithAccess(); }}>
+            Open SD card root for delete access
+          </button>
+        </p>
+      {/if}
     </div>
   </div>
 
@@ -499,6 +644,11 @@
         {/if}
         <div class="filter-spacer"></div>
         <span class="results-count">{filtered.length}/{results.length} songs</span>
+        {#if reconnectHandle}
+          <button class="btn btn-secondary btn-sm" onclick={reconnectFolder} disabled={reconnecting}>
+            {reconnecting ? "Reconnecting…" : "Reconnect folder to enable delete"}
+          </button>
+        {/if}
         <button class="btn btn-secondary btn-sm" onclick={exportCsv}>Export CSV</button>
         <button class="btn btn-secondary btn-sm" onclick={reset}>Analyze more</button>
       </div>
@@ -507,6 +657,17 @@
     <!-- Table -->
     <div class="table-wrap">
       <table>
+        <colgroup>
+          <col class="col-name" />
+          <col class="col-bpm" />
+          <col class="col-key" />
+          <col class="col-duration" />
+          <col class="col-type" />
+          <col class="col-instruments" />
+          <col class="col-clips" />
+          <col class="col-notes" />
+          <col class="col-modified col-hide-narrow" />
+        </colgroup>
         <thead>
           <tr>
             {#each [
@@ -545,16 +706,28 @@
             <tr class:row--error={s.key.startsWith('Error')}>
               <td class="cell-name">
                 <span class="cell-name-text" title={name}>{name}</span>
-                {#if (s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)}
+                {#if ((s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)) || (rootHandle && filePaths.has(s.filename))}
                   <span class="cell-name-actions">
-                    {#if convertingFile === s.filename}
-                      <span class="score-btn score-btn--busy">Converting…</span>
-                    {:else}
-                      <button class="score-btn" class:score-btn--done={convertedFiles.has(s.filename)} title={convertedFiles.has(s.filename) ? "Download MusicXML" : "Convert to MusicXML"} onclick={() => convertScore(s.filename)}>
-                        {convertedFiles.has(s.filename) ? "Download" : "Score"}
+                    {#if (s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)}
+                      {#if convertingFile === s.filename}
+                        <span class="score-btn score-btn--busy">Converting…</span>
+                      {:else}
+                        <button class="score-btn" class:score-btn--done={convertedFiles.has(s.filename)} title={convertedFiles.has(s.filename) ? "Download MusicXML" : "Convert to MusicXML"} onclick={() => convertScore(s.filename)}>
+                          {convertedFiles.has(s.filename) ? "Download" : "Score"}
+                        </button>
+                      {/if}
+                      <button class="score-btn inspect-btn" title="Preview song" onclick={() => openInPreview(s.filename)}>Preview</button>
+                    {/if}
+                    {#if rootHandle && filePaths.has(s.filename)}
+                      <button
+                        class="score-btn delete-btn"
+                        title="Move to {SOFT_DELETE_DIR_NAME}/"
+                        disabled={deletingFiles.has(s.filename)}
+                        onclick={() => deleteSong(s.filename)}
+                      >
+                        {deletingFiles.has(s.filename) ? "…" : "Delete"}
                       </button>
                     {/if}
-                    <button class="score-btn inspect-btn" title="Preview song" onclick={() => openInPreview(s.filename)}>Preview</button>
                   </span>
                 {/if}
               </td>
@@ -704,6 +877,12 @@
     color: var(--accent);
     cursor: pointer;
     text-decoration: underline;
+  }
+  .dropzone-browse--btn {
+    background: none;
+    border: none;
+    font: inherit;
+    padding: 0;
   }
   .dropzone-hint {
     font-size: 0.8rem;
@@ -858,10 +1037,20 @@
 
   table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     font-size: 0.82rem;
     white-space: nowrap;
   }
+  .col-name { width: 34%; }
+  .col-bpm { width: 7%; }
+  .col-key { width: 7%; }
+  .col-duration { width: 9%; }
+  .col-type { width: 8%; }
+  .col-instruments { width: 7%; }
+  .col-clips { width: 7%; }
+  .col-notes { width: 9%; }
+  .col-modified { width: 12%; }
   thead {
     background: var(--surface);
     box-shadow: inset 0 -1px 0 var(--border);
@@ -886,21 +1075,32 @@
   .cell-name {
     font-family: 'DM Mono', monospace;
     font-weight: 500;
-    max-width: 220px;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    position: relative;
   }
   .cell-name-text {
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
-    flex-shrink: 1;
-    min-width: 0;
   }
   .cell-name-actions {
-    flex-shrink: 0;
     display: flex;
+    align-items: center;
     gap: 0.25rem;
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--ground);
+    padding-left: 0.5rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s ease;
+  }
+  tbody tr:hover .cell-name-actions,
+  .cell-name-actions:focus-within {
+    background: var(--surface);
+    opacity: 1;
+    pointer-events: auto;
   }
   .score-btn {
     font-family: 'DM Mono', monospace;
@@ -946,6 +1146,18 @@
   .inspect-btn:hover {
     background: var(--teal);
     color: var(--ground);
+  }
+  .delete-btn {
+    border-color: #c47a7a;
+    color: #c47a7a;
+  }
+  .delete-btn:hover:not(:disabled) {
+    background: #c47a7a;
+    color: var(--ground);
+  }
+  .delete-btn:disabled {
+    opacity: 1;
+    cursor: default;
   }
   .cell-num {
     text-align: right;

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { TRASH_DIR, getOrCreateDir, moveToTrash } from "../lib/softDelete";
+
   type State = "idle" | "processing" | "done" | "error";
 
   interface MissingRef {
@@ -27,7 +29,6 @@
   const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
   const XML_DIRS = ["SONGS", "KITS", "SYNTHS"];
   const FILE_ATTRS = ["fileName", "filePath"];
-  const TRASH_DIR = "DELUGE_UNUSED";
 
   let state: State = $state("idle");
   let errorMsg = $state("");
@@ -118,18 +119,6 @@
         await readDirHandle(entry as FileSystemDirectoryHandle, entryPath, fileMap);
       }
     }
-  }
-
-  async function getOrCreateDir(
-    root: FileSystemDirectoryHandle,
-    path: string,
-  ): Promise<FileSystemDirectoryHandle> {
-    const parts = path.split("/").filter(Boolean);
-    let current = root;
-    for (const part of parts) {
-      current = await current.getDirectoryHandle(part, { create: true });
-    }
-    return current;
   }
 
   async function scanFromHandle(handle: FileSystemDirectoryHandle) {
@@ -345,23 +334,7 @@
     movingFiles = next;
 
     try {
-      const parts = samplePath.split("/");
-      const fileName = parts.pop()!;
-      const sourceDir = parts.join("/");
-
-      const sourceDirHandle = await getOrCreateDir(rootHandle, sourceDir);
-      const sourceFileHandle = await sourceDirHandle.getFileHandle(fileName);
-      const file = await sourceFileHandle.getFile();
-      const data = await file.arrayBuffer();
-
-      const trashPath = `${TRASH_DIR}/${sourceDir}`;
-      const trashDirHandle = await getOrCreateDir(rootHandle, trashPath);
-      const destFileHandle = await trashDirHandle.getFileHandle(fileName, { create: true });
-      const writable = await destFileHandle.createWritable();
-      await writable.write(data);
-      await writable.close();
-
-      await sourceDirHandle.removeEntry(fileName);
+      await moveToTrash(rootHandle, samplePath);
 
       const moved = new Set(movedFiles);
       moved.add(samplePath);

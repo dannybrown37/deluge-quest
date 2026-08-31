@@ -1,6 +1,6 @@
 <script lang="ts">
   import { loadPyodide, inspectSong, type PreviewData, type PreviewTrack } from "../lib/pyodide";
-  import { SongPlayer } from "../lib/songAudio";
+  import { SongPlayer, type EQBand } from "../lib/songAudio";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -11,6 +11,7 @@
   let fileName = $state("");
   let data: PreviewData | null = $state(null);
   let dragOver = $state(false);
+  let statsCount = $state(0);
   let hoveredClip: { track: number; clip: number } | null = $state(null);
   let tooltip = $state({ visible: false, x: 0, y: 0, text: "" });
 
@@ -18,6 +19,19 @@
   let playState: 'stopped' | 'playing' | 'paused' = $state('stopped');
   let playheadTick = $state(0);
   let scrollEl: HTMLDivElement | undefined = $state();
+
+  const EQ_BANDS: { key: EQBand; label: string }[] = [
+    { key: 'low', label: 'Low' },
+    { key: 'mid', label: 'Mid' },
+    { key: 'high', label: 'High' },
+  ];
+  const EQ_FREQ_LABEL: Record<EQBand, string> = { low: '200 Hz shelf', mid: '1 kHz', high: '4 kHz shelf' };
+  let eq: Record<EQBand, number> = $state({ low: -4, mid: 0, high: 0 });
+
+  function setEQ(band: EQBand, gainDb: number) {
+    eq = { ...eq, [band]: gainDb };
+    player?.setEQ(band, gainDb);
+  }
 
   const TRACK_COLORS = [
     "#D4A847", "#5AABAC", "#C47A7A", "#7A9EC4", "#A87AD4",
@@ -165,6 +179,12 @@
         if (name && content) inspect(name, content);
       }
     } catch {}
+    try {
+      const cached = JSON.parse(sessionStorage.getItem("deluge-stats-results") ?? "null");
+      statsCount = Array.isArray(cached) ? cached.length : 0;
+    } catch {
+      statsCount = 0;
+    }
   });
 
   function handleDrop(e: DragEvent) {
@@ -228,7 +248,7 @@
 
   function createPlayer() {
     if (!data) return null;
-    return new SongPlayer({
+    const p = new SongPlayer({
       bpm: data.bpm,
       ticksPerQuarter: data.ticksPerQuarter,
       tracks: data.tracks,
@@ -239,6 +259,8 @@
       },
       onEnd: () => { playState = 'stopped'; },
     });
+    for (const { key } of EQ_BANDS) p.setEQ(key, eq[key]);
+    return p;
   }
 
   function togglePlay() {
@@ -302,6 +324,12 @@
 </script>
 
 {#if state === "idle"}
+  {#if statsCount > 0}
+    <a class="resume-banner" href="/stats">
+      <span>{statsCount} song{statsCount === 1 ? "" : "s"} loaded in Song Stats</span>
+      <span class="resume-banner-arrow">Back to Song Stats →</span>
+    </a>
+  {/if}
   <div
     class="dropzone"
     class:dropzone--over={dragOver}
@@ -411,6 +439,24 @@
           {Math.floor(playheadTick / layout.ticksPerMeasure) + 1}:{Math.floor((playheadTick % layout.ticksPerMeasure) / (layout.ticksPerMeasure / 4)) + 1}
         </span>
       {/if}
+
+      <div class="eq">
+        {#each EQ_BANDS as { key, label }}
+          <div class="eq-band">
+            <input
+              type="range"
+              min="-12"
+              max="12"
+              step="1"
+              value={eq[key]}
+              oninput={(e) => setEQ(key, Number((e.target as HTMLInputElement).value))}
+              title="{label} ({EQ_FREQ_LABEL[key]})"
+            />
+            <span class="eq-label">{label}</span>
+            <span class="eq-value">{eq[key] > 0 ? '+' : ''}{eq[key]}</span>
+          </div>
+        {/each}
+      </div>
     </div>
 
     <div class="timeline-container" bind:this={containerEl}>
@@ -568,6 +614,30 @@
 {/if}
 
 <style>
+  .resume-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.85rem;
+    transition: border-color 0.05s, background 0.05s;
+  }
+  .resume-banner:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .resume-banner-arrow {
+    font-family: 'DM Mono', monospace;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
   .dropzone {
     border: 2px dashed var(--border);
     border-radius: 10px;
@@ -741,6 +811,40 @@
     font-size: 0.82rem;
     color: var(--text-secondary);
     min-width: 4ch;
+  }
+
+  .eq {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    margin-left: auto;
+    padding-left: 0.75rem;
+    border-left: 1px solid var(--border);
+  }
+
+  .eq-band {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .eq-band input[type="range"] {
+    width: 64px;
+    accent-color: var(--teal);
+  }
+
+  .eq-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+  }
+
+  .eq-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    min-width: 2.4ch;
+    text-align: right;
   }
 
   .timeline-container {

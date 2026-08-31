@@ -10,6 +10,7 @@
   let fileName = $state("");
   let resultXml = $state("");
   let dragOver = $state(false);
+  let statsCount = $state(0);
 
   async function convert(name: string, xmlContent: string) {
     fileName = name;
@@ -54,6 +55,12 @@
         if (name && content) convert(name, content);
       }
     } catch {}
+    try {
+      const cached = JSON.parse(sessionStorage.getItem("deluge-stats-results") ?? "null");
+      statsCount = Array.isArray(cached) ? cached.length : 0;
+    } catch {
+      statsCount = 0;
+    }
   });
 
   function handleDrop(e: DragEvent) {
@@ -97,6 +104,12 @@
 </script>
 
 {#if state === "idle"}
+  {#if statsCount > 0}
+    <a class="resume-banner" href="/stats">
+      <span>{statsCount} song{statsCount === 1 ? "" : "s"} loaded in Song Stats</span>
+      <span class="resume-banner-arrow">Back to Song Stats →</span>
+    </a>
+  {/if}
   <div
     class="dropzone"
     class:dropzone--over={dragOver}
@@ -162,6 +175,30 @@
 {/if}
 
 <style>
+  .resume-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.85rem;
+    transition: border-color 0.05s, background 0.05s;
+  }
+  .resume-banner:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .resume-banner-arrow {
+    font-family: 'DM Mono', monospace;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
   .dropzone {
     border: 2px dashed var(--border);
     border-radius: 10px;
