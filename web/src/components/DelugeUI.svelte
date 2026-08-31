@@ -48,6 +48,18 @@
   let dragStartY = 0;
   let dragStartAngle = 0;
 
+  interface Song { file: string; name: string; }
+  let songs: Song[] = [];
+  let currentSongIndex = 0;
+  let songLoaded = false;
+
+  async function fetchSongList() {
+    try {
+      const resp = await fetch('/audio/songs.json');
+      if (resp.ok) songs = await resp.json();
+    } catch { /* no songs available */ }
+  }
+
   // Audio player state
   let audioCtx: AudioContext | null = null;
   let audioBuffer: AudioBuffer | null = null;
@@ -240,12 +252,42 @@
     updateFilter();
     updateReverb();
     updateDelay();
+    if (songs.length > 0) await loadSong(currentSongIndex);
+  }
+
+  async function loadSong(idx: number) {
+    if (!audioCtx || songs.length === 0) return;
+    if (isPlaying && sourceNode) {
+      sourceNode.onended = null;
+      sourceNode.stop();
+      sourceNode = null;
+      isPlaying = false;
+    }
+    playOffset = 0;
+    currentSongIndex = idx;
+    const song = songs[idx];
+    screenText = 'LOADING';
+    screenSubtext = song.name;
     try {
-      const resp = await fetch('/audio/demo.mp3');
-      if (!resp.ok) { console.warn('No audio file at /audio/demo.mp3'); return; }
+      const resp = await fetch(`/audio/${encodeURIComponent(song.file)}`);
+      if (!resp.ok) { screenText = 'ERROR'; screenSubtext = 'file not found'; return; }
       const buf = await resp.arrayBuffer();
       audioBuffer = await audioCtx.decodeAudioData(buf);
-    } catch (e) { console.error('Audio init failed:', e); }
+      songLoaded = true;
+      screenText = song.name.toUpperCase();
+      screenSubtext = 'press play';
+    } catch (e) {
+      console.error('Audio load failed:', e);
+      screenText = 'ERROR';
+      screenSubtext = 'load failed';
+    }
+  }
+
+  async function handleLoad() {
+    if (songs.length === 0) return;
+    await initAudio();
+    const nextIdx = (currentSongIndex + 1) % songs.length;
+    await loadSong(nextIdx);
   }
 
   function updateVolume() {
@@ -406,6 +448,7 @@
   onMount(() => {
     mounted = true;
     initPads();
+    fetchSongList();
 
     window.addEventListener('mousemove', handleKnobMove);
     window.addEventListener('mouseup', handleKnobEnd);
@@ -529,14 +572,22 @@
 
         <div class="screen-area">
           <div class="deluge-logo">✦ deluge</div>
-          <div class="oled-screen">
-            <div class="oled-text">{screenText}</div>
-            <div class="oled-subtext">{screenSubtext || ' '}</div>
+          <div class="oled-row">
+            <div class="oled-screen">
+              <div class="oled-text">{screenText}</div>
+              <div class="oled-subtext">{screenSubtext || ' '}</div>
+            </div>
+            <button
+              class="load-btn"
+              on:click={handleLoad}
+              aria-label="Load song"
+            >
+              <div class="load-btn-surface">LOAD</div>
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- RIGHT: black + gold knobs, horizontally parallel (gold on right) -->
       <div class="knobs-right">
         <!-- Black (tempo) -->
         <div class="knob-col">
@@ -761,6 +812,40 @@
     color: #D4A847;
   }
 
+  .load-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, #3A3A40 0%, #252528 40%, #1A1A1E 100%);
+    box-shadow:
+      0 2px 1px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+    transition: box-shadow 0.1s;
+  }
+  .load-btn:hover {
+    box-shadow:
+      0 2px 1px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      0 0 8px rgba(212,168,71,0.3);
+  }
+  .load-btn:active {
+    transform: scale(0.95);
+  }
+  .load-btn-surface {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.4rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: #888;
+  }
+
   /* --- Knob rendering --- */
   .knob-hitbox {
     width: 56px;
@@ -890,6 +975,12 @@
     width: 240px;
     flex-shrink: 0;
   }
+  .oled-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+  }
   .deluge-logo {
     font-family: 'DM Mono', monospace;
     font-size: 1.2rem;
@@ -903,7 +994,8 @@
     border: 1px solid #1A1A1E;
     border-radius: 3px;
     padding: 0.35rem 0.7rem;
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     text-align: center;
     box-shadow: inset 0 1px 6px rgba(0,0,0,0.9);
   }
