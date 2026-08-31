@@ -1,6 +1,7 @@
 <script lang="ts">
   import { loadPyodide, inspectSong, type PreviewData, type PreviewTrack } from "../lib/pyodide";
   import { SongPlayer, type EQBand } from "../lib/songAudio";
+  import { cardStore } from "../lib/cardStore";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -258,6 +259,9 @@
         autoScrollToPlayhead();
       },
       onEnd: () => { playState = 'stopped'; },
+      sampleResolver: cardStore.isLoaded
+        ? (path, ctx) => cardStore.getSampleBuffer(path, ctx)
+        : undefined,
     });
     for (const { key } of EQ_BANDS) p.setEQ(key, eq[key]);
     return p;

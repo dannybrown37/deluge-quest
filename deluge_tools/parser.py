@@ -25,6 +25,7 @@ class NoteRow:
     y: int | None = None
     drum_index: int | None = None
     drum_name: str | None = None
+    sample_path: str | None = None
     notes: list[Note] = field(default_factory=list)
 
 
@@ -56,6 +57,7 @@ class Instrument:
     cv_channel: int | None = None
     clip_instances: list[ClipInstance] = field(default_factory=list)
     drum_names: list[str] = field(default_factory=list)
+    drum_sample_paths: list[str | None] = field(default_factory=list)
 
 
 @dataclass
@@ -131,6 +133,7 @@ def _parse_bpm(root: ET.Element) -> float:
 def _parse_clip_note_rows(
     clip: ET.Element,
     drum_names: list[str] | None = None,
+    drum_sample_paths: list[str | None] | None = None,
 ) -> list[NoteRow]:
     rows = []
     for nr in clip.findall("noteRows/noteRow"):
@@ -141,6 +144,8 @@ def _parse_clip_note_rows(
             row.drum_index = int(nr.get("drumIndex"))
             if drum_names and 0 <= row.drum_index < len(drum_names):
                 row.drum_name = drum_names[row.drum_index]
+            if drum_sample_paths and 0 <= row.drum_index < len(drum_sample_paths):
+                row.sample_path = drum_sample_paths[row.drum_index]
         note_data = nr.get("noteData")
         if note_data is not None:
             row.notes = parse_note_data(note_data)
@@ -204,6 +209,9 @@ def parse_song(path: Path | str) -> Song:
             instrument.name = "Kit"
             for sound in inst_el.findall("soundSources/sound"):
                 instrument.drum_names.append(sound.get("name", ""))
+                osc1 = sound.find("osc1")
+                file_name = osc1.get("fileName") if osc1 is not None else None
+                instrument.drum_sample_paths.append(file_name)
         elif inst_type == "midi":
             instrument.midi_channel = int(inst_el.get("channel", "0"))
             instrument.name = f"MIDI Ch {instrument.midi_channel + 1}"
@@ -246,7 +254,11 @@ def parse_song(path: Path | str) -> Song:
             instrument_sub_slot=sub,
             is_kit=inst.is_kit if inst else False,
             length=int(clip_el.get("length", "0")),
-            rows=_parse_clip_note_rows(clip_el, inst.drum_names if inst and inst.is_kit else None),
+            rows=_parse_clip_note_rows(
+                clip_el,
+                inst.drum_names if inst and inst.is_kit else None,
+                inst.drum_sample_paths if inst and inst.is_kit else None,
+            ),
         )
         song.clips.append(clip)
 
@@ -265,7 +277,11 @@ def parse_song(path: Path | str) -> Song:
             instrument_sub_slot=sub,
             is_kit=inst.is_kit if inst else False,
             length=int(clip_el.get("length", "0")),
-            rows=_parse_clip_note_rows(clip_el, inst.drum_names if inst and inst.is_kit else None),
+            rows=_parse_clip_note_rows(
+                clip_el,
+                inst.drum_names if inst and inst.is_kit else None,
+                inst.drum_sample_paths if inst and inst.is_kit else None,
+            ),
         )
         song.clips.append(clip)
 

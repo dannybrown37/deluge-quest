@@ -148,6 +148,43 @@ class TestParseSong:
         assert len(kits) >= 1
 
 
+class TestKitSamplePaths:
+    @pytest.fixture
+    def song_with_kit_samples(self, tmp_path):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<song firmwareVersion="4.0.0" timePerTimerTick="917" timerTickFraction="3006477107"
+      rootNote="0" inArrangementView="0">
+  <instruments>
+    <kit presetSlot="1" presetSubSlot="-1">
+      <soundSources>
+        <sound name="KICK"><osc1 type="sample" fileName="SAMPLES/DRUMS/Kick/808 Kick.wav"/></sound>
+        <sound name="SNARE"><osc1 type="sample" fileName="SAMPLES/DRUMS/Snare/Snare1.wav"/></sound>
+        <sound name="SYNTH"><osc1 type="square"/></sound>
+      </soundSources>
+    </kit>
+  </instruments>
+  <sessionClips>
+    <instrumentClip instrumentPresetSlot="1" instrumentPresetSubSlot="-1" length="96">
+      <noteRows>
+        <noteRow y="0" drumIndex="0" noteData="0x00000000000000000C64"/>
+        <noteRow y="1" drumIndex="2" noteData="0x00000000000000000C64"/>
+      </noteRows>
+    </instrumentClip>
+  </sessionClips>
+</song>"""
+        p = tmp_path / "test.XML"
+        p.write_text(xml)
+        return parse_song(p)
+
+    def test_sample_path_resolved_for_drum_row(self, song_with_kit_samples):
+        clip = song_with_kit_samples.clips[0]
+        assert clip.rows[0].sample_path == "SAMPLES/DRUMS/Kick/808 Kick.wav"
+
+    def test_sample_path_none_for_non_sample_osc(self, song_with_kit_samples):
+        clip = song_with_kit_samples.clips[0]
+        assert clip.rows[1].sample_path is None
+
+
 class TestInstrumentTypes:
     @pytest.fixture
     def song_with_all_types(self, tmp_path):
