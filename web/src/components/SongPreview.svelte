@@ -34,6 +34,19 @@
     player?.setEQ(band, gainDb);
   }
 
+  let trackVolumes: number[] = $state([]);
+  let trackMuted: boolean[] = $state([]);
+
+  function setTrackVolume(ti: number, volume: number) {
+    trackVolumes[ti] = volume;
+    player?.setTrackVolume(ti, volume);
+  }
+
+  function toggleTrackMuted(ti: number) {
+    trackMuted[ti] = !trackMuted[ti];
+    player?.setTrackMuted(ti, trackMuted[ti]);
+  }
+
   const TRACK_COLORS = [
     "#D4A847", "#5AABAC", "#C47A7A", "#7A9EC4", "#A87AD4",
     "#7AC48A", "#D4977A", "#7ACAC4", "#C4B07A", "#AD7AC4",
@@ -154,6 +167,8 @@
       }
 
       data = result;
+      trackVolumes = result.tracks.map(() => 1);
+      trackMuted = result.tracks.map(() => false);
       state = "done";
       progressPct = 100;
     } catch (e: any) {
@@ -264,6 +279,10 @@
         : undefined,
     });
     for (const { key } of EQ_BANDS) p.setEQ(key, eq[key]);
+    for (let i = 0; i < data.tracks.length; i++) {
+      p.setTrackVolume(i, trackVolumes[i] ?? 1);
+      p.setTrackMuted(i, trackMuted[i] ?? false);
+    }
     return p;
   }
 
@@ -407,7 +426,7 @@
           {/each}
         </div>
         <div class="track-list">
-          {#each data!.tracks as track}
+          {#each data!.tracks as track, ti}
             {@const type = track.instrumentType ?? (track.isKit ? "kit" : "synth")}
             {@const totalNotes = track.clips.reduce((s, c) => s + c.noteCount, 0)}
             <div class="track-row">
@@ -421,6 +440,22 @@
                 <span class="track-row-detail">Ch {track.cvChannel + 1}</span>
               {/if}
               <span class="track-row-notes">{totalNotes} notes</span>
+              <button
+                class="track-mute-btn"
+                class:track-mute-btn--active={trackMuted[ti]}
+                onclick={() => toggleTrackMuted(ti)}
+                title={trackMuted[ti] ? 'Unmute' : 'Mute'}
+              >M</button>
+              <input
+                class="track-volume-slider"
+                type="range"
+                min="0"
+                max="1.5"
+                step="0.05"
+                value={trackVolumes[ti] ?? 1}
+                oninput={(e) => setTrackVolume(ti, Number((e.target as HTMLInputElement).value))}
+                title="{track.name} volume"
+              />
             </div>
           {/each}
         </div>
@@ -1046,5 +1081,33 @@
     color: var(--text-secondary);
     font-size: 0.72rem;
     white-space: nowrap;
+  }
+  .track-mute-btn {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.05s, border-color 0.05s, color 0.05s;
+  }
+  .track-mute-btn:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+  .track-mute-btn--active {
+    background: #c47a7a;
+    border-color: #c47a7a;
+    color: var(--ground);
+  }
+  .track-volume-slider {
+    flex-shrink: 0;
+    width: 70px;
+    accent-color: var(--teal);
   }
 </style>

@@ -58,6 +58,9 @@ export class SongPlayer {
   private masterGain: GainNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
   private trackGains: GainNode[] = [];
+  private trackBaseGain = 1;
+  private trackVolumes: number[] = [];
+  private trackMuted: boolean[] = [];
   private scheduled: ScheduledNode[] = [];
   private noiseBuffer: AudioBuffer | null = null;
 
@@ -178,10 +181,12 @@ export class SongPlayer {
     this.masterGain = masterGain;
 
     const trackCount = this.opts.tracks.length;
-    const perTrackGain = 0.7 / Math.sqrt(Math.max(trackCount, 1));
-    this.trackGains = this.opts.tracks.map(() => {
+    this.trackBaseGain = 0.7 / Math.sqrt(Math.max(trackCount, 1));
+    if (this.trackVolumes.length !== trackCount) this.trackVolumes = this.opts.tracks.map(() => 1);
+    if (this.trackMuted.length !== trackCount) this.trackMuted = this.opts.tracks.map(() => false);
+    this.trackGains = this.opts.tracks.map((_, i) => {
       const g = ctx.createGain();
-      g.gain.value = perTrackGain;
+      g.gain.value = this.trackMuted[i] ? 0 : this.trackBaseGain * this.trackVolumes[i];
       g.connect(masterGain);
       return g;
     });
@@ -274,6 +279,31 @@ export class SongPlayer {
     this.eqLow = null;
     this.eqMid = null;
     this.eqHigh = null;
+  }
+
+  getTrackVolume(trackIdx: number): number {
+    return this.trackVolumes[trackIdx] ?? 1;
+  }
+
+  setTrackVolume(trackIdx: number, volume: number) {
+    this.trackVolumes[trackIdx] = volume;
+    this.applyTrackGain(trackIdx);
+  }
+
+  isTrackMuted(trackIdx: number): boolean {
+    return this.trackMuted[trackIdx] ?? false;
+  }
+
+  setTrackMuted(trackIdx: number, muted: boolean) {
+    this.trackMuted[trackIdx] = muted;
+    this.applyTrackGain(trackIdx);
+  }
+
+  private applyTrackGain(trackIdx: number) {
+    const node = this.trackGains[trackIdx];
+    if (!node || !this.ctx) return;
+    const value = this.trackMuted[trackIdx] ? 0 : this.trackBaseGain * this.trackVolumes[trackIdx];
+    node.gain.setTargetAtTime(value, this.ctx.currentTime, 0.01);
   }
 
   getEQ(band: EQBand): number {
