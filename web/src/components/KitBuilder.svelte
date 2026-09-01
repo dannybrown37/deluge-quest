@@ -20,6 +20,8 @@
   let renameValue = $state("");
   let playingAudio: { index: number; audio: HTMLAudioElement; url: string } | null = $state(null);
   let loadedFileName = $state("");
+  let hasUnsavedChanges = $state(false);
+  let showNewKitModal = $state(false);
 
   let samplesDir: FileSystemDirectoryHandle | null = $state(null);
   let reconnectAvailable = $state(false);
@@ -64,6 +66,55 @@
   const POLY_MODES: KitRow["polyphonic"][] = ["auto", "choke", "mono", "poly"];
   const LOOP_LABELS: Record<KitRow["loopMode"], string> = { once: "ONE", loop: "LOOP", cut: "CUT" };
   const POLY_LABELS: Record<KitRow["polyphonic"], string> = { auto: "AUTO", choke: "CHOKE", mono: "MONO", poly: "POLY" };
+
+  // --- Cache management ---
+
+  function saveKitToCache() {
+    const cacheData = {
+      name: kit.name,
+      rows: kit.rows.map(r => ({
+        name: r.name,
+        samplePath: r.samplePath,
+        volume: r.volume,
+        pan: r.pan,
+        loopMode: r.loopMode,
+        polyphonic: r.polyphonic,
+      })),
+      selectedIndex: kit.selectedIndex,
+    };
+    localStorage.setItem("kit-builder-cache", JSON.stringify(cacheData));
+  }
+
+  function loadKitFromCache(): Kit | null {
+    try {
+      const cached = localStorage.getItem("kit-builder-cache");
+      return cached ? JSON.parse(cached) : null;
+    } catch { return null; }
+  }
+
+  function clearKitCache() {
+    localStorage.removeItem("kit-builder-cache");
+  }
+
+  // Auto-load cached kit on init
+  (() => {
+    const cached = loadKitFromCache();
+    if (cached && cached.rows.length > 0) {
+      kit = cached;
+      hasUnsavedChanges = false;
+    }
+  })();
+
+  // Auto-save to cache whenever kit changes
+  $effect(() => {
+    void kit.rows;
+    void kit.name;
+    void kit.selectedIndex;
+    if (kit.rows.length > 0) {
+      saveKitToCache();
+      hasUnsavedChanges = true;
+    }
+  });
 
   $effect(() => { containerEl?.focus(); });
 
@@ -283,6 +334,7 @@
     a.download = `${kit.name || "Kit"}.XML`;
     a.click();
     URL.revokeObjectURL(url);
+    hasUnsavedChanges = false;
   }
 
   async function loadKitFile(file: File) {
@@ -291,9 +343,27 @@
       kit = parseKitXml(text);
       kit.name = file.name.replace(/\.xml$/i, "");
       loadedFileName = file.name;
+      hasUnsavedChanges = false;
+      saveKitToCache();
     } catch (err: any) {
       console.error("Failed to parse kit XML:", err);
     }
+  }
+
+  function startNewKit() {
+    if (hasUnsavedChanges && kit.rows.length > 0) {
+      showNewKitModal = true;
+    } else {
+      confirmNewKit();
+    }
+  }
+
+  function confirmNewKit() {
+    kit = createEmptyKit();
+    loadedFileName = "";
+    hasUnsavedChanges = false;
+    clearKitCache();
+    showNewKitModal = false;
   }
 
   function handleFileInput(e: Event) {
@@ -461,6 +531,7 @@
         {/if}
       </div>
       <div class="toolbar-right">
+        <button class="btn btn-sm btn-secondary" onclick={startNewKit}>New Kit</button>
         <button class="btn btn-sm btn-secondary" onclick={openSamplesDir}>
           {samplesDir ? "Change Folder" : "Open Folder"}
         </button>
@@ -600,6 +671,21 @@
         <span class="status-playing">▶ playing</span>
       {/if}
       <span class="status-hint">Tab to switch · ? for help</span>
+    </div>
+  {/if}
+
+  <!-- New Kit confirmation modal -->
+  {#if showNewKitModal}
+    <div class="overlay" onclick={() => showNewKitModal = false} role="presentation">
+      <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
+        <h3>Save before creating new kit?</h3>
+        <p>You have unsaved changes.</p>
+        <div class="modal-actions">
+          <button class="btn btn-sm btn-secondary" onclick={() => showNewKitModal = false}>Cancel</button>
+          <button class="btn btn-sm btn-secondary" onclick={exportKit}>Save & Export</button>
+          <button class="btn btn-sm btn-primary" onclick={confirmNewKit}>Discard & New</button>
+        </div>
+      </div>
     </div>
   {/if}
 
@@ -974,7 +1060,7 @@
   .status-playing { color: var(--teal); }
   .status-hint { margin-left: auto; }
 
-  /* Help overlay */
+  /* Overlay & Modals */
   .overlay {
     position: fixed;
     inset: 0;
@@ -983,6 +1069,30 @@
     align-items: center;
     justify-content: center;
     z-index: 200;
+  }
+  .modal {
+    background: var(--ground);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    max-width: 400px;
+    width: 90vw;
+  }
+  .modal h3 {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  .modal p {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
   }
   .help-panel {
     background: var(--ground);

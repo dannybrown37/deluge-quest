@@ -239,6 +239,25 @@
     return true;
   }
 
+  /** Silently loads from a previously connected card (via persisted handle), same as Kits/Clean. */
+  async function tryAutoLoad() {
+    if (cardStore.isLoaded && cardStore.songXmls.size > 0) {
+      adoptCardStore();
+      await processFromCardStore();
+      return;
+    }
+    try {
+      if (await cardStore.reconnect()) {
+        if (cardStore.songXmls.size > 0) {
+          adoptCardStore();
+          await processFromCardStore();
+        }
+      } else {
+        reconnectAvailable = await cardStore.hasPersistedHandle();
+      }
+    } catch {}
+  }
+
   async function reconnectFolder() {
     if (reconnecting) return;
     reconnecting = true;
@@ -281,7 +300,9 @@
     URL.revokeObjectURL(url);
   }
 
-  restoreFromSession().catch(() => {});
+  restoreFromSession()
+    .then((hadCache) => { if (!hadCache) tryAutoLoad(); })
+    .catch(() => tryAutoLoad());
 
   async function readEntryRecursive(entry: FileSystemEntry, basePath = ""): Promise<DroppedFile[]> {
     const entryPath = basePath ? `${basePath}/${entry.name}` : entry.name;
@@ -602,6 +623,7 @@
             Open SD card root for delete access
           </button>
         </p>
+        <p class="dropzone-hint">Opening the SD card root also connects it on Kits and Card Analysis — no need to load it twice.</p>
       {/if}
     </div>
   </div>
