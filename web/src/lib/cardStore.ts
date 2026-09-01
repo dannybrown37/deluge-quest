@@ -8,8 +8,12 @@ export interface SampleInfo {
 export type ProgressCallback = (stage: string, done: number, total: number) => void;
 
 const IDB_NAME = "deluge-card-store";
+const IDB_VERSION = 2;
 const IDB_META = "meta";
 const KEY_HANDLE = "rootHandle";
+/** Song XML text cached from the last scan, so other pages can list songs without the card handle. */
+const IDB_SONGS = "songCache";
+const KEY_SONGS = "arrangementSongs";
 /** App-managed dirs — trash and pre-fix backups, not real card content. Never scanned. */
 const APP_MANAGED_DIRS = new Set(["SOFT_DELETE", "REPAIR_BACKUP"]);
 const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
@@ -33,12 +37,28 @@ export function normalizePath(path: string): string {
   return path.replace(/^\/+/, "").toLowerCase();
 }
 
+/**
+ * True if the song XML has at least one instrument carrying a full clipInstances record
+ * (arrangement view data). Values are written as `0x` + packed hex, 24 hex chars per 12-byte
+ * record — songs saved in session view only have an empty or absent attribute.
+ */
+export function songHasArrangement(xml: string): boolean {
+  return /clipInstances="0x[0-9a-fA-F]{24,}"/.test(xml);
+}
+
+export interface CachedSongs {
+  cardName: string;
+  savedAt: number;
+  songs: { path: string; xml: string }[];
+}
+
 function openIdb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1);
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(IDB_META)) db.createObjectStore(IDB_META);
+      if (!db.objectStoreNames.contains(IDB_SONGS)) db.createObjectStore(IDB_SONGS);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -95,6 +115,59 @@ class CardStoreImpl {
   }
 
   /**
+   * Stores the arrangement-view songs from the current scan so pages that never got a card handle
+   * (or lost permission on navigation) can still list songs. Quota failures are non-fatal — the
+   * scan itself already succeeded.
+   */
+  async saveSongCache(cardName: string, songs: { path: string; xml: string }[] = this.eligibleSongs()) {
+    try {
+      const payload: CachedSongs = {
+        cardName,
+        savedAt: Date.now(),
+        songs: songs.filter(s => songHasArrangement(s.xml)),
+      };
+      const db = await openIdb();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(IDB_SONGS, "readwrite");
+        tx.objectStore(IDB_SONGS).put(payload, KEY_SONGS);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    } catch {}
+  }
+
+  /** Songs saved by the most recent scan on this browser. Needs no card handle or permission. */
+  async loadCachedSongs(): Promise<CachedSongs | null> {
+    try {
+      const db = await openIdb();
+      const cached = await new Promise<CachedSongs | null>((resolve, reject) => {
+        const tx = db.transaction(IDB_SONGS, "readonly");
+        const req = tx.objectStore(IDB_SONGS).get(KEY_SONGS);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      return cached;
+    } catch {
+      return null;
+    }
+  }
+
+  async clearSongCache() {
+    try {
+      const db = await openIdb();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(IDB_SONGS, "readwrite");
+        tx.objectStore(IDB_SONGS).delete(KEY_SONGS);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    } catch {}
+  }
+
+  /**
    * Grabs the persisted root handle without walking the card — for callers (like /kits) that only
    * need a directory handle, not the full song/sample index. Does not touch isLoaded or the maps.
    */
@@ -112,6 +185,11 @@ class CardStoreImpl {
   /** Opens the native directory picker, walks the card, and persists the handle for future reconnects. */
   async pickDirectory(onProgress?: ProgressCallback): Promise<void> {
     const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+    await this.adoptHandle(handle, onProgress);
+  }
+
+  /** Walks a directory handle obtained any other way (e.g. drag-and-drop) and persists it for future reconnects. */
+  async adoptHandle(handle: FileSystemDirectoryHandle, onProgress?: ProgressCallback): Promise<void> {
     await this.loadFromHandle(handle, onProgress);
     await this.saveHandle(handle);
   }
@@ -173,6 +251,7 @@ class CardStoreImpl {
     }
 
     this.isLoaded = true;
+    await this.saveSongCache(handle.name);
   }
 
   private async walk(
@@ -189,6 +268,16 @@ class CardStoreImpl {
         await this.walk(entry as FileSystemDirectoryHandle, entryPath, out);
       }
     }
+  }
+
+  /** Songs with arrangement-view data, sorted by path — the only ones Preview/Score can use. */
+  eligibleSongs(): { path: string; xml: string }[] {
+    const out: { path: string; xml: string }[] = [];
+    for (const [path, xml] of this.songXmls) {
+      if (songHasArrangement(xml)) out.push({ path, xml });
+    }
+    out.sort((a, b) => a.path.localeCompare(b.path));
+    return out;
   }
 
   /** Decodes and caches (LRU) a sample by SAMPLES-relative path. Returns null if not on the card. */

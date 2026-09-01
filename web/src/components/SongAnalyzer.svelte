@@ -471,10 +471,51 @@
       state = "done";
       progressPct = 100;
       saveToSession();
+      await cardStore.saveSongCache(
+        "your dropped folder",
+        entries.map(e => ({ path: e.path, xml: fileContents.get(e.file.name) ?? "" })),
+      );
     } catch (e: any) {
       state = "error";
       errorMsg = e.message || "Analysis failed";
     }
+  }
+
+  /** Chrome/Edge only: a dropped folder can hand back a real, persistable FileSystemDirectoryHandle
+   * instead of the one-shot FileSystemEntry tree — using it means /preview and /score can silently
+   * reconnect to this same card later, exactly as if "Load SD card" had been used. */
+  async function tryAdoptDroppedDirectoryHandle(items: DataTransferItemList): Promise<boolean> {
+    const item = Array.from(items).find(i => i.kind === "file");
+    const getAsFileSystemHandle = (item as any)?.getAsFileSystemHandle;
+    if (!item || typeof getAsFileSystemHandle !== "function") return false;
+
+    const handle = await getAsFileSystemHandle.call(item);
+    if (!handle || handle.kind !== "directory") return false;
+
+    try {
+      await (handle as any).requestPermission?.({ mode: "readwrite" });
+    } catch {}
+
+    state = "indexing";
+    progress = "Indexing card";
+    progressPct = 0;
+    try {
+      await cardStore.adoptHandle(handle as FileSystemDirectoryHandle, (stage, done, total) => {
+        progress = total > 0 ? `${stage} (${done}/${total})` : stage;
+        progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+      });
+      if (cardStore.songXmls.size === 0) {
+        state = "error";
+        errorMsg = "Not a Deluge SD card: no SONGS directory found. Drop the SD card root folder.";
+        return true;
+      }
+      adoptCardStore();
+      await processFromCardStore();
+    } catch (e: any) {
+      state = "error";
+      errorMsg = e.message || "Failed to read dropped folder";
+    }
+    return true;
   }
 
   async function handleDrop(e: DragEvent) {
@@ -482,6 +523,8 @@
     dragOver = false;
 
     const items = e.dataTransfer?.items;
+    if (items && (await tryAdoptDroppedDirectoryHandle(items))) return;
+
     if (items) {
       const entries = Array.from(items)
         .map(item => item.webkitGetAsEntry?.())

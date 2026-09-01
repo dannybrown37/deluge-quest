@@ -15,6 +15,29 @@
   let statsCount = $state(0);
   let hoveredClip: { track: number; clip: number } | null = $state(null);
   let tooltip = $state({ visible: false, x: 0, y: 0, text: "" });
+  let cardSongs: { path: string; xml: string }[] = $state([]);
+  let cardName = $state("");
+  let cardSavedAt = $state(0);
+  let cardFromCache = $state(false);
+
+  async function tryLoadCardSongs() {
+    try {
+      if (cardStore.isLoaded && cardStore.songXmls.size > 0) {
+        cardSongs = cardStore.eligibleSongs();
+        cardName = cardStore.rootHandle?.name ?? "";
+        return;
+      }
+      const cached = await cardStore.loadCachedSongs();
+      if (cached?.songs.length) {
+        cardSongs = cached.songs;
+        cardName = cached.cardName;
+        cardSavedAt = cached.savedAt;
+        cardFromCache = true;
+      }
+    } catch {}
+  }
+
+  tryLoadCardSongs();
 
   let player: SongPlayer | null = $state(null);
   let playState: 'stopped' | 'playing' | 'paused' = $state('stopped');
@@ -353,6 +376,28 @@
       <span class="resume-banner-arrow">Back to Song Stats →</span>
     </a>
   {/if}
+  {#if cardSongs.length > 0}
+    <div class="card-picker">
+      <p class="card-picker-title">
+        {cardSongs.length} song{cardSongs.length === 1 ? "" : "s"} with arrangement data{cardName ? ` on ${cardName}` : ""}
+      </p>
+      {#if cardFromCache}
+        <p class="card-picker-sub">From your last card scan{cardSavedAt ? ` (${new Date(cardSavedAt).toLocaleString()})` : ""}. Rescan on <a href="/clean">Card Clean</a> to refresh.</p>
+      {/if}
+      <ul class="card-picker-list">
+        {#each cardSongs as song}
+          <li>
+            <button type="button" class="card-picker-item" onclick={() => inspect(song.path, song.xml)}>
+              {song.path}
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <p class="card-picker-hint">or drop a file below</p>
+    </div>
+  {:else}
+    <p class="card-hint">No songs cached yet. <a href="/clean">Scan your card on Card Clean</a> to pick a song from a list here instead of dropping a file.</p>
+  {/if}
   <div
     class="dropzone"
     class:dropzone--over={dragOver}
@@ -677,6 +722,72 @@
     color: var(--accent);
     flex-shrink: 0;
   }
+  .card-hint {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+  }
+  .card-hint a {
+    color: var(--accent);
+  }
+  .card-picker {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    background: var(--surface);
+  }
+  .card-picker-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+  }
+  .card-picker-sub {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.6rem;
+  }
+  .card-picker-sub a {
+    color: var(--accent);
+  }
+  .card-picker-list {
+    list-style: none;
+    margin: 0 0 0.5rem;
+    padding: 0;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .card-picker-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.05s;
+  }
+  .card-picker-item:hover {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+  .card-picker-hint {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
+  }
+  .card-reconnect {
+    width: 100%;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
   .dropzone {
     border: 2px dashed var(--border);
     border-radius: 10px;
