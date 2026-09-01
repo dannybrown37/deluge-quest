@@ -8,6 +8,7 @@
     generateKitXml,
   } from "../lib/kitXml";
   import { cardStore } from "../lib/cardStore";
+  import { tick } from "svelte";
 
   type Pane = "browser" | "kit";
   type Mode = "normal" | "rename" | "help" | "search";
@@ -43,6 +44,8 @@
     parent: TreeEntry | null;
   }
 
+  let newRowIndex = $state(-1);
+
   let selectedRow = $derived(
     kit.selectedIndex >= 0 && kit.selectedIndex < kit.rows.length
       ? kit.rows[kit.selectedIndex]
@@ -69,11 +72,11 @@
     void kit.selectedIndex;
     if (activePane === "browser" && browserListEl) {
       const sel = browserListEl.querySelector(".browse-entry--selected");
-      sel?.scrollIntoView({ block: "nearest" });
+      sel?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
     if (activePane === "kit" && kitListEl) {
       const sel = kitListEl.querySelector(".kit-row--selected");
-      sel?.scrollIntoView({ block: "nearest" });
+      sel?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   });
 
@@ -174,6 +177,12 @@
     row.fileHandle = entry.handle as FileSystemFileHandle;
     kit.rows.push(row);
     kit.selectedIndex = kit.rows.length - 1;
+    newRowIndex = kit.rows.length - 1;
+    await tick();
+    if (kitListEl) {
+      kitListEl.scrollTop = kitListEl.scrollHeight;
+    }
+    setTimeout(() => { newRowIndex = -1; }, 1500);
   }
 
   // --- Audio preview ---
@@ -549,6 +558,7 @@
                 class="kit-row"
                 class:kit-row--selected={i === kit.selectedIndex && activePane === "kit"}
                 class:kit-row--playing={playingAudio?.index === i}
+                class:kit-row--new={i === newRowIndex}
                 role="button"
                 tabindex="-1"
                 onclick={() => { activePane = "kit"; kit.selectedIndex = i; }}
@@ -785,6 +795,7 @@
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    scroll-behavior: smooth;
   }
   .pane-empty {
     padding: 2rem 1rem;
@@ -887,6 +898,13 @@
     padding-left: calc(0.6rem - 2px);
   }
   .kit-row--playing { background: var(--teal-dim); }
+  .kit-row--new {
+    animation: pulse-highlight 1.5s ease-out;
+  }
+  @keyframes pulse-highlight {
+    0% { background: var(--accent); color: var(--ground); }
+    100% { background: transparent; color: var(--text); }
+  }
   .row-index {
     font-family: 'DM Mono', monospace;
     font-size: 0.68rem;
