@@ -338,6 +338,23 @@ class MusicXMLWriter:
             sp = ET.SubElement(part_list, "score-part", id=f"P{i}")
             ET.SubElement(sp, "part-name").text = part.name
 
+            instr = ET.SubElement(sp, "score-instrument", id=f"P{i}-I1")
+            if part.clef_sign == "percussion":
+                ET.SubElement(instr, "instrument-name").text = "Percussion"
+                ET.SubElement(instr, "instrument-abbreviation").text = "Perc."
+            else:
+                ET.SubElement(instr, "instrument-name").text = part.name
+                ET.SubElement(instr, "instrument-abbreviation").text = part.name[:4]
+
+            midi = ET.SubElement(sp, "midi-instrument", id=f"P{i}-I1")
+            if part.clef_sign == "percussion":
+                ET.SubElement(midi, "midi-program").text = "0"
+                ET.SubElement(midi, "midi-channel").text = "10"
+                ET.SubElement(midi, "midi-unpitched").text = "36"
+            else:
+                ET.SubElement(midi, "midi-program").text = "0"
+                ET.SubElement(midi, "midi-channel").text = "1"
+
         max_ticks = 0
         for part in self.parts:
             if part.events:
