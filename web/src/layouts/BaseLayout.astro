@@ -1,4 +1,6 @@
 ---
+import { ClientRouter } from 'astro:transitions';
+
 interface Props {
   title: string;
   description?: string;
@@ -14,6 +16,7 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     <meta name="description" content={description} />
     <title>{title} — Deluge Tools</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <ClientRouter />
   </head>
   <body>
     <nav class="nav">
@@ -33,6 +36,19 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
         </div>
       </div>
     </nav>
+    <div id="mini-player" class="mini-player" style="display:none">
+      <div class="mini-player-inner">
+        <button id="mini-play-btn" class="mini-btn" aria-label="Play/Pause">
+          <svg id="mini-play-icon" viewBox="0 0 12 12" width="10" height="10"><polygon points="2,0 12,6 2,12" fill="currentColor"/></svg>
+          <svg id="mini-pause-icon" viewBox="0 0 12 12" width="10" height="10" style="display:none"><rect x="1" y="1" width="3.5" height="10" fill="currentColor"/><rect x="7.5" y="1" width="3.5" height="10" fill="currentColor"/></svg>
+        </button>
+        <div class="mini-info">
+          <span id="mini-song-name" class="mini-song-name"></span>
+          <span id="mini-time" class="mini-time"></span>
+        </div>
+        <a href="/" class="mini-home-link" aria-label="Go to player">⬡</a>
+      </div>
+    </div>
     <main>
       <slot />
     </main>
@@ -41,6 +57,44 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
         <p>Open source tools for the <a href="https://synthstrom.com/product/deluge/" target="_blank" rel="noopener">Synthstrom Deluge</a></p>
       </div>
     </footer>
+
+    <script>
+      import { homeAudio } from '../lib/homeAudio';
+
+      function isHomePage() {
+        return window.location.pathname === '/' || window.location.pathname === '';
+      }
+
+      function updateMiniPlayer() {
+        const el = document.getElementById('mini-player');
+        const nameEl = document.getElementById('mini-song-name');
+        const timeEl = document.getElementById('mini-time');
+        const playIcon = document.getElementById('mini-play-icon');
+        const pauseIcon = document.getElementById('mini-pause-icon');
+        if (!el) return;
+
+        const shouldShow = !isHomePage() && (homeAudio.isPlaying || (homeAudio.songLoaded && homeAudio.playOffset > 0));
+        el.style.display = shouldShow ? '' : 'none';
+
+        if (shouldShow && nameEl && timeEl && playIcon && pauseIcon) {
+          nameEl.textContent = homeAudio.currentSong?.name ?? '';
+          timeEl.textContent = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
+          playIcon.style.display = homeAudio.isPlaying ? 'none' : '';
+          pauseIcon.style.display = homeAudio.isPlaying ? '' : 'none';
+        }
+      }
+
+      homeAudio.subscribe(updateMiniPlayer);
+
+      document.addEventListener('astro:page-load', () => {
+        updateMiniPlayer();
+
+        const btn = document.getElementById('mini-play-btn');
+        btn?.addEventListener('click', () => {
+          homeAudio.togglePlay();
+        });
+      });
+    </script>
   </body>
 </html>
 
@@ -114,4 +168,66 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     font-size: 0.85rem;
     color: var(--text-secondary);
   }
+
+  /* Mini-player bar */
+  .mini-player {
+    background: #111114;
+    border-bottom: 1px solid var(--border);
+    z-index: 99;
+  }
+  .mini-player-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0.35rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .mini-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(180deg, #3A3A40 0%, #252528 40%, #1A1A1E 100%);
+    box-shadow: 0 2px 1px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+    color: #D4A847;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .mini-btn:hover {
+    box-shadow: 0 2px 1px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06), 0 0 8px rgba(212,168,71,0.3);
+  }
+  .mini-info {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    min-width: 0;
+    flex: 1;
+  }
+  .mini-song-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: #E0DDD6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mini-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    color: #777;
+    flex-shrink: 0;
+  }
+  .mini-home-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 1rem;
+    flex-shrink: 0;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+  }
+  .mini-home-link:hover { opacity: 1; }
 </style>

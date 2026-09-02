@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { navigate } from 'astro:transitions/client';
+  import { homeAudio } from '../lib/homeAudio';
 
   interface Pad {
     row: number;
@@ -23,10 +25,6 @@
   const WHITE = '#E0DDD6';
   const OFF = 'transparent';
 
-  // 7 knobs matching real Deluge layout
-  // Left: 2 black diagonal + 2 gold diagonal to their right
-  // Center-left: 1 black knob next to screen
-  // Right: 1 gold + 1 black, horizontally parallel
   const DEFAULT_KNOB_VALUES = [0, 0, 127, 0, 0, 64, 100];
   let knobValues = [...DEFAULT_KNOB_VALUES];
   let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
@@ -53,12 +51,24 @@
   let dragStartY = 0;
   let dragStartAngle = 0;
 
-  interface Song { file: string; name: string; year?: string | number; genre?: string; duration?: string; }
-  let songs: Song[] = [];
-  let currentSongIndex = 0;
-  let songLoaded = false;
+  $: songs = homeAudio.songs;
+  $: currentSongIndex = homeAudio.currentSongIndex;
+  $: songLoaded = homeAudio.songLoaded;
+  $: isPlaying = homeAudio.isPlaying;
   let browsing = false;
   let browseIndex = 0;
+  let unsubscribe: (() => void) | null = null;
+
+  function syncFromAudio() {
+    isPlaying = homeAudio.isPlaying;
+    songLoaded = homeAudio.songLoaded;
+    currentSongIndex = homeAudio.currentSongIndex;
+    songs = homeAudio.songs;
+    if (isPlaying) {
+      screenText = idleText();
+      screenSubtext = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
+    }
+  }
 
   function marquee(node: HTMLElement, _text: string) {
     const inner = node.firstElementChild as HTMLElement;
@@ -93,105 +103,19 @@
   }
 
   async function fetchSongList() {
-    try {
-      const resp = await fetch('/audio/songs.json');
-      if (resp.ok) {
-        songs = await resp.json();
-        if (songs.length > 0) {
-          currentSongIndex = Math.floor(Math.random() * songs.length);
-          screenText = idleText();
-          screenSubtext = idleSubtext();
-        }
-      }
-    } catch { /* no songs available */ }
-  }
-
-  // Audio player state
-  let audioCtx: AudioContext | null = null;
-  let audioBuffer: AudioBuffer | null = null;
-  let sourceNode: AudioBufferSourceNode | null = null;
-  let gainNode: GainNode | null = null;
-  let filterNode: BiquadFilterNode | null = null;
-  let reverbNode: ConvolverNode | null = null;
-  let dryGain: GainNode | null = null;
-  let wetGain: GainNode | null = null;
-  let delayNode: DelayNode | null = null;
-  let delayFeedback: GainNode | null = null;
-  let delayWet: GainNode | null = null;
-  let isPlaying = false;
-  let playStartTime = 0;
-  let playOffset = 0;
-
-  // The Media Session API only binds to a real media element, so a silent looping
-  // <audio> stands in for the Web Audio graph to expose OS play/pause keys.
-  let keeper: HTMLAudioElement | null = null;
-  let keeperUrl = '';
-
-  function silentWavUrl(): string {
-    const sampleRate = 8000;
-    const frames = sampleRate;
-    const size = 44 + frames * 2;
-    const buf = new ArrayBuffer(size);
-    const view = new DataView(buf);
-    const ascii = (offset: number, text: string) => {
-      for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
-    };
-    ascii(0, 'RIFF');
-    view.setUint32(4, size - 8, true);
-    ascii(8, 'WAVEfmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    ascii(36, 'data');
-    view.setUint32(40, frames * 2, true);
-    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
-  }
-
-  function initKeeper() {
-    if (keeper) return;
-    keeperUrl = silentWavUrl();
-    keeper = new Audio(keeperUrl);
-    keeper.loop = true;
-    keeper.volume = 0;
-  }
-
-  function updateMediaMetadata() {
-    if (!('mediaSession' in navigator)) return;
-    const song = songs[currentSongIndex];
-    if (!song) return;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: song.name,
-      artist: 'Deluge Tools',
-      album: 'Demo Tracks',
-    });
-  }
-
-  function setMediaState(state: MediaSessionPlaybackState) {
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = state;
-  }
-
-  function initMediaSession() {
-    if (!('mediaSession' in navigator)) return;
-    const set = (action: MediaSessionAction, handler: (() => void) | null) => {
-      try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* unsupported action */ }
-    };
-    set('play', () => { if (!isPlaying) togglePlay(); });
-    set('pause', () => { if (isPlaying) togglePlay(); });
-    set('stop', () => { if (isPlaying) togglePlay(); });
-    set('nexttrack', () => { if (songs.length > 1) stepSong(1); });
-    set('previoustrack', () => { if (songs.length > 1) stepSong(-1); });
+    await homeAudio.fetchSongList();
+    songs = homeAudio.songs;
+    currentSongIndex = homeAudio.currentSongIndex;
+    if (songs.length > 0) {
+      screenText = idleText();
+      screenSubtext = idleSubtext();
+    }
   }
 
   async function stepSong(delta: number) {
-    const wasPlaying = isPlaying;
-    const idx = (currentSongIndex + delta + songs.length) % songs.length;
-    await initAudio();
-    await loadSong(idx);
-    if (wasPlaying) await togglePlay();
+    screenText = 'LOADING';
+    await homeAudio.stepSong(delta);
+    syncFromAudio();
   }
 
   const DESIGN_WIDTH = 900;
@@ -311,7 +235,7 @@
   function handlePadClick(pad: Pad) {
     if (pad.link) {
       if (pad.link.startsWith('http')) window.open(pad.link, '_blank', 'noopener');
-      else window.location.href = pad.link;
+      else navigate(pad.link);
     }
   }
 
@@ -323,85 +247,21 @@
     e.preventDefault();
   }
 
-  function createImpulse(ctx: AudioContext, duration = 2.5, decay = 3): AudioBuffer {
-    const rate = ctx.sampleRate;
-    const len = rate * duration;
-    const buf = ctx.createBuffer(2, len, rate);
-    for (let ch = 0; ch < 2; ch++) {
-      const data = buf.getChannelData(ch);
-      for (let i = 0; i < len; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
-      }
-    }
-    return buf;
-  }
-
   async function initAudio() {
-    if (audioCtx) {
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-      return;
-    }
-    audioCtx = new AudioContext();
-    filterNode = audioCtx.createBiquadFilter();
-    filterNode.type = 'lowpass';
-    gainNode = audioCtx.createGain();
-    dryGain = audioCtx.createGain();
-    wetGain = audioCtx.createGain();
-    reverbNode = audioCtx.createConvolver();
-    reverbNode.buffer = createImpulse(audioCtx);
-    delayNode = audioCtx.createDelay(2.0);
-    delayNode.delayTime.value = 0.375;
-    delayFeedback = audioCtx.createGain();
-    delayFeedback.gain.value = 0.35;
-    delayWet = audioCtx.createGain();
-    delayWet.gain.value = 0.4;
-    filterNode.connect(dryGain);
-    filterNode.connect(reverbNode);
-    filterNode.connect(delayNode);
-    delayNode.connect(delayFeedback);
-    delayFeedback.connect(delayNode);
-    delayNode.connect(delayWet);
-    reverbNode.connect(wetGain);
-    dryGain.connect(gainNode);
-    wetGain.connect(gainNode);
-    delayWet.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    updateVolume();
-    updateFilter();
-    updateReverb();
-    updateDelay();
-    if (songs.length > 0) await loadSong(currentSongIndex);
-  }
-
-  // Commas are legal in a path segment; some static hosts 404 on the %2C form.
-  function songUrl(file: string): string {
-    return `/audio/${encodeURIComponent(file).replace(/%2C/g, ',')}`;
+    await homeAudio.initAudio();
+    applyKnobs();
+    if (songs.length > 0 && !homeAudio.songLoaded) await loadSong(currentSongIndex);
   }
 
   async function loadSong(idx: number) {
-    if (!audioCtx || songs.length === 0) return;
-    if (isPlaying && sourceNode) {
-      sourceNode.onended = null;
-      sourceNode.stop();
-      sourceNode = null;
-      isPlaying = false;
-    }
-    playOffset = 0;
-    currentSongIndex = idx;
-    const song = songs[idx];
     screenText = 'LOADING';
-    screenSubtext = song.name;
-    try {
-      const resp = await fetch(songUrl(song.file));
-      if (!resp.ok) { screenText = 'ERROR'; screenSubtext = 'file not found'; return; }
-      const buf = await resp.arrayBuffer();
-      audioBuffer = await audioCtx.decodeAudioData(buf);
-      songLoaded = true;
-      updateMediaMetadata();
-      screenText = song.name.toUpperCase();
+    screenSubtext = songs[idx]?.name ?? '';
+    const ok = await homeAudio.loadSong(idx);
+    if (ok) {
+      syncFromAudio();
+      screenText = homeAudio.currentSong!.name.toUpperCase();
       screenSubtext = 'press play';
-    } catch (e) {
-      console.error('Audio load failed:', e);
+    } else {
       screenText = 'ERROR';
       screenSubtext = 'load failed';
     }
@@ -459,31 +319,19 @@
     if (e.key === 'Enter') { e.preventDefault(); chooseSong(browseIndex); }
   }
 
-  function updateVolume() {
-    if (!gainNode) return;
-    gainNode.gain.value = knobValues[6] / 127;
+  function applyKnobs() {
+    homeAudio.updateVolume(knobValues[6]);
+    homeAudio.updateFilter(knobValues[2], knobValues[3]);
+    homeAudio.updateReverb(knobValues[4]);
+    homeAudio.updateDelay(knobValues[0], knobValues[1]);
+    homeAudio.updatePlaybackRate(knobValues[5]);
   }
 
-  function updateReverb() {
-    if (!dryGain || !wetGain) return;
-    const mix = knobValues[4] / 127;
-    dryGain.gain.value = 1 - mix * 0.5;
-    wetGain.gain.value = mix;
-  }
-
-  function updateDelay() {
-    if (!delayNode || !delayFeedback) return;
-    delayNode.delayTime.value = 0.05 + (knobValues[0] / 127) * 0.75; // 0.05s – 0.8s
-    delayFeedback.gain.value = (knobValues[1] / 127) * 0.85; // 0 – 0.85, avoids runaway feedback
-  }
-
-  function updateFilter() {
-    if (!filterNode) return;
-    const norm = knobValues[2] / 127;
-    filterNode.frequency.value = 80 * Math.pow(280, norm); // 80 Hz – 22400 Hz exponential
-    const resNorm = knobValues[3] / 127;
-    filterNode.Q.value = 0.5 + resNorm * 24.5; // 0.5 – 25
-  }
+  function updateVolume() { homeAudio.updateVolume(knobValues[6]); }
+  function updateReverb() { homeAudio.updateReverb(knobValues[4]); }
+  function updateDelay() { homeAudio.updateDelay(knobValues[0], knobValues[1]); }
+  function updateFilter() { homeAudio.updateFilter(knobValues[2], knobValues[3]); }
+  function updatePlaybackRate() { homeAudio.updatePlaybackRate(knobValues[5]); }
 
   function getPlaybackRate(): number {
     const v = knobValues[5];
@@ -491,65 +339,17 @@
     return 1.0 + ((v - 64) / 63) * 1.0;
   }
 
-  function updatePlaybackRate() {
-    if (sourceNode) sourceNode.playbackRate.value = getPlaybackRate();
-  }
-
   async function togglePlay() {
     await initAudio();
-    if (!audioCtx || !audioBuffer || !gainNode) return;
-
-    if (isPlaying && sourceNode) {
-      playOffset += (audioCtx.currentTime - playStartTime) * sourceNode.playbackRate.value;
-      sourceNode.stop();
-      sourceNode = null;
-      isPlaying = false;
-      keeper?.pause();
-      setMediaState('paused');
+    await homeAudio.togglePlay(getPlaybackRate());
+    syncFromAudio();
+    if (!homeAudio.isPlaying && homeAudio.playOffset > 0) {
       screenText = idleText();
-      screenSubtext = `paused · ${formatTime(playOffset, audioBuffer.duration)}`;
-      return;
+      screenSubtext = `paused · ${homeAudio.formatTime(homeAudio.playOffset, homeAudio.duration)}`;
+    } else if (!homeAudio.isPlaying) {
+      screenText = idleText();
+      screenSubtext = idleSubtext();
     }
-
-    if (playOffset >= audioBuffer.duration) playOffset = 0;
-
-    sourceNode = audioCtx.createBufferSource();
-    sourceNode.buffer = audioBuffer;
-    sourceNode.playbackRate.value = getPlaybackRate();
-    sourceNode.connect(filterNode!);
-    sourceNode.onended = () => {
-      if (isPlaying) {
-        isPlaying = false;
-        playOffset = 0;
-        sourceNode = null;
-        keeper?.pause();
-        setMediaState('none');
-        screenText = idleText();
-        screenSubtext = idleSubtext();
-      }
-    };
-    sourceNode.start(0, playOffset);
-    playStartTime = audioCtx.currentTime;
-    isPlaying = true;
-    initKeeper();
-    keeper?.play().catch(() => { /* autoplay blocked until a gesture */ });
-    updateMediaMetadata();
-    setMediaState('playing');
-    screenText = idleText();
-    screenSubtext = formatTime(playOffset, audioBuffer.duration);
-    updateScreenTimer();
-  }
-
-  function formatTime(current: number, total: number): string {
-    const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-    return `${fmt(current)} / ${fmt(total)}`;
-  }
-
-  function updateScreenTimer() {
-    if (!isPlaying || !audioCtx || !audioBuffer || !sourceNode) return;
-    const elapsed = playOffset + (audioCtx.currentTime - playStartTime) * sourceNode.playbackRate.value;
-    screenSubtext = formatTime(elapsed, audioBuffer.duration);
-    requestAnimationFrame(updateScreenTimer);
   }
 
   function handleKnobMove(e: MouseEvent | TouchEvent) {
@@ -570,11 +370,8 @@
   function handleKnobEnd() {
     if (draggingKnob !== null) {
       draggingKnob = null;
-      if (isPlaying) {
-        screenText = idleText();
-        updateScreenTimer();
-      } else {
-        screenText = idleText();
+      screenText = idleText();
+      if (!isPlaying) {
         screenSubtext = idleSubtext();
       }
     }
@@ -597,7 +394,15 @@
     mounted = true;
     initPads();
     fetchSongList();
-    initMediaSession();
+    homeAudio.initMediaSession();
+
+    unsubscribe = homeAudio.subscribe(() => {
+      syncFromAudio();
+    });
+
+    if (homeAudio.isPlaying || homeAudio.songLoaded) {
+      syncFromAudio();
+    }
 
     window.addEventListener('keydown', handleBrowseKeys);
     window.addEventListener('mousedown', handleOutsideClick);
@@ -607,14 +412,13 @@
     window.addEventListener('touchend', handleKnobEnd);
 
     return () => {
+      unsubscribe?.();
       window.removeEventListener('keydown', handleBrowseKeys);
       window.removeEventListener('mousedown', handleOutsideClick);
       window.removeEventListener('mousemove', handleKnobMove);
       window.removeEventListener('mouseup', handleKnobEnd);
       window.removeEventListener('touchmove', handleKnobMove);
       window.removeEventListener('touchend', handleKnobEnd);
-      keeper?.pause();
-      if (keeperUrl) URL.revokeObjectURL(keeperUrl);
     };
   });
 </script>
