@@ -1,45 +1,125 @@
 # Deluge Tools
 
-CLI toolset for Synthstrom Deluge. Primary tool: `deluge-score` — converts Deluge XML Song arrangement view into sheet music (MusicXML, MIDI, Lilypond).
+Browser-first toolset for the Synthstrom Deluge. A static Astro + Svelte site (`web/`) is the
+product; a Python package (`deluge_tools/`) supplies the file-format logic, shipped into the
+browser as a Pyodide wheel and also exposed as CLIs for local use.
+
+## ⚠️ Keep This File Current
+
+**This document is part of the work, not a description of it.** It drifted badly once already —
+it described a 4-page site with one Svelte component long after the site had grown to 10 pages
+and 8 components, and the largest file in the repo went unmentioned. That cost real context.
+
+Update this file **in the same change** that causes the drift, whenever you:
+
+- add, remove, or rename a page in `web/src/pages/` or a component in `web/src/components/`
+- add or remove a module in `web/src/lib/` or `deluge_tools/`
+- add, remove, or rename a CLI entrypoint in `pyproject.toml`
+- change the Python↔JS contract in `pyodide.ts` (new bridge function, changed payload shape)
+- change how state crosses pages (`cardStore`, IndexedDB schema, cache keys)
+- fix or discover something in **Known Issues**
+- change a dependency, the build pipeline, or the deploy target
+
+If you finish a task and this file no longer matches the repo, the task is not finished. When
+in doubt, verify against the tree (`ls web/src/components web/src/pages`, `grep '\[project.scripts\]' -A6 pyproject.toml`)
+rather than trusting what's written here.
 
 ## Quick Start
 
 ```bash
-uv venv && source .venv/bin/activate
-uv pip install -e .
+just setup          # uv venv + pip install -e ".[dev]" + npm install
+just check          # ruff check + pytest
+just web-dev        # Astro dev server at localhost:4321
+just build          # rebuild wheel, then static build
+```
+
+`justfile` is the task runner of record — prefer it over remembering raw commands. Raw
+equivalents:
+
+```bash
+uv venv && source .venv/bin/activate && uv pip install -e ".[dev]"
 .venv/bin/pytest tests/ -v
-.venv/bin/deluge-score "Square Spelunking.XML" -o output.musicxml --no-open
+cd web && npm run dev
 ```
 
 ## Architecture
 
+Two halves joined by a wheel. The Python does format work; the Svelte does everything a user
+actually touches.
+
 ```
-deluge_tools/
-  parser.py          — XML → Song dataclasses (clips, instruments, noteData binary, clipInstances binary)
-  converter.py       — Song → MusicXML (custom writer) or music21 Score (MIDI/Lilypond)
-  musicxml_writer.py — Custom MusicXML serializer (bypasses music21, divisions=48)
-  cli.py             — `deluge-score` entrypoint (argparse, MuseScore WSL launcher)
-  midi_to_deluge.py  — MIDI → Deluge XML (reverse direction)
-  cli_import.py      — `deluge-import` entrypoint for midi_to_deluge
-  analyzer.py        — Song → SongStats (BPM, key, scale, duration, counts)
-  cli_stats.py       — `deluge-stats` entrypoint (directory scanner, table output)
-tests/
-  test_parser.py, test_converter.py, test_midi_to_deluge.py
-web/                 — Astro + Svelte website (Vercel static hosting)
-  src/pages/         — index, /score, /inspector, /about
-  src/components/    — Svelte interactive islands (ScoreConverter.svelte)
-  src/lib/pyodide.ts — Pyodide loader + Python-in-browser bridge
-  src/layouts/       — BaseLayout.astro (nav, footer, theme)
-  src/styles/        — Design tokens (DM Mono + DM Sans, gold/charcoal palette)
-  public/py/         — Built Python wheel for Pyodide (deluge_tools-0.1.0-py3-none-any.whl)
-  build-wheel.sh     — Packages deluge_tools as wheel for Pyodide
-  vercel.json        — Vercel deployment config
+deluge_tools/           — pure-stdlib format logic (except music21/mido, CLI-only)
+  parser.py             — XML → Song dataclasses. TICKS_PER_QUARTER=48, binary noteData /
+                          clipInstances decoding, SoundPatch/OscPatch/PatchCable synth params
+  converter.py          — Song → MusicXML (custom writer) or music21 Score (MIDI/Lilypond)
+  musicxml_writer.py    — Custom MusicXML serializer (bypasses music21, divisions=48)
+  analyzer.py           — Song → SongStats (BPM, key, scale, duration, instrument/note counts)
+  card_scanner.py       — SD card tree → CardReport (unused samples, missing refs, reclaimable)
+  midi_to_deluge.py     — MIDI → Deluge XML (reverse direction; needs mido)
+  cli.py                — `deluge-score`   (argparse, MuseScore WSL launcher)
+  cli_import.py         — `deluge-import`
+  cli_stats.py          — `deluge-stats`   (directory scanner, table output)
+  cli_clean.py          — `deluge-clean`   (card scan/cleanup)
+tests/                  — test_parser, test_converter, test_analyzer, test_card_scanner,
+                          test_cli_clean, test_cli_stats, test_midi_to_deluge
+web/                    — Astro + Svelte, static, deployed to Vercel
+  src/pages/            — one .astro shell per tool, each mounting one Svelte island
+  src/components/       — the actual product (see table below)
+  src/lib/              — shared TS (see table below)
+  src/layouts/          — BaseLayout.astro (nav, footer, theme)
+  src/styles/           — design tokens
+  public/py/            — checked-in wheel loaded by Pyodide
+  public/audio/         — .mp3 demo tracks served by the home page player
+  build-wheel.sh        — packages deluge_tools as the wheel above
+  vercel.json           — deploy config
+docs/handoffs/          — session handoff notes
 ```
+
+### Pages → components
+
+Every page is a thin `.astro` shell wrapping `BaseLayout` plus a single Svelte island.
+
+| Page | Component | What it does |
+|---|---|---|
+| `/` | `DelugeUI.svelte` | Interactive 8×16 Deluge pad-grid nav + demo audio player |
+| `/clean` | `CardScanner.svelte` | SD card scan: unused samples, missing refs, XML repair, song sorting, soft delete |
+| `/stats` | `SongAnalyzer.svelte` | Batch song stats table over a card or file selection |
+| `/preview` | `SongPreview.svelte` | Web Audio playback of a song with per-track mute/volume |
+| `/kits` | `KitBuilder.svelte` | Build/edit Deluge kit XML from card samples (vim-style keys) |
+| `/patch` | `PatchGenerator.svelte` | Generate synth presets with live Web Audio preview |
+| `/score` | `ScoreConverter.svelte` | Song XML → MusicXML download |
+| `/import` | `MidiImporter.svelte` | MIDI → Deluge song XML |
+| `/about` | — | Static |
+
+`src/pages/audio/songs.json.ts` is an Astro endpoint that enumerates `public/audio/*.mp3` at
+build time for the home-page player.
+
+### `web/src/lib/`
+
+| Module | Role |
+|---|---|
+| `pyodide.ts` | The Python↔JS seam. Lazy singleton loader + 4 bridges: `analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML` |
+| `cardStore.ts` | Singleton `cardStore` — the SD card handle, sample index, and song cache, shared across `/clean`, `/stats`, `/kits`, `/preview`. Persists the `FileSystemDirectoryHandle` and a song-XML cache in IndexedDB (`deluge-card-store`, v2) |
+| `softDelete.ts` | `moveToTrash(root, path)` — copy into `SOFT_DELETE/<original path>`, then remove original. Nothing is ever hard-deleted |
+| `patchAudio.ts` | Web Audio synth engine (subtractive + FM voices, envelopes) for `/patch` |
+| `songAudio.ts` | Song-level scheduler over `patchAudio` voices + card samples for `/preview` |
+| `kitXml.ts` | `Kit`/`KitRow` model and Deluge kit XML serialization for `/kits` |
 
 ## Key Design Decisions
 
-- **Arrangement view only.** Session/Clips view has no timeline — `NoArrangementError` if no `clipInstances` found.
-- **Clips are first-class objects.** `Song.clips` indexed by position in `sessionClips`. `Instrument.clip_instances` references clips by index. Matches Deluge's own model.
+- **Browser-first.** The site is the product; the CLIs are a convenience over the same package.
+  Anything user-facing goes in `web/`, and processing stays client-side — no uploads, no server.
+- **Arrangement view only** for scores. Session/Clips view has no timeline — `NoArrangementError`
+  if no `clipInstances`. `cardStore.songHasArrangement()` filters by regex on the raw XML so
+  other pages can pre-filter without invoking Python.
+- **Clips are first-class objects.** `Song.clips` indexed by position in `sessionClips`;
+  `Instrument.clip_instances` references clips by index. Matches Deluge's own model.
+- **Nothing is destroyed.** Card operations move files into `SOFT_DELETE/` or `REPAIR_BACKUP/`
+  (both in `APP_MANAGED_DIRS`, never re-scanned). There is deliberately no bulk-delete button.
+- **Python↔JS is an untyped string seam.** `pyodide.ts` embeds Python in template literals and
+  marshals via `JSON.stringify` + `pyodide.globals.set`. TS interfaces (`SongStats`, `PreviewTrack`)
+  are hand-maintained mirrors of the Python dataclasses — change one, change the other, no
+  compiler will catch it.
 - **music21 `insert()` not `append()`** for absolute note positioning.
 - **Grace notes** for sub-16th clusters that would collapse into false chords.
 
@@ -47,7 +127,7 @@ web/                 — Astro + Svelte website (Vercel static hosting)
 
 - **noteData**: 10-byte records — `uint32 position`, `uint32 length`, `uint8 velocity`, `uint8 lift_velocity`
 - **noteDataWithLift**: 11-byte records (firmware 4.0+) — same fields + 1 trailing probability/condition byte (ignored). Used instead of `noteData` on newer-firmware songs; `_parse_clip_note_rows` falls back to it when `noteData` is absent.
-- **clipInstances**: 12-byte records — `uint32 position`, `uint32 length`, `uint32 clip_index`. Bit 31 set means `clip_index` points into `arrangementOnlyTracks` (masked-off low bits = index there), not `sessionClips` — see below.
+- **clipInstances**: 12-byte records — `uint32 position`, `uint32 length`, `uint32 clip_index`. Bit 31 (`ARRANGEMENT_ONLY_FLAG = 0x80000000`) set means `clip_index` points into `arrangementOnlyTracks` (masked-off low bits = index there), not `sessionClips`.
 
 ## Known Issues
 
@@ -56,13 +136,60 @@ web/                 — Astro + Svelte website (Vercel static hosting)
 - ~~**Named-preset instrument collision**~~ **FIXED** — firmware 4.0+ synths address by `presetName`/`presetFolder` instead of numeric `presetSlot` (which is absent); all such instruments collided on key `(-1, -1)` and overwrote each other.
 - ~~**MIDI/CV channel collision**~~ **FIXED** — `midiChannel`/`cv` instruments also lack `presetSlot`; multiple channels collided the same way. Now keyed by `(type, channel)`.
 - ~~**`arrangementOnlyTracks` ignored**~~ **FIXED** — clips dropped straight into the arranger (no session-view slot) live in a separate top-level `<arrangementOnlyTracks>` block; `clip_index` values with bit 31 set reference it. Previously unparsed → those clips (and any instrument's notes routed through them) showed as 0.
+- **No tests for `web/`** — ~9,000 lines of Svelte and ~1,700 lines of TS, including all the
+  file-mutating card code, have no automated coverage. `just check` only covers Python.
 - **Only 2 scales** — major and minor. Should support all 14 firmware presets + USER_SCALE label.
 - **`midiChannel`/`cv` instruments** parse correctly now but still render nothing in MusicXML/score output (`converter.py` skips them) — preview/inspector paths (`pyodide.ts`) are fine.
 - **Kit drums at C4** — no General MIDI mapping; all drums render as x-noteheads with lyric labels.
-- **Hardcoded 4/4** — Deluge has no native time signature, but the quantization issue makes this worse.
+- **Hardcoded 4/4** — Deluge has no native time signature.
 - **No swing** — `swingAmount` is ignored in XML→score direction.
-- **No automation** — `parameterAutomation`, `knobPositions`, `patchCables` not parsed.
-- **`audioClip` elements** ignored entirely.
+- **No automation** — `parameterAutomation`, `knobPositions` not parsed in the score path.
+- **`audioClip` elements** ignored in the score path.
+
+## Web Frontend
+
+Static Astro + Svelte on Vercel (free tier). All file processing is client-side via Pyodide
+(Python compiled to WASM) and the File System Access API.
+
+### Pyodide Compatibility
+
+- `parser.py` → `converter.py` → `musicxml_writer.py` → `analyzer.py` → `card_scanner.py` are
+  **pure stdlib** (struct, xml.etree, dataclasses) and work as-is in the browser.
+- `midi_to_deluge.py` needs `mido` (pure Python, installed via micropip on demand).
+- `song_to_score()` uses `music21` (~50MB) — **CLI only**, never loaded in the browser.
+
+Keep new `deluge_tools` code stdlib-only unless it is deliberately CLI-only.
+
+### Browser API Constraints
+
+- **File System Access API** (`showDirectoryPicker`, `FileSystemDirectoryHandle`) is
+  Chromium-only. Firefox/Safari fall back to drag-and-drop / file input, which is read-only —
+  card mutation features simply aren't available there.
+- Directory handles persisted in IndexedDB need permission re-granted per session; see
+  `cardStore.reconnect()` / `requestReconnect()`, which must be triggered by a user gesture.
+
+### Dev Commands
+
+```bash
+cd web
+npm run dev          # Astro dev server at localhost:4321
+npm run build        # Static build → web/dist/  (acceptance bar: zero errors, zero warnings)
+bash build-wheel.sh  # Rebuild Python wheel into web/public/py/
+npx vercel           # Deploy to Vercel
+```
+
+**⚠️ The site loads `deluge_tools` from the checked-in wheel, not live source.** Any change to
+`deluge_tools/*.py` (parser, converter, analyzer, card_scanner, musicxml_writer) is invisible in
+the browser — including `npm run dev` — until you run `bash build-wheel.sh` to regenerate
+`web/public/py/deluge_tools-0.1.0-py3-none-any.whl`. `git status` will show the `.whl` as
+modified; commit it alongside the source change. Symptom of forgetting: preview/converter
+behaves as if the old bug is still there even though `pytest` passes and the fix is correct —
+always rebuild the wheel before trusting a browser repro of a `deluge_tools` change.
+
+### Design System
+- **Typography:** DM Mono (headers, code, labels) + DM Sans (body, UI)
+- **Palette:** Gold accent (#D4A847 dark / #C4942A light), charcoal ground (#131316 dark / #F2F0EB light), teal secondary (#5AABAC / #3A7B7C)
+- **Theme:** Full light/dark support via CSS custom properties
 
 ## Deluge Firmware Reference
 
@@ -89,7 +216,7 @@ Located in `src/deluge/model/scale/`:
 - **`musical_key.h`** — `MusicalKey` class holds `modeNotes` (NoteSet) + `rootNote`.
 - **`note_set.h`** — `NoteSet` is a 12-bit bitfield, one bit per semitone.
 - If `getScale(notes)` finds no match in `presetScaleNotes[]`, returns `USER_SCALE`.
-- Our file's `[0,2,3,5,7,8,10,11]` has **8 notes** (no preset has 8) — it's a user-defined scale (natural minor + major 7th). Falling back to minor is correct.
+- A song with `[0,2,3,5,7,8,10,11]` has **8 notes** (no preset has 8) — user-defined scale (natural minor + major 7th). Falling back to minor is correct.
 
 ### Community Ecosystem
 
@@ -102,43 +229,11 @@ No existing tool does Deluge → sheet music. Nearest peers:
 | `deluge-cmd` / `deluge-card` | SD card management | On PyPI, active |
 | `deluge-synthstrom-utils` | Multisample preset generator | Active |
 
-## Web Frontend
-
-The `web/` directory is an Astro + Svelte site deployed to Vercel (static, free tier). All file processing runs client-side via Pyodide (Python compiled to WASM).
-
-### Pyodide Compatibility
-
-The core pipeline is **pure stdlib Python** — no external deps needed:
-- `parser.py` → `converter.py` → `musicxml_writer.py` (all stdlib: struct, xml.etree, dataclasses)
-- `midi_to_deluge.py` needs `mido` (pure Python, installable via micropip)
-- `song_to_score()` uses `music21` (~50MB) — **not used in web**, only CLI
-
-### Dev Commands
-
-```bash
-cd web
-npm run dev          # Astro dev server at localhost:4321
-npm run build        # Static build → web/dist/
-bash build-wheel.sh  # Rebuild Python wheel into web/public/py/
-npx vercel           # Deploy to Vercel
-```
-
-**⚠️ The site loads `deluge_tools` from the checked-in wheel, not live source.** Any change to
-`deluge_tools/*.py` (parser, converter, analyzer, musicxml_writer) is invisible in the browser —
-including `npm run dev` — until you run `bash build-wheel.sh` to regenerate
-`web/public/py/deluge_tools-0.1.0-py3-none-any.whl`. `git status` will show the `.whl` as
-modified; commit it alongside the source change. Symptom of forgetting: preview/converter
-behaves as if the old bug is still there even though `pytest` passes and the fix is correct —
-always rebuild the wheel before trusting a browser repro of a `deluge_tools` change.
-
-### Design System
-- **Typography:** DM Mono (headers, code, labels) + DM Sans (body, UI)
-- **Palette:** Gold accent (#D4A847 dark / #C4942A light), charcoal ground (#131316 dark / #F2F0EB light), teal secondary (#5AABAC / #3A7B7C)
-- **Theme:** Full light/dark support via CSS custom properties
-
 ## Style
 
 - Python 3.10+, type hints everywhere.
 - `pytest` + `pytest.mark.parametrize` for tests.
-- `uv` for venv/package management.
+- `uv` for venv/package management; `just` for tasks.
 - No comments unless explaining a non-obvious "why".
+- TypeScript in `web/src/lib/` carries explicit types at module boundaries; Svelte components
+  are where untyped local state is tolerated.

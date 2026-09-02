@@ -122,6 +122,78 @@
   let playStartTime = 0;
   let playOffset = 0;
 
+  // The Media Session API only binds to a real media element, so a silent looping
+  // <audio> stands in for the Web Audio graph to expose OS play/pause keys.
+  let keeper: HTMLAudioElement | null = null;
+  let keeperUrl = '';
+
+  function silentWavUrl(): string {
+    const sampleRate = 8000;
+    const frames = sampleRate;
+    const size = 44 + frames * 2;
+    const buf = new ArrayBuffer(size);
+    const view = new DataView(buf);
+    const ascii = (offset: number, text: string) => {
+      for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    };
+    ascii(0, 'RIFF');
+    view.setUint32(4, size - 8, true);
+    ascii(8, 'WAVEfmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    ascii(36, 'data');
+    view.setUint32(40, frames * 2, true);
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+
+  function initKeeper() {
+    if (keeper) return;
+    keeperUrl = silentWavUrl();
+    keeper = new Audio(keeperUrl);
+    keeper.loop = true;
+    keeper.volume = 0;
+  }
+
+  function updateMediaMetadata() {
+    if (!('mediaSession' in navigator)) return;
+    const song = songs[currentSongIndex];
+    if (!song) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.name,
+      artist: 'Deluge Tools',
+      album: 'Demo Tracks',
+    });
+  }
+
+  function setMediaState(state: MediaSessionPlaybackState) {
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = state;
+  }
+
+  function initMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    const set = (action: MediaSessionAction, handler: (() => void) | null) => {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* unsupported action */ }
+    };
+    set('play', () => { if (!isPlaying) togglePlay(); });
+    set('pause', () => { if (isPlaying) togglePlay(); });
+    set('stop', () => { if (isPlaying) togglePlay(); });
+    set('nexttrack', () => { if (songs.length > 1) stepSong(1); });
+    set('previoustrack', () => { if (songs.length > 1) stepSong(-1); });
+  }
+
+  async function stepSong(delta: number) {
+    const wasPlaying = isPlaying;
+    const idx = (currentSongIndex + delta + songs.length) % songs.length;
+    await initAudio();
+    await loadSong(idx);
+    if (wasPlaying) await togglePlay();
+  }
+
   const DESIGN_WIDTH = 900;
   let wrapperWidth = DESIGN_WIDTH;
   let housingHeight = 0;
@@ -325,6 +397,7 @@
       const buf = await resp.arrayBuffer();
       audioBuffer = await audioCtx.decodeAudioData(buf);
       songLoaded = true;
+      updateMediaMetadata();
       screenText = song.name.toUpperCase();
       screenSubtext = 'press play';
     } catch (e) {
@@ -431,6 +504,8 @@
       sourceNode.stop();
       sourceNode = null;
       isPlaying = false;
+      keeper?.pause();
+      setMediaState('paused');
       screenText = idleText();
       screenSubtext = `paused · ${formatTime(playOffset, audioBuffer.duration)}`;
       return;
@@ -447,6 +522,8 @@
         isPlaying = false;
         playOffset = 0;
         sourceNode = null;
+        keeper?.pause();
+        setMediaState('none');
         screenText = idleText();
         screenSubtext = idleSubtext();
       }
@@ -454,6 +531,10 @@
     sourceNode.start(0, playOffset);
     playStartTime = audioCtx.currentTime;
     isPlaying = true;
+    initKeeper();
+    keeper?.play().catch(() => { /* autoplay blocked until a gesture */ });
+    updateMediaMetadata();
+    setMediaState('playing');
     screenText = idleText();
     screenSubtext = formatTime(playOffset, audioBuffer.duration);
     updateScreenTimer();
@@ -516,6 +597,7 @@
     mounted = true;
     initPads();
     fetchSongList();
+    initMediaSession();
 
     window.addEventListener('keydown', handleBrowseKeys);
     window.addEventListener('mousedown', handleOutsideClick);
@@ -531,6 +613,8 @@
       window.removeEventListener('mouseup', handleKnobEnd);
       window.removeEventListener('touchmove', handleKnobMove);
       window.removeEventListener('touchend', handleKnobEnd);
+      keeper?.pause();
+      if (keeperUrl) URL.revokeObjectURL(keeperUrl);
     };
   });
 </script>
