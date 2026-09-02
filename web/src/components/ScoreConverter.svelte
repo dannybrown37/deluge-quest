@@ -1,6 +1,6 @@
 <script lang="ts">
   import { loadPyodide, convertToMusicXML } from "../lib/pyodide";
-  import { cardStore } from "../lib/cardStore";
+  import { cardStore, songHasArrangement } from "../lib/cardStore";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -26,7 +26,7 @@
       }
       const cached = await cardStore.loadCachedSongs();
       if (cached?.songs.length) {
-        cardSongs = cached.songs;
+        cardSongs = cached.songs.filter(s => songHasArrangement(s.xml));
         cardName = cached.cardName;
         cardSavedAt = cached.savedAt;
         cardFromCache = true;

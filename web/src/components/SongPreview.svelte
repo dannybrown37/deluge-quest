@@ -23,7 +23,7 @@
   async function tryLoadCardSongs() {
     try {
       if (cardStore.isLoaded && cardStore.songXmls.size > 0) {
-        cardSongs = cardStore.eligibleSongs();
+        cardSongs = cardStore.eligibleSongs(false);
         cardName = cardStore.rootHandle?.name ?? "";
         return;
       }
@@ -152,6 +152,7 @@
       });
     }
 
+    const isSession = !data.hasArrangement;
     const tracks = data.tracks.map((t, i) => {
       const y = RULER_HEIGHT + i * TRACK_HEIGHT;
       const type = t.instrumentType ?? (t.isKit ? "kit" : "synth");
@@ -159,9 +160,15 @@
       const clips = t.clips.map((c, ci) => {
         const x = LABEL_WIDTH + (c.positionTicks / ticksPerMeasure) * pxPerMeasure;
         const w = Math.max((c.lengthTicks / ticksPerMeasure) * pxPerMeasure, 2);
-        return { ...c, x, w, trackIdx: i, clipIdx: ci };
+        const patternW = isSession
+          ? Math.max((c.clipLengthTicks / ticksPerMeasure) * pxPerMeasure, 2)
+          : w;
+        const loops = isSession && c.clipLengthTicks > 0
+          ? Math.ceil(c.lengthTicks / c.clipLengthTicks)
+          : 1;
+        return { ...c, x, w, patternW, loops, trackIdx: i, clipIdx: ci };
       });
-      return { ...t, y, color, clips };
+      return { ...t, y, color, clips, isSession };
     });
 
     return { svgWidth, svgHeight, rulerMarks, tracks, totalMeasures, pxPerMeasure, ticksPerMeasure };
@@ -265,12 +272,16 @@
     const track = data.tracks[trackIdx];
     const clip = track.clips[clipIdx];
     const ticksPerMeasure = layout.ticksPerMeasure;
-    const lines = [
-      track.name,
-      formatMeasure(clip.positionTicks, ticksPerMeasure),
-      formatLength(clip.lengthTicks, ticksPerMeasure),
-      `${clip.noteCount} notes, ${clip.rowCount} rows`,
-    ];
+    const lines = [track.name];
+    if (data.hasArrangement) {
+      lines.push(formatMeasure(clip.positionTicks, ticksPerMeasure));
+    }
+    lines.push(formatLength(clip.clipLengthTicks, ticksPerMeasure));
+    if (!data.hasArrangement && clip.clipLengthTicks < clip.lengthTicks) {
+      const loops = Math.ceil(clip.lengthTicks / clip.clipLengthTicks);
+      lines.push(`loops ${loops}x`);
+    }
+    lines.push(`${clip.noteCount} notes, ${clip.rowCount} rows`);
     hoveredClip = { track: trackIdx, clip: clipIdx };
     tooltip = {
       visible: true,
@@ -448,6 +459,9 @@
       <div class="meta">
         <h2 class="song-name">{fileName.replace(/\.XML$/i, '')}</h2>
         <div class="meta-chips">
+          {#if !data.hasArrangement}
+            <span class="chip chip--session">Session</span>
+          {/if}
           <span class="chip">{data.bpm.toFixed(0)} BPM</span>
           <span class="chip">{data.key}</span>
           <span class="chip">{data.durationStr}</span>
@@ -617,21 +631,56 @@
             <!-- Clip instances -->
             {#each track.clips as clip, ci}
               {@const isHovered = hoveredClip?.track === ti && hoveredClip?.clip === ci}
-              <rect
-                x={clip.x}
-                y={track.y + 3}
-                width={clip.w}
-                height={TRACK_HEIGHT - 6}
-                rx="3"
-                fill={track.color}
-                opacity={isHovered ? 1 : 0.75}
-                stroke={isHovered ? "var(--text)" : "none"}
-                stroke-width="1.5"
-                style="cursor: pointer"
-                onmouseenter={(e) => showTooltip(e, ti, ci)}
-                onmousemove={(e) => { if (tooltip.visible) tooltip = { ...tooltip, x: e.clientX, y: e.clientY }; }}
-                onmouseleave={hideTooltip}
-              />
+              {#if track.isSession && clip.loops > 1}
+                <!-- Session mode: show pattern repeats as faded blocks -->
+                {#each Array(clip.loops) as _, li}
+                  {@const loopX = clip.x + li * clip.patternW}
+                  {@const loopW = Math.min(clip.patternW, clip.w - li * clip.patternW)}
+                  {#if loopW > 0}
+                    <rect
+                      x={loopX}
+                      y={track.y + 3}
+                      width={loopW}
+                      height={TRACK_HEIGHT - 6}
+                      rx={li === 0 ? 3 : 0}
+                      fill={track.color}
+                      opacity={li === 0 ? (isHovered ? 1 : 0.75) : (isHovered ? 0.55 : 0.35)}
+                      stroke={li === 0 && isHovered ? "var(--text)" : "none"}
+                      stroke-width="1.5"
+                      style="cursor: pointer"
+                      onmouseenter={(e) => showTooltip(e, ti, ci)}
+                      onmousemove={(e) => { if (tooltip.visible) tooltip = { ...tooltip, x: e.clientX, y: e.clientY }; }}
+                      onmouseleave={hideTooltip}
+                    />
+                    {#if li > 0}
+                      <line
+                        x1={loopX} y1={track.y + 5}
+                        x2={loopX} y2={track.y + TRACK_HEIGHT - 5}
+                        stroke="var(--ground)"
+                        stroke-width="0.5"
+                        opacity="0.5"
+                        style="pointer-events: none"
+                      />
+                    {/if}
+                  {/if}
+                {/each}
+              {:else}
+                <rect
+                  x={clip.x}
+                  y={track.y + 3}
+                  width={clip.w}
+                  height={TRACK_HEIGHT - 6}
+                  rx="3"
+                  fill={track.color}
+                  opacity={isHovered ? 1 : 0.75}
+                  stroke={isHovered ? "var(--text)" : "none"}
+                  stroke-width="1.5"
+                  style="cursor: pointer"
+                  onmouseenter={(e) => showTooltip(e, ti, ci)}
+                  onmousemove={(e) => { if (tooltip.visible) tooltip = { ...tooltip, x: e.clientX, y: e.clientY }; }}
+                  onmouseleave={hideTooltip}
+                />
+              {/if}
               <!-- Clip label (only if wide enough) -->
               {#if clip.w > 40}
                 <text
@@ -926,6 +975,12 @@
     border: 1px solid var(--border);
     border-radius: 4px;
     color: var(--text-secondary);
+  }
+  .chip--session {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: var(--ground);
+    font-weight: 600;
   }
 
   .transport {

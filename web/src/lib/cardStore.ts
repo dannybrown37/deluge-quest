@@ -115,16 +115,16 @@ class CardStoreImpl {
   }
 
   /**
-   * Stores the arrangement-view songs from the current scan so pages that never got a card handle
+   * Stores all songs from the current scan so pages that never got a card handle
    * (or lost permission on navigation) can still list songs. Quota failures are non-fatal — the
    * scan itself already succeeded.
    */
-  async saveSongCache(cardName: string, songs: { path: string; xml: string }[] = this.eligibleSongs()) {
+  async saveSongCache(cardName: string, songs: { path: string; xml: string }[] = this.eligibleSongs(false)) {
     try {
       const payload: CachedSongs = {
         cardName,
         savedAt: Date.now(),
-        songs: songs.filter(s => songHasArrangement(s.xml)),
+        songs,
       };
       const db = await openIdb();
       await new Promise<void>((resolve, reject) => {
@@ -270,11 +270,11 @@ class CardStoreImpl {
     }
   }
 
-  /** Songs with arrangement-view data, sorted by path — the only ones Preview/Score can use. */
-  eligibleSongs(): { path: string; xml: string }[] {
+  /** Songs sorted by path. When `arrangementOnly` is true, filters to songs with arrangement data. */
+  eligibleSongs(arrangementOnly = true): { path: string; xml: string }[] {
     const out: { path: string; xml: string }[] = [];
     for (const [path, xml] of this.songXmls) {
-      if (songHasArrangement(xml)) out.push({ path, xml });
+      if (!arrangementOnly || songHasArrangement(xml)) out.push({ path, xml });
     }
     out.sort((a, b) => a.path.localeCompare(b.path));
     return out;

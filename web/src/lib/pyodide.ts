@@ -226,6 +226,7 @@ export interface PreviewData {
   ticksPerQuarter: number;
   trackCount: number;
   totalNotes: number;
+  hasArrangement: boolean;
   tracks: PreviewTrack[];
 }
 
@@ -329,11 +330,10 @@ try:
                     "noteRows": _clip_note_rows.get(_ci.clip_index, []),
                 })
         else:
-            _pos = 0
             for _c in _song.clips:
                 if _c.instrument_slot == _inst.slot and _c.instrument_sub_slot == _inst.sub_slot:
                     _clips.append({
-                        "positionTicks": _pos,
+                        "positionTicks": 0,
                         "lengthTicks": _c.length,
                         "clipLengthTicks": _c.length,
                         "clipIndex": _c.index,
@@ -341,7 +341,6 @@ try:
                         "rowCount": _clip_row_counts.get(_c.index, 0),
                         "noteRows": _clip_note_rows.get(_c.index, []),
                     })
-                    _pos += _c.length
         if not _clips:
             continue
 
@@ -364,7 +363,10 @@ try:
         _dur_ticks = _stats.arrangement_length_ticks
         _dur_str = _stats.duration_str
     else:
-        _dur_ticks = max((c["positionTicks"] + c["lengthTicks"] for t in _tracks for c in t["clips"]), default=0)
+        _dur_ticks = max((c["lengthTicks"] for t in _tracks for c in t["clips"]), default=0)
+        for _t in _tracks:
+            for _c in _t["clips"]:
+                _c["lengthTicks"] = _dur_ticks
         _total_secs = _dur_ticks / TICKS_PER_QUARTER * 60.0 / _stats.bpm if _stats.bpm > 0 else 0
         _dur_str = f"{int(_total_secs // 60)}:{int(_total_secs % 60):02d}" if _dur_ticks > 0 else "-"
 
@@ -376,6 +378,7 @@ try:
         "ticksPerQuarter": TICKS_PER_QUARTER,
         "trackCount": len(_tracks),
         "totalNotes": _stats.total_notes,
+        "hasArrangement": _has_arrangement,
         "tracks": _tracks,
     }
 finally:
