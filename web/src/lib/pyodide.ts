@@ -210,6 +210,7 @@ export interface PreviewTrack {
   clips: {
     positionTicks: number;
     lengthTicks: number;
+    clipLengthTicks: number;
     clipIndex: number;
     noteCount: number;
     rowCount: number;
@@ -249,9 +250,11 @@ try:
     _clip_note_counts = {}
     _clip_row_counts = {}
     _clip_note_rows = {}
+    _clip_lengths = {}
     for _c in _song.clips:
         _clip_note_counts[_c.index] = sum(len(r.notes) for r in _c.rows)
         _clip_row_counts[_c.index] = len(_c.rows)
+        _clip_lengths[_c.index] = _c.length
         _rows = []
         for _r in _c.rows:
             if _r.notes:
@@ -319,6 +322,7 @@ try:
                 _clips.append({
                     "positionTicks": _ci.position,
                     "lengthTicks": _ci.length,
+                    "clipLengthTicks": _clip_lengths.get(_ci.clip_index, _ci.length),
                     "clipIndex": _ci.clip_index,
                     "noteCount": _clip_note_counts.get(_ci.clip_index, 0),
                     "rowCount": _clip_row_counts.get(_ci.clip_index, 0),
@@ -331,6 +335,7 @@ try:
                     _clips.append({
                         "positionTicks": _pos,
                         "lengthTicks": _c.length,
+                        "clipLengthTicks": _c.length,
                         "clipIndex": _c.index,
                         "noteCount": _clip_note_counts.get(_c.index, 0),
                         "rowCount": _clip_row_counts.get(_c.index, 0),

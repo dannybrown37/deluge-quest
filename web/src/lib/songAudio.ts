@@ -98,21 +98,30 @@ export class SongPlayer {
     for (let ti = 0; ti < tracks.length; ti++) {
       const track = tracks[ti];
       for (const clip of track.clips) {
+        const clipLen = clip.clipLengthTicks;
+        const instanceLen = clip.lengthTicks;
+        const loops = clipLen > 0 ? Math.ceil(instanceLen / clipLen) : 1;
+
         for (const row of clip.noteRows) {
           const midi = row.y ?? 60;
           const drumType = track.isKit ? classifyDrum(row.drumName, midi) : 'perc' as DrumType;
           for (const note of row.notes) {
-            const absTick = clip.positionTicks + note.pos;
-            this.flatNotes.push({
-              trackIdx: ti,
-              midi,
-              isKit: track.isKit,
-              drumType,
-              samplePath: track.isKit ? row.samplePath : null,
-              startSec: absTick * this.secPerTick,
-              durSec: Math.max(note.len * this.secPerTick, 0.02),
-              vel: note.vel / 127,
-            });
+            for (let loop = 0; loop < loops; loop++) {
+              const absTick = clip.positionTicks + loop * clipLen + note.pos;
+              if (absTick >= clip.positionTicks + instanceLen) break;
+              const maxDur = clip.positionTicks + instanceLen - absTick;
+              const noteDur = Math.min(note.len, maxDur);
+              this.flatNotes.push({
+                trackIdx: ti,
+                midi,
+                isKit: track.isKit,
+                drumType,
+                samplePath: track.isKit ? row.samplePath : null,
+                startSec: absTick * this.secPerTick,
+                durSec: Math.max(noteDur * this.secPerTick, 0.02),
+                vel: note.vel / 127,
+              });
+            }
           }
         }
       }
