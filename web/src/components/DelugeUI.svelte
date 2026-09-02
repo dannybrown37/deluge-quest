@@ -206,7 +206,7 @@
     { group: 'preview',   label: 'Song Preview',     link: '/preview',   color: AUDITION_PALETTE[1], subtext: 'arrangement preview & playback' },
     { group: 'score',     label: 'Score Converter',  link: '/score',     color: AUDITION_PALETTE[2], subtext: 'Deluge XML → MusicXML' },
     { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: AUDITION_PALETTE[3], subtext: 'MIDI → Deluge XML' },
-    { group: 'clean',     label: 'Card Analysis',    link: '/clean',     color: AUDITION_PALETTE[4], subtext: 'find unused samples' },
+    { group: 'manage',    label: 'Card Management',  link: '/manage',    color: AUDITION_PALETTE[4], subtext: 'organize samples & songs' },
     { group: 'patch',     label: 'Patch Generator',  link: '/patch',     color: AUDITION_PALETTE[5], subtext: 'random synth presets' },
     { group: 'kits',      label: 'Kit Builder',      link: '/kits',      color: AUDITION_PALETTE[6], subtext: 'build & edit drum kits' },
   ];

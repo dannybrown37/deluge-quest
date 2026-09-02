@@ -143,7 +143,7 @@
     activePane = "browser";
   }
 
-  /** Loads the SAMPLES/ dir from an already-picked SD card root (from /stats or /clean) instead of prompting again. */
+  /** Loads the SAMPLES/ dir from an already-picked SD card root (from /stats or /manage) instead of prompting again. */
   async function loadSamplesFromRoot(root: FileSystemDirectoryHandle) {
     try {
       samplesDir = await (root as any).getDirectoryHandle("SAMPLES");

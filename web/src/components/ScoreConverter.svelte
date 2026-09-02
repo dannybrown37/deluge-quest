@@ -140,7 +140,7 @@
         {cardSongs.length} song{cardSongs.length === 1 ? "" : "s"} with arrangement data{cardName ? ` on ${cardName}` : ""}
       </p>
       {#if cardFromCache}
-        <p class="card-picker-sub">From your last card scan{cardSavedAt ? ` (${new Date(cardSavedAt).toLocaleString()})` : ""}. Rescan on <a href="/clean">Card Clean</a> to refresh.</p>
+        <p class="card-picker-sub">From your last card scan{cardSavedAt ? ` (${new Date(cardSavedAt).toLocaleString()})` : ""}. Rescan on <a href="/manage">Card Management</a> to refresh.</p>
       {/if}
       <ul class="card-picker-list">
         {#each cardSongs as song}
@@ -154,7 +154,7 @@
       <p class="card-picker-hint">or drop a file below</p>
     </div>
   {:else}
-    <p class="card-hint">No songs cached yet. <a href="/clean">Scan your card on Card Clean</a> to pick a song from a list here instead of dropping a file.</p>
+    <p class="card-hint">No songs cached yet. <a href="/manage">Scan your card on Card Management</a> to pick a song from a list here instead of dropping a file.</p>
   {/if}
   <div
     class="dropzone"

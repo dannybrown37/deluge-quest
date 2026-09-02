@@ -82,7 +82,7 @@ Every page is a thin `.astro` shell wrapping `BaseLayout` plus a single Svelte i
 | Page | Component | What it does |
 |---|---|---|
 | `/` | `DelugeUI.svelte` | Interactive 8×16 Deluge pad-grid nav + demo audio player |
-| `/clean` | `CardScanner.svelte` | SD card scan: unused samples, missing refs, XML repair, song sorting, soft delete |
+| `/manage` | `CardScanner.svelte` | SD card management: sample browser with drag-drop reorganization (auto-updates XML refs), song sorting, broken ref repair, analysis |
 | `/stats` | `SongAnalyzer.svelte` | Batch song stats table over a card or file selection |
 | `/preview` | `SongPreview.svelte` | Web Audio playback of a song with per-track mute/volume |
 | `/kits` | `KitBuilder.svelte` | Build/edit Deluge kit XML from card samples (vim-style keys) |
@@ -99,8 +99,8 @@ build time for the home-page player.
 | Module | Role |
 |---|---|
 | `pyodide.ts` | The Python↔JS seam. Lazy singleton loader + 4 bridges: `analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML` |
-| `cardStore.ts` | Singleton `cardStore` — the SD card handle, sample index, and song cache, shared across `/clean`, `/stats`, `/kits`, `/preview`. Persists the `FileSystemDirectoryHandle` and a song-XML cache in IndexedDB (`deluge-card-store`, v2) |
-| `softDelete.ts` | `moveToTrash(root, path)` — copy into `SOFT_DELETE/<original path>`, then remove original. Nothing is ever hard-deleted |
+| `cardStore.ts` | Singleton `cardStore` — the SD card handle, sample index, and song cache, shared across `/manage`, `/stats`, `/kits`, `/preview`. Persists the `FileSystemDirectoryHandle` and a song-XML cache in IndexedDB (`deluge-card-store`, v2) |
+| `softDelete.ts` | `moveToTrash(root, path)`, `moveFile(root, from, to)`, `updateXmlReferences(root, xmlPaths, xmlTexts, moves)` — file moves with XML ref updating. Backups to `MOVE_BACKUP/` |
 | `patchAudio.ts` | Web Audio synth engine (subtractive + FM voices, envelopes) for `/patch` |
 | `songAudio.ts` | Song-level scheduler over `patchAudio` voices + card samples for `/preview` |
 | `kitXml.ts` | `Kit`/`KitRow` model and Deluge kit XML serialization for `/kits` |
@@ -114,8 +114,9 @@ build time for the home-page player.
   other pages can pre-filter without invoking Python.
 - **Clips are first-class objects.** `Song.clips` indexed by position in `sessionClips`;
   `Instrument.clip_instances` references clips by index. Matches Deluge's own model.
-- **Nothing is destroyed.** Card operations move files into `SOFT_DELETE/` or `REPAIR_BACKUP/`
-  (both in `APP_MANAGED_DIRS`, never re-scanned). There is deliberately no bulk-delete button.
+- **Nothing is destroyed.** Card operations move files into `SOFT_DELETE/`, `REPAIR_BACKUP/`, or
+  `MOVE_BACKUP/` (all in `APP_MANAGED_DIRS`, never re-scanned). Sample moves back up affected
+  XMLs to `MOVE_BACKUP/` before rewriting references.
 - **Python↔JS is an untyped string seam.** `pyodide.ts` embeds Python in template literals and
   marshals via `JSON.stringify` + `pyodide.globals.set`. TS interfaces (`SongStats`, `PreviewTrack`)
   are hand-maintained mirrors of the Python dataclasses — change one, change the other, no

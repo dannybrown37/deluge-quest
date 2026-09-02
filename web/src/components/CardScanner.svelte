@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { TRASH_DIR, getOrCreateDir, moveToTrash } from "../lib/softDelete";
+  import { TRASH_DIR, MOVE_BACKUP_DIR, getOrCreateDir, moveToTrash, moveFile, updateXmlReferences } from "../lib/softDelete";
   import { cardStore } from "../lib/cardStore";
 
   type State = "idle" | "indexing" | "processing" | "done" | "error";
@@ -43,7 +43,8 @@
   const FILE_ATTRS = ["fileName", "filePath"];
   const SOFT_DELETE_DIR = "SOFT_DELETE";
   const REPAIR_BACKUP_DIR = "REPAIR_BACKUP";
-  const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR, REPAIR_BACKUP_DIR]);
+  const MOVE_BACKUP = "MOVE_BACKUP";
+  const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR, REPAIR_BACKUP_DIR, MOVE_BACKUP]);
 
   /** SOFT_DELETE/ and REPAIR_BACKUP/ are app-managed, not card content — never scan, report, or count them. */
   function isAppManagedPath(relPath: string): boolean {
@@ -55,7 +56,7 @@
   let report: CardReport | null = $state(null);
   let dragOver = $state(false);
   let cardName = $state("");
-  let listCategory = $state<"all" | "samples" | "missing" | "presets" | "duplicates" | "songs" | "invalid">("all");
+  let listCategory = $state<"samples" | "songs" | "analysis">("samples");
   let progress = $state("");
   let progressPct = $state(0);
   let canWrite = $state(false);
@@ -69,6 +70,19 @@
   let reconnectAvailable = $state(false);
   let playingFile = $state<string | null>(null);
   let currentAudio = $state<HTMLAudioElement | null>(null);
+
+  let refSources = $state(new Map<string, Set<string>>());
+  let allSamplePaths = $state<string[]>([]);
+  let allSampleSizes = $state(new Map<string, number>());
+  let xmlTexts = $state(new Map<string, string>());
+  let expandedRefs = $state(new Set<string>());
+  let dragOverFolder = $state<string | null>(null);
+  let draggedPath = $state<string | null>(null);
+  let moveStatus = $state<{ message: string; type: "success" | "error" } | null>(null);
+  let movingPaths = $state(new Set<string>());
+  let relinkedRefs = $state(new Set<string>());
+  let relinkingRef = $state<string | null>(null);
+  let suggestionsFor = $state<string | null>(null);
 
   let movedCount = $derived(movedFiles.size);
   let hasFileSystemAccess = $derived(typeof window !== "undefined" && "showDirectoryPicker" in window);
@@ -333,11 +347,13 @@
     xmlEntries: [string, string][],
     getSampleFile: (relPath: string) => Promise<File>,
   ) {
-    const refSources = new Map<string, Set<string>>();
+    const localRefSources = new Map<string, Set<string>>();
     const songsByType = { delugeOnly: [] as string[], mixed: [] as string[], externalOnly: [] as string[] };
     const invalidXml: InvalidXmlFile[] = [];
+    const localXmlTexts = new Map<string, string>();
 
     for (const [rel, text] of xmlEntries) {
+      localXmlTexts.set(rel, text);
       const wellFormed = new DOMParser().parseFromString(text, "text/xml").querySelector("parsererror") === null;
       if (!wellFormed) {
         const autoFixable = new DOMParser().parseFromString(dedupeAttributes(text), "text/xml").querySelector("parsererror") === null;
@@ -345,8 +361,8 @@
       }
 
       for (const ref of extractFileRefs(text)) {
-        if (!refSources.has(ref)) refSources.set(ref, new Set());
-        refSources.get(ref)!.add(rel);
+        if (!localRefSources.has(ref)) localRefSources.set(ref, new Set());
+        localRefSources.get(ref)!.add(rel);
       }
       if (topDir(rel).toUpperCase() === "SONGS") {
         const gearType = classifyInstrumentGear(text);
@@ -356,7 +372,7 @@
     invalidXml.sort((a, b) => a.path.localeCompare(b.path));
 
     const sampleRefs = new Map<string, Set<string>>();
-    for (const [ref, sources] of refSources) {
+    for (const [ref, sources] of localRefSources) {
       if (ref.startsWith("SAMPLES/")) sampleRefs.set(ref, sources);
     }
     const sampleKeys = new Set(allSamples.keys());
@@ -448,6 +464,11 @@
     songsByType.delugeOnly.sort();
     songsByType.mixed.sort();
     songsByType.externalOnly.sort();
+
+    refSources = localRefSources;
+    allSamplePaths = [...allSamples.keys()].sort();
+    allSampleSizes = allSamples;
+    xmlTexts = localXmlTexts;
 
     report = {
       totalSamples: allSamples.size,
@@ -576,6 +597,167 @@
     for (const { path, category } of all) {
       if (!movedSongs.has(path)) await moveSongToCategory(path, category);
     }
+  }
+
+  async function moveSampleTo(oldPath: string, newPath: string) {
+    if (!rootHandle || movingPaths.has(oldPath)) return;
+    movingPaths = new Set([...movingPaths, oldPath]);
+    moveStatus = null;
+
+    try {
+      await moveFile(rootHandle, oldPath, newPath);
+
+      const moves = new Map([[oldPath, newPath]]);
+      const xmlPaths = [...xmlTexts.keys()];
+      const result = await updateXmlReferences(rootHandle, xmlPaths, xmlTexts, moves);
+
+      const newRefs = new Map(refSources);
+      const oldRefs = newRefs.get(oldPath);
+      if (oldRefs) {
+        newRefs.delete(oldPath);
+        newRefs.set(newPath, oldRefs);
+      }
+      refSources = newRefs;
+
+      const newSamplePaths = allSamplePaths.map(p => p === oldPath ? newPath : p).sort();
+      allSamplePaths = newSamplePaths;
+
+      const info = cardStore.sampleIndex.get(oldPath.toLowerCase());
+      if (info) {
+        cardStore.sampleIndex.delete(oldPath.toLowerCase());
+        cardStore.sampleIndex.set(newPath.toLowerCase(), { ...info, path: newPath });
+      }
+
+      if (report) {
+        report = {
+          ...report,
+          unusedSamples: report.unusedSamples.map(p => p === oldPath ? newPath : p).sort(),
+          missingReferences: report.missingReferences,
+        };
+      }
+
+      const updatedCount = result.updated.length;
+      const errorCount = result.errors.length;
+      if (errorCount > 0) {
+        moveStatus = { message: `Moved sample. Updated ${updatedCount} XMLs, ${errorCount} failed.`, type: "error" };
+      } else if (updatedCount > 0) {
+        moveStatus = { message: `Moved sample. Updated ${updatedCount} XML${updatedCount === 1 ? "" : "s"}.`, type: "success" };
+      } else {
+        moveStatus = { message: "Moved sample (no XML references to update).", type: "success" };
+      }
+    } catch (e: any) {
+      moveStatus = { message: `Move failed: ${e.message}`, type: "error" };
+    } finally {
+      movingPaths = new Set([...movingPaths].filter(p => p !== oldPath));
+    }
+  }
+
+  async function relinkMissingRef(oldPath: string, newPath: string) {
+    if (!rootHandle || relinkedRefs.has(oldPath)) return;
+    relinkingRef = oldPath;
+
+    try {
+      const moves = new Map([[oldPath, newPath]]);
+      const xmlPaths = [...xmlTexts.keys()];
+      await updateXmlReferences(rootHandle, xmlPaths, xmlTexts, moves);
+
+      const newRefs = new Map(refSources);
+      const oldSources = newRefs.get(oldPath);
+      if (oldSources) {
+        newRefs.delete(oldPath);
+        const existing = newRefs.get(newPath) ?? new Set();
+        for (const s of oldSources) existing.add(s);
+        newRefs.set(newPath, existing);
+      }
+      refSources = newRefs;
+      relinkedRefs = new Set([...relinkedRefs, oldPath]);
+
+      if (report) {
+        report = {
+          ...report,
+          missingReferences: report.missingReferences.filter(m => m.sample !== oldPath),
+        };
+      }
+      moveStatus = { message: `Re-linked "${oldPath.split("/").pop()}" to "${newPath}".`, type: "success" };
+    } catch (e: any) {
+      moveStatus = { message: `Re-link failed: ${e.message}`, type: "error" };
+    } finally {
+      relinkingRef = null;
+    }
+  }
+
+  function findSuggestions(missingPath: string): string[] {
+    const missingName = missingPath.split("/").pop()!.toLowerCase();
+    return allSamplePaths.filter(p => p.split("/").pop()!.toLowerCase() === missingName);
+  }
+
+  function handleDragStart(e: DragEvent, path: string) {
+    draggedPath = path;
+    e.dataTransfer!.effectAllowed = "move";
+    e.dataTransfer!.setData("text/plain", path);
+  }
+
+  function handleDragEnd() {
+    draggedPath = null;
+    dragOverFolder = null;
+  }
+
+  function handleFolderDragOver(e: DragEvent, folderPath: string) {
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = "move";
+    dragOverFolder = folderPath;
+  }
+
+  function handleFolderDragLeave() {
+    dragOverFolder = null;
+  }
+
+  let newFolderParent: string | null = $state(null);
+  let newFolderName: string = $state("");
+
+  async function createFolder(parentPath: string) {
+    if (!rootHandle || !newFolderName.trim()) return;
+    const name = newFolderName.trim();
+    try {
+      const parts = parentPath ? parentPath.split("/") : [];
+      let dir = rootHandle;
+      for (const part of parts) {
+        dir = await dir.getDirectoryHandle(part);
+      }
+      await dir.getDirectoryHandle(name, { create: true });
+      moveStatus = { message: `Created folder "${parentPath ? parentPath + "/" : ""}${name}/"`, type: "success" };
+    } catch (e: any) {
+      moveStatus = { message: `Failed to create folder: ${e.message}`, type: "error" };
+    }
+    newFolderParent = null;
+    newFolderName = "";
+  }
+
+  async function handleFolderDrop(e: DragEvent, targetFolder: string) {
+    e.preventDefault();
+    dragOverFolder = null;
+    const sourcePath = e.dataTransfer?.getData("text/plain");
+    if (!sourcePath || !rootHandle) return;
+    draggedPath = null;
+
+    const fileName = sourcePath.split("/").pop()!;
+    const sourceFolder = sourcePath.split("/").slice(0, -1).join("/");
+    if (sourceFolder === targetFolder) return;
+
+    const newPath = `${targetFolder}/${fileName}`;
+    if (allSamplePaths.includes(newPath)) {
+      moveStatus = { message: `"${fileName}" already exists in ${targetFolder}/`, type: "error" };
+      return;
+    }
+
+    await moveSampleTo(sourcePath, newPath);
+  }
+
+  function toggleRefExpand(path: string) {
+    const next = new Set(expandedRefs);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    expandedRefs = next;
   }
 
   let fixedXmlFiles = $state(new Set<string>());
@@ -802,31 +984,63 @@
     } catch {}
   }
 
-  let filteredUnused = $derived(
-    listCategory === "all" || listCategory === "samples" ? (report?.unusedSamples ?? []) : []
-  );
-  let filteredMissing = $derived(
-    listCategory === "all" || listCategory === "missing" ? (report?.missingReferences ?? []) : []
-  );
-  let filteredPresets = $derived(
-    listCategory === "all" || listCategory === "presets" ? (report?.unusedPresets ?? []) : []
-  );
-  let filteredDuplicates = $derived(
-    listCategory === "all" || listCategory === "duplicates" ? (report?.duplicates ?? []) : []
-  );
+  let unusedSet = $derived(new Set(report?.unusedSamples ?? []));
+
   let filteredDelugeOnlySongs = $derived(
-    listCategory === "all" || listCategory === "songs"
-      ? [...(report?.songsByType.delugeOnly ?? [])].sort()
-      : []
+    [...(report?.songsByType.delugeOnly ?? [])].sort()
   );
   let filteredExternalSongs = $derived(
-    listCategory === "all" || listCategory === "songs"
-      ? [...(report?.songsByType.mixed ?? []), ...(report?.songsByType.externalOnly ?? [])].sort()
-      : []
+    [...(report?.songsByType.mixed ?? []), ...(report?.songsByType.externalOnly ?? [])].sort()
   );
-  let filteredInvalidXml = $derived(
-    listCategory === "all" || listCategory === "invalid" ? (report?.invalidXml ?? []) : []
-  );
+
+  interface SampleFile {
+    name: string;
+    path: string;
+    refs: string[];
+    isUnused: boolean;
+  }
+
+  interface SampleFolderNode {
+    name: string;
+    files: SampleFile[];
+    children: Map<string, SampleFolderNode>;
+    totalFiles: number;
+    folderPath: string;
+  }
+
+  function buildSampleTree(paths: string[], refs: Map<string, Set<string>>, unused: Set<string>): SampleFolderNode {
+    const root: SampleFolderNode = { name: "", files: [], children: new Map(), totalFiles: paths.length, folderPath: "" };
+    for (const p of paths) {
+      const parts = p.split("/");
+      const fileName = parts.pop()!;
+      let node = root;
+      let currentPath = "";
+      for (const part of parts) {
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        if (!node.children.has(part)) {
+          node.children.set(part, { name: part, files: [], children: new Map(), totalFiles: 0, folderPath: currentPath });
+        }
+        node = node.children.get(part)!;
+      }
+      const fileRefs = refs.get(p);
+      node.files.push({
+        name: fileName,
+        path: p,
+        refs: fileRefs ? [...fileRefs].sort() : [],
+        isUnused: unused.has(p),
+      });
+    }
+    function computeTotals(node: SampleFolderNode): number {
+      let total = node.files.length;
+      for (const child of node.children.values()) {
+        total += computeTotals(child);
+      }
+      node.totalFiles = total;
+      return total;
+    }
+    computeTotals(root);
+    return root;
+  }
 
   interface FolderNode {
     name: string;
@@ -861,8 +1075,22 @@
     return root;
   }
 
-  let unusedTree = $derived(buildTree(filteredUnused));
-  let presetsTree = $derived(buildTree(filteredPresets));
+  let sampleSearch: string = $state("");
+  let sampleFilter: "all" | "referenced" | "unused" = $state("all");
+
+  let filteredSamplePaths = $derived.by(() => {
+    let paths = allSamplePaths;
+    if (sampleFilter === "unused") paths = paths.filter(p => unusedSet.has(p));
+    else if (sampleFilter === "referenced") paths = paths.filter(p => !unusedSet.has(p));
+    if (sampleSearch.trim()) {
+      const q = sampleSearch.trim().toLowerCase();
+      paths = paths.filter(p => p.toLowerCase().includes(q));
+    }
+    return paths;
+  });
+
+  let sampleTree = $derived(buildSampleTree(filteredSamplePaths, refSources, unusedSet));
+  let presetsTree = $derived(buildTree(report?.unusedPresets ?? []));
 
   interface MissingFolderNode {
     name: string;
@@ -895,8 +1123,24 @@
     return root;
   }
 
-  let missingTree = $derived(buildMissingTree(filteredMissing));
+  let missingTree = $derived(buildMissingTree(report?.missingReferences ?? []));
   let expandedDirs = $state(new Set<string>());
+
+  function collectFolderPaths(node: SampleFolderNode): string[] {
+    const paths: string[] = [];
+    for (const child of node.children.values()) {
+      if (child.folderPath) paths.push(child.folderPath);
+      paths.push(...collectFolderPaths(child));
+    }
+    return paths;
+  }
+
+  $effect(() => {
+    if (sampleSearch.trim() && filteredSamplePaths.length > 0 && filteredSamplePaths.length <= 500) {
+      const allFolders = collectFolderPaths(sampleTree);
+      expandedDirs = new Set([...expandedDirs, ...allFolders]);
+    }
+  });
 
   function toggleDir(path: string) {
     const next = new Set(expandedDirs);
@@ -1009,57 +1253,24 @@
           <span class="stat-value">{report.totalReferences.toLocaleString()}</span>
           <span class="stat-label">referenced</span>
         </div>
-        <div class="stat" class:stat--warn={report.unusedSamples.length > 0}>
-          <span class="stat-value">{report.unusedSamples.length.toLocaleString()}</span>
-          <span class="stat-label">
-            unused
-            {#if report.reclaimableBytes > 0}
-              ({formatBytes(report.reclaimableBytes)} reclaimable)
-            {/if}
-          </span>
-        </div>
+        {#if report.unusedSamples.length > 0}
+          <button class="stat stat--warn stat--clickable" onclick={() => { listCategory = "analysis"; }}>
+            <span class="stat-value">{report.unusedSamples.length.toLocaleString()}</span>
+            <span class="stat-label">unused</span>
+          </button>
+        {/if}
         {#if report.missingReferences.length > 0}
-          <div class="stat stat--error">
+          <button class="stat stat--error stat--clickable" onclick={() => { listCategory = "samples"; if (!expandedDirs.has("__broken_refs__")) toggleDir("__broken_refs__"); }}>
             <span class="stat-value">{report.missingReferences.length.toLocaleString()}</span>
-            <span class="stat-label">broken refs (referenced but missing)</span>
-          </div>
-        {/if}
-        {#if report.unusedPresets.length > 0}
-          <div class="stat stat--warn">
-            <span class="stat-value">{report.unusedPresets.length.toLocaleString()}</span>
-            <span class="stat-label">orphan presets (not used by any song)</span>
-          </div>
-        {/if}
-        {#if report.duplicates.length > 0}
-          <div class="stat stat--warn">
-            <span class="stat-value">{report.duplicates.length.toLocaleString()}</span>
-            <span class="stat-label">
-              duplicate groups ({report.duplicates.reduce((s, d) => s + d.files.length, 0)} files, {formatBytes(report.duplicateWastedBytes)} wasted)
-            </span>
-          </div>
-        {/if}
-        {#if report.songsByType.mixed.length + report.songsByType.externalOnly.length > 0}
-          <div class="stat">
-            <span class="stat-value">{(report.songsByType.mixed.length + report.songsByType.externalOnly.length).toLocaleString()}</span>
-            <span class="stat-label">songs use external gear (MIDI/CV)</span>
-          </div>
-        {/if}
-        {#if report.invalidXml.length > 0}
-          <div class="stat stat--error">
-            <span class="stat-value">{report.invalidXml.length.toLocaleString()}</span>
-            <span class="stat-label">invalid XML files (not well-formed)</span>
-          </div>
+            <span class="stat-label">broken refs</span>
+          </button>
         {/if}
       </div>
 
-      {#if movedCount > 0}
-        <p class="moved-msg">
-          Moved {movedCount} file{movedCount === 1 ? "" : "s"} to {TRASH_DIR}/
+      {#if moveStatus}
+        <p class="moved-msg" class:moved-msg--error={moveStatus.type === "error"}>
+          {moveStatus.message}
         </p>
-      {/if}
-
-      {#if report.unusedSamples.length === 0 && report.missingReferences.length === 0 && report.unusedPresets.length === 0 && (report.duplicates?.length ?? 0) === 0}
-        <p class="clean-msg">Your card is clean — every sample is referenced, every preset is used, no duplicates.</p>
       {/if}
     </div>
 
@@ -1068,269 +1279,425 @@
       <button class="btn btn-secondary btn-sm" onclick={reset}>Scan another</button>
     </div>
 
-    {#if report.unusedSamples.length + report.missingReferences.length + report.unusedPresets.length + report.duplicates.length + report.songsByType.delugeOnly.length + report.songsByType.mixed.length + report.songsByType.externalOnly.length + report.invalidXml.length > 0}
-      <div class="list-section">
-        <div class="list-tabs">
-          {#each [
-            { id: "all", label: "All" },
-            { id: "samples", label: `Unused (${report.unusedSamples.length})` },
-            { id: "missing", label: `Missing (${report.missingReferences.length})` },
-            { id: "presets", label: `Presets (${report.unusedPresets.length})` },
-            { id: "duplicates", label: `Duplicates (${report.duplicates.length})` },
-            { id: "songs", label: `Organize Songs (${report.songsByType.delugeOnly.length + report.songsByType.mixed.length + report.songsByType.externalOnly.length})` },
-            { id: "invalid", label: `Invalid XML (${report.invalidXml.length})` },
-          ] as tab}
-            <button
-              class="list-tab"
-              class:list-tab--active={listCategory === tab.id}
-              onclick={() => { listCategory = tab.id as any; }}
-            >{tab.label}</button>
-          {/each}
-        </div>
+    <div class="list-section">
+      <div class="list-tabs">
+        {#each [
+          { id: "samples", label: `Samples (${report.totalSamples})` },
+          { id: "songs", label: `Songs (${filteredDelugeOnlySongs.length + filteredExternalSongs.length})` },
+          { id: "analysis", label: "Analysis" },
+        ] as tab}
+          <button
+            class="list-tab"
+            class:list-tab--active={listCategory === tab.id}
+            onclick={() => { listCategory = tab.id as any; }}
+          >{tab.label}</button>
+        {/each}
+      </div>
 
-        {#if filteredUnused.length > 0}
-          <div class="list-group">
-            <h4 class="list-heading">Unused samples ({filteredUnused.length})</h4>
-            <div class="file-tree">
-              {#snippet folderChildren(node: FolderNode, path: string)}
-                {#each [...node.children.entries()].sort((a, b) => b[1].totalFiles - a[1].totalFiles) as [name, child]}
-                  {@const fullPath = path ? `${path}/${name}` : name}
-                  {@const isOpen = expandedDirs.has(fullPath)}
-                  <div class="tree-item">
-                    <button class="tree-dir" onclick={() => toggleDir(fullPath)}>
-                      <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
-                      <span class="tree-dir-name">{name}/</span>
-                      <span class="tree-count">{child.totalFiles}</span>
-                    </button>
-                    {#if isOpen}
-                      <div class="tree-children">
-                        {@render folderChildren(child, fullPath)}
-                        {#each child.files.sort() as file}
-                          {@const filePath = fullPath ? `${fullPath}/${file}` : file}
-                          {@const isMoved = movedFiles.has(filePath)}
-                          {@const isMoving = movingFiles.has(filePath)}
-                          <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
-                            {#if !isMoved}
+      {#if listCategory === "samples"}
+        <div class="list-group">
+          {#if report.missingReferences.length > 0}
+            <div class="broken-refs-banner">
+              <div class="songs-header">
+                <h4 class="list-heading list-heading--error">{report.missingReferences.length} broken reference{report.missingReferences.length === 1 ? "" : "s"}</h4>
+                <button class="btn btn-secondary btn-sm" onclick={() => toggleDir("__broken_refs__")}>
+                  {expandedDirs.has("__broken_refs__") ? "Hide" : "Show"}
+                </button>
+              </div>
+              {#if expandedDirs.has("__broken_refs__")}
+                <div class="broken-refs-list">
+                  {#each report.missingReferences as ref}
+                    {@const isRelinked = relinkedRefs.has(ref.sample)}
+                    {@const isRelinking = relinkingRef === ref.sample}
+                    {@const suggestions = suggestionsFor === ref.sample ? findSuggestions(ref.sample) : []}
+                    <div class="tree-file tree-file--missing" class:tree-file--moved={isRelinked}>
+                      <div class="broken-ref-row">
+                        <span class="tree-file-name" title={ref.sample}>{ref.sample.split("/").pop()}</span>
+                        {#if isRelinked}
+                          <span class="tree-file-badge">re-linked</span>
+                        {:else if canWrite}
+                          <button
+                            class="btn btn-secondary btn-sm"
+                            onclick={() => { suggestionsFor = suggestionsFor === ref.sample ? null : ref.sample; }}
+                            disabled={isRelinking}
+                          >{isRelinking ? "..." : "Re-link"}</button>
+                        {/if}
+                      </div>
+                      <div class="broken-ref-path" title={ref.sample}>{ref.sample}</div>
+                      <div class="broken-ref-sources">
+                        {#each ref.referencedBy as xmlPath}
+                          <span class="broken-ref-source" title={xmlPath}>{xmlPath.split("/").pop()}</span>
+                        {/each}
+                      </div>
+                      {#if suggestionsFor === ref.sample}
+                        <div class="suggestions">
+                          {#if suggestions.length > 0}
+                            <p class="suggestions-label">Matching files on card:</p>
+                            {#each suggestions as match}
                               <button
-                                class="play-btn"
-                                class:play-btn--active={playingFile === filePath}
-                                onclick={() => playSample(filePath)}
-                                title={playingFile === filePath ? "Stop" : "Play"}
-                              >{playingFile === filePath ? "◼" : "▶"}</button>
-                            {/if}
-                            <span class="tree-file-name">{file}</span>
-                            {#if isMoved}
-                              <span class="tree-file-badge">moved</span>
-                            {:else if canWrite}
-                              <button
-                                class="move-btn"
-                                onclick={() => moveSample(filePath)}
-                                disabled={isMoving}
-                                title="Move to {TRASH_DIR}/"
-                              >{isMoving ? "..." : "×"}</button>
-                            {/if}
-                          </div>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                {/each}
-              {/snippet}
-              {@render folderChildren(unusedTree, "")}
-            </div>
-          </div>
-        {/if}
-
-        {#if filteredMissing.length > 0}
-          <div class="list-group">
-            <h4 class="list-heading">Broken references ({filteredMissing.length})</h4>
-            <div class="file-tree">
-              {#snippet missingChildren(node: MissingFolderNode, path: string)}
-                {#each [...node.children.entries()].sort((a, b) => b[1].totalEntries - a[1].totalEntries) as [name, child]}
-                  {@const fullPath = path ? `${path}/${name}` : name}
-                  {@const isOpen = expandedDirs.has(fullPath)}
-                  <div class="tree-item">
-                    <button class="tree-dir" onclick={() => toggleDir(fullPath)}>
-                      <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
-                      <span class="tree-dir-name">{name}/</span>
-                      <span class="tree-count">{child.totalEntries}</span>
-                    </button>
-                    {#if isOpen}
-                      <div class="tree-children">
-                        {@render missingChildren(child, fullPath)}
-                        {#each child.entries.sort((a, b) => a.sample.localeCompare(b.sample)) as entry}
-                          <div class="tree-file tree-file--missing">
-                            <span>{entry.sample}</span>
-                            <span class="missing-source">← {entry.referencedBy.join(", ")}</span>
-                          </div>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                {/each}
-              {/snippet}
-              {@render missingChildren(missingTree, "")}
-            </div>
-          </div>
-        {/if}
-
-        {#if filteredPresets.length > 0}
-          <div class="list-group">
-            <h4 class="list-heading">Orphan presets ({filteredPresets.length})</h4>
-            <div class="file-tree">
-              {#snippet presetChildren(node: FolderNode, path: string)}
-                {#each [...node.children.entries()].sort((a, b) => b[1].totalFiles - a[1].totalFiles) as [name, child]}
-                  {@const fullPath = path ? `${path}/${name}` : name}
-                  {@const isOpen = expandedDirs.has(fullPath)}
-                  <div class="tree-item">
-                    <button class="tree-dir" onclick={() => toggleDir(fullPath)}>
-                      <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
-                      <span class="tree-dir-name">{name}/</span>
-                      <span class="tree-count">{child.totalFiles}</span>
-                    </button>
-                    {#if isOpen}
-                      <div class="tree-children">
-                        {@render presetChildren(child, fullPath)}
-                        {#each child.files.sort() as file}
-                          <div class="tree-file">{file}</div>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                {/each}
-              {/snippet}
-              {@render presetChildren(presetsTree, "")}
-            </div>
-          </div>
-        {/if}
-
-        {#if filteredDuplicates.length > 0}
-          <div class="list-group">
-            <h4 class="list-heading">Duplicate samples ({filteredDuplicates.length} groups)</h4>
-            <div class="dup-list">
-              {#each filteredDuplicates as group, i}
-                <div class="dup-group">
-                  <div class="dup-header">
-                    <span class="dup-label">Group {i + 1}</span>
-                    <span class="dup-meta">{group.files.length} copies · {formatBytes(group.size)} each · {formatBytes(group.size * (group.files.length - 1))} wasted</span>
-                  </div>
-                  {#each group.files as filePath}
-                    <div class="tree-file tree-file--sample">
-                      <button
-                        class="play-btn"
-                        class:play-btn--active={playingFile === filePath}
-                        onclick={() => playSample(filePath)}
-                        title={playingFile === filePath ? "Stop" : "Play"}
-                      >{playingFile === filePath ? "◼" : "▶"}</button>
-                      <span class="tree-file-name" title={filePath}>{filePath}</span>
+                                class="suggestion-btn"
+                                onclick={() => { suggestionsFor = null; relinkMissingRef(ref.sample, match); }}
+                              >{match}</button>
+                            {/each}
+                          {:else}
+                            <p class="suggestions-label">No matching filename found on card.</p>
+                          {/if}
+                        </div>
+                      {/if}
                     </div>
                   {/each}
                 </div>
+              {/if}
+            </div>
+          {/if}
+
+          {#if !canWrite}
+            <p class="list-subtext">Use Chrome or Edge with "Browse for folder" to enable drag-and-drop sample moves.</p>
+          {/if}
+
+          <div class="sample-toolbar">
+            <input
+              class="sample-search"
+              type="text"
+              placeholder="Search samples..."
+              bind:value={sampleSearch}
+            />
+            <div class="sample-filter-btns">
+              {#each [["all", "All"], ["referenced", "Referenced"], ["unused", "Unused"]] as [val, label]}
+                <button
+                  class="btn btn-sm"
+                  class:btn-secondary={sampleFilter !== val}
+                  class:btn-primary={sampleFilter === val}
+                  onclick={() => { sampleFilter = val as any; }}
+                >{label}</button>
               {/each}
             </div>
+            <button
+              class="btn btn-sm btn-secondary"
+              onclick={() => {
+                const allFolders = collectFolderPaths(sampleTree);
+                const allExpanded = allFolders.every(f => expandedDirs.has(f));
+                if (allExpanded) {
+                  const next = new Set(expandedDirs);
+                  allFolders.forEach(f => next.delete(f));
+                  expandedDirs = next;
+                } else {
+                  expandedDirs = new Set([...expandedDirs, ...allFolders]);
+                }
+              }}
+            >{collectFolderPaths(sampleTree).every(f => expandedDirs.has(f)) ? "Collapse" : "Expand"}</button>
+            <span class="sample-count">{filteredSamplePaths.length} / {allSamplePaths.length}</span>
           </div>
-        {/if}
 
-        {#if filteredDelugeOnlySongs.length > 0 || filteredExternalSongs.length > 0}
-          <div class="list-group">
-            <div class="songs-header">
-              <h4 class="list-heading">Organize songs</h4>
-              {#if canWrite}
-                <button class="btn btn-secondary btn-sm" onclick={sortAllSongs}>Sort all songs</button>
-              {/if}
-            </div>
-
-            {#if filteredDelugeOnlySongs.length > 0}
-              <h5 class="list-subheading">Deluge-only ({filteredDelugeOnlySongs.length})</h5>
-              <div class="file-tree">
-                {#each filteredDelugeOnlySongs as song}
-                  {@const isMoved = movedSongs.has(song)}
-                  {@const isMoving = movingSongs.has(song)}
-                  <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
-                    <span class="tree-file-name" title={song}>{song}</span>
-                    {#if isMoved}
-                      <span class="tree-file-badge">moved</span>
-                    {:else if canWrite}
+          <div class="file-tree">
+            {#snippet sampleFolderChildren(node: SampleFolderNode)}
+              {#each [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0])) as [name, child]}
+                {@const isOpen = expandedDirs.has(child.folderPath)}
+                {@const isDragOver = dragOverFolder === child.folderPath}
+                <div class="tree-item">
+                  <div class="tree-dir-row">
+                    <button
+                      class="tree-dir"
+                      class:tree-dir--drop-target={isDragOver}
+                      onclick={() => toggleDir(child.folderPath)}
+                      ondragover={(e) => handleFolderDragOver(e, child.folderPath)}
+                      ondragleave={handleFolderDragLeave}
+                      ondrop={(e) => handleFolderDrop(e, child.folderPath)}
+                    >
+                      <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
+                      <span class="tree-dir-name">{name}/</span>
+                      <span class="tree-count">{child.totalFiles}</span>
+                    </button>
+                    {#if canWrite}
                       <button
-                        class="btn btn-secondary btn-sm"
-                        onclick={() => moveSongToCategory(song, "DELUGE_ONLY")}
-                        disabled={isMoving}
-                      >{isMoving ? "..." : "Move"}</button>
+                        class="new-folder-btn"
+                        title="New subfolder"
+                        onclick={() => { newFolderParent = child.folderPath; newFolderName = ""; if (!isOpen) toggleDir(child.folderPath); }}
+                      >+</button>
                     {/if}
                   </div>
-                {/each}
-              </div>
-            {/if}
+                  {#if isOpen}
+                    <div class="tree-children">
+                      {#if newFolderParent === child.folderPath}
+                        <div class="new-folder-input">
+                          <input
+                            class="sample-search"
+                            type="text"
+                            placeholder="Folder name..."
+                            bind:value={newFolderName}
+                            onkeydown={(e) => { if (e.key === "Enter") createFolder(child.folderPath); if (e.key === "Escape") newFolderParent = null; }}
+                          />
+                          <button class="btn btn-sm btn-primary" onclick={() => createFolder(child.folderPath)}>Create</button>
+                          <button class="btn btn-sm btn-secondary" onclick={() => { newFolderParent = null; }}>Cancel</button>
+                        </div>
+                      {/if}
+                      {@render sampleFolderChildren(child)}
+                      {#each child.files.sort((a, b) => a.name.localeCompare(b.name)) as file}
+                        {@const isMoving = movingPaths.has(file.path)}
+                        {@const refsExpanded = expandedRefs.has(file.path)}
+                        <div
+                          class="tree-file tree-file--sample"
+                          class:tree-file--dragging={draggedPath === file.path}
+                          draggable={canWrite ? "true" : undefined}
+                          ondragstart={(e) => handleDragStart(e, file.path)}
+                          ondragend={handleDragEnd}
+                        >
+                          <button
+                            class="play-btn"
+                            class:play-btn--active={playingFile === file.path}
+                            onclick={() => playSample(file.path)}
+                            title={playingFile === file.path ? "Stop" : "Play"}
+                          >{playingFile === file.path ? "◼" : "▶"}</button>
+                          <span class="tree-file-name">{file.name}</span>
+                          {#if file.isUnused}
+                            <span class="tree-file-badge tree-file-badge--warn">unused</span>
+                          {:else if file.refs.length > 0}
+                            <button
+                              class="ref-count-btn"
+                              onclick={() => toggleRefExpand(file.path)}
+                              title="Show referencing songs/kits"
+                            >{file.refs.length} ref{file.refs.length === 1 ? "" : "s"}</button>
+                          {/if}
+                          {#if isMoving}
+                            <span class="tree-file-badge">moving...</span>
+                          {/if}
+                        </div>
+                        {#if refsExpanded && file.refs.length > 0}
+                          <div class="ref-list">
+                            {#each file.refs as ref}
+                              <div class="ref-item" title={ref}>{ref.split("/").pop()}</div>
+                            {/each}
+                          </div>
+                        {/if}
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+              {/each}
+            {/snippet}
+            {@render sampleFolderChildren(sampleTree)}
+          </div>
+        </div>
 
-            {#if filteredExternalSongs.length > 0}
-              <h5 class="list-subheading">External gear ({filteredExternalSongs.length})</h5>
-              <div class="file-tree">
-                {#each filteredExternalSongs as song}
-                  {@const isMoved = movedSongs.has(song)}
-                  {@const isMoving = movingSongs.has(song)}
-                  <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
-                    <span class="tree-file-name" title={song}>{song}</span>
-                    {#if isMoved}
-                      <span class="tree-file-badge">moved</span>
-                    {:else if canWrite}
-                      <button
-                        class="btn btn-secondary btn-sm"
-                        onclick={() => moveSongToCategory(song, "EXTERNAL_GEAR")}
-                        disabled={isMoving}
-                      >{isMoving ? "..." : "Move"}</button>
-                    {/if}
-                  </div>
-                {/each}
-              </div>
+      {:else if listCategory === "songs"}
+        <div class="list-group">
+          <div class="songs-header">
+            <h4 class="list-heading">Organize songs</h4>
+            {#if canWrite}
+              <button class="btn btn-secondary btn-sm" onclick={sortAllSongs}>Sort all songs</button>
             {/if}
           </div>
-        {/if}
 
-        {#if filteredInvalidXml.length > 0}
-          <div class="list-group">
-            <div class="songs-header">
-              <h4 class="list-heading">Invalid XML files ({filteredInvalidXml.length})</h4>
-              {#if canWrite && filteredInvalidXml.some(f => f.autoFixable && !fixedXmlFiles.has(f.path))}
-                <button class="btn btn-secondary btn-sm" onclick={fixAllXml}>Fix all</button>
-              {/if}
-            </div>
-            <p class="list-subtext">
-              Not well-formed XML (e.g. duplicate attributes from a firmware write quirk) — the app can't
-              reliably read these until fixed. "Fix" backs up the original to {REPAIR_BACKUP_DIR}/ first,
-              then rewrites the file with duplicate attributes collapsed to their last value.
-            </p>
+          {#if filteredDelugeOnlySongs.length > 0}
+            <h5 class="list-subheading">Deluge-only ({filteredDelugeOnlySongs.length})</h5>
             <div class="file-tree">
-              {#each filteredInvalidXml as f}
-                {@const isFixed = fixedXmlFiles.has(f.path)}
-                {@const isFixing = fixingXmlFiles.has(f.path)}
-                {@const error = xmlFixErrors.get(f.path)}
-                <div class="tree-file tree-file--sample" class:tree-file--moved={isFixed}>
-                  <span class="tree-file-name" title={f.path}>{f.path}</span>
-                  {#if isFixed}
-                    <span class="tree-file-badge">fixed</span>
-                  {:else if !f.autoFixable}
-                    <span class="tree-file-badge tree-file-badge--error">needs manual review</span>
+              {#each filteredDelugeOnlySongs as song}
+                {@const isMoved = movedSongs.has(song)}
+                {@const isMoving = movingSongs.has(song)}
+                <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
+                  <span class="tree-file-name" title={song}>{song.split("/").pop()?.replace(/\.XML$/i, "") ?? song}</span>
+                  {#if isMoved}
+                    <span class="tree-file-badge">moved</span>
                   {:else if canWrite}
                     <button
                       class="btn btn-secondary btn-sm"
-                      onclick={() => fixXmlFile(f.path)}
-                      disabled={isFixing}
-                    >{isFixing ? "..." : "Fix"}</button>
-                  {/if}
-                  {#if error}
-                    <span class="missing-source">{error}</span>
+                      onclick={() => moveSongToCategory(song, "DELUGE_ONLY")}
+                      disabled={isMoving}
+                    >{isMoving ? "..." : "Move"}</button>
                   {/if}
                 </div>
               {/each}
             </div>
-          </div>
-        {/if}
+          {/if}
 
-        {#if filteredUnused.length === 0 && filteredMissing.length === 0 && filteredPresets.length === 0 && filteredDuplicates.length === 0 && filteredDelugeOnlySongs.length === 0 && filteredExternalSongs.length === 0 && filteredInvalidXml.length === 0}
-          <p class="list-empty">Nothing to list in this category.</p>
-        {/if}
-      </div>
-    {/if}
+          {#if filteredExternalSongs.length > 0}
+            <h5 class="list-subheading">External gear ({filteredExternalSongs.length})</h5>
+            <div class="file-tree">
+              {#each filteredExternalSongs as song}
+                {@const isMoved = movedSongs.has(song)}
+                {@const isMoving = movingSongs.has(song)}
+                <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
+                  <span class="tree-file-name" title={song}>{song.split("/").pop()?.replace(/\.XML$/i, "") ?? song}</span>
+                  {#if isMoved}
+                    <span class="tree-file-badge">moved</span>
+                  {:else if canWrite}
+                    <button
+                      class="btn btn-secondary btn-sm"
+                      onclick={() => moveSongToCategory(song, "EXTERNAL_GEAR")}
+                      disabled={isMoving}
+                    >{isMoving ? "..." : "Move"}</button>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          {#if filteredDelugeOnlySongs.length === 0 && filteredExternalSongs.length === 0}
+            <p class="list-empty">No songs found.</p>
+          {/if}
+        </div>
+
+      {:else if listCategory === "analysis"}
+        <div class="list-group">
+          {#if report.unusedSamples.length > 0}
+            <div class="analysis-section">
+              <div class="songs-header">
+                <h4 class="list-heading">Unused samples ({report.unusedSamples.length})</h4>
+                <span class="stat-label">{formatBytes(report.reclaimableBytes)} reclaimable</span>
+              </div>
+              <div class="file-tree">
+                {#snippet unusedFolderChildren(node: FolderNode, path: string)}
+                  {#each [...node.children.entries()].sort((a, b) => b[1].totalFiles - a[1].totalFiles) as [name, child]}
+                    {@const fullPath = path ? `${path}/${name}` : name}
+                    {@const isOpen = expandedDirs.has(fullPath)}
+                    <div class="tree-item">
+                      <button class="tree-dir" onclick={() => toggleDir(fullPath)}>
+                        <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
+                        <span class="tree-dir-name">{name}/</span>
+                        <span class="tree-count">{child.totalFiles}</span>
+                      </button>
+                      {#if isOpen}
+                        <div class="tree-children">
+                          {@render unusedFolderChildren(child, fullPath)}
+                          {#each child.files.sort() as file}
+                            {@const filePath = fullPath ? `${fullPath}/${file}` : file}
+                            {@const isMoved = movedFiles.has(filePath)}
+                            {@const isMoving = movingFiles.has(filePath)}
+                            <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
+                              {#if !isMoved}
+                                <button
+                                  class="play-btn"
+                                  class:play-btn--active={playingFile === filePath}
+                                  onclick={() => playSample(filePath)}
+                                  title={playingFile === filePath ? "Stop" : "Play"}
+                                >{playingFile === filePath ? "◼" : "▶"}</button>
+                              {/if}
+                              <span class="tree-file-name">{file}</span>
+                              {#if isMoved}
+                                <span class="tree-file-badge">moved</span>
+                              {:else if canWrite}
+                                <button
+                                  class="move-btn"
+                                  onclick={() => moveSample(filePath)}
+                                  disabled={isMoving}
+                                  title="Move to {TRASH_DIR}/"
+                                >{isMoving ? "..." : "×"}</button>
+                              {/if}
+                            </div>
+                          {/each}
+                        </div>
+                      {/if}
+                    </div>
+                  {/each}
+                {/snippet}
+                {@render unusedFolderChildren(buildTree(report.unusedSamples), "")}
+              </div>
+            </div>
+          {/if}
+
+          {#if report.unusedPresets.length > 0}
+            <div class="analysis-section">
+              <h4 class="list-heading">Orphan presets ({report.unusedPresets.length})</h4>
+              <div class="file-tree">
+                {#snippet presetChildren(node: FolderNode, path: string)}
+                  {#each [...node.children.entries()].sort((a, b) => b[1].totalFiles - a[1].totalFiles) as [name, child]}
+                    {@const fullPath = path ? `${path}/${name}` : name}
+                    {@const isOpen = expandedDirs.has(fullPath)}
+                    <div class="tree-item">
+                      <button class="tree-dir" onclick={() => toggleDir(fullPath)}>
+                        <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
+                        <span class="tree-dir-name">{name}/</span>
+                        <span class="tree-count">{child.totalFiles}</span>
+                      </button>
+                      {#if isOpen}
+                        <div class="tree-children">
+                          {@render presetChildren(child, fullPath)}
+                          {#each child.files.sort() as file}
+                            <div class="tree-file">{file}</div>
+                          {/each}
+                        </div>
+                      {/if}
+                    </div>
+                  {/each}
+                {/snippet}
+                {@render presetChildren(presetsTree, "")}
+              </div>
+            </div>
+          {/if}
+
+          {#if report.duplicates.length > 0}
+            <div class="analysis-section">
+              <h4 class="list-heading">Duplicate samples ({report.duplicates.length} groups, {formatBytes(report.duplicateWastedBytes)} wasted)</h4>
+              <div class="dup-list">
+                {#each report.duplicates as group, i}
+                  <div class="dup-group">
+                    <div class="dup-header">
+                      <span class="dup-label">Group {i + 1}</span>
+                      <span class="dup-meta">{group.files.length} copies · {formatBytes(group.size)} each</span>
+                    </div>
+                    {#each group.files as filePath}
+                      <div class="tree-file tree-file--sample">
+                        <button
+                          class="play-btn"
+                          class:play-btn--active={playingFile === filePath}
+                          onclick={() => playSample(filePath)}
+                          title={playingFile === filePath ? "Stop" : "Play"}
+                        >{playingFile === filePath ? "◼" : "▶"}</button>
+                        <span class="tree-file-name" title={filePath}>{filePath.split("/").pop()}</span>
+                        <span class="broken-ref-path" title={filePath}>{filePath.split("/").slice(0, -1).join("/")}/</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          {#if report.invalidXml.length > 0}
+            <div class="analysis-section">
+              <div class="songs-header">
+                <h4 class="list-heading">Invalid XML files ({report.invalidXml.length})</h4>
+                {#if canWrite && report.invalidXml.some(f => f.autoFixable && !fixedXmlFiles.has(f.path))}
+                  <button class="btn btn-secondary btn-sm" onclick={fixAllXml}>Fix all</button>
+                {/if}
+              </div>
+              <p class="list-subtext">
+                Backs up the original to {REPAIR_BACKUP_DIR}/ first, then collapses duplicate attributes.
+              </p>
+              <div class="file-tree">
+                {#each report.invalidXml as f}
+                  {@const isFixed = fixedXmlFiles.has(f.path)}
+                  {@const isFixing = fixingXmlFiles.has(f.path)}
+                  {@const error = xmlFixErrors.get(f.path)}
+                  <div class="tree-file tree-file--sample" class:tree-file--moved={isFixed}>
+                    <span class="tree-file-name" title={f.path}>{f.path.split("/").pop()}</span>
+                    <span class="broken-ref-path" title={f.path}>{f.path.split("/").slice(0, -1).join("/")}/</span>
+                    {#if isFixed}
+                      <span class="tree-file-badge">fixed</span>
+                    {:else if !f.autoFixable}
+                      <span class="tree-file-badge tree-file-badge--error">needs manual review</span>
+                    {:else if canWrite}
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        onclick={() => fixXmlFile(f.path)}
+                        disabled={isFixing}
+                      >{isFixing ? "..." : "Fix"}</button>
+                    {/if}
+                    {#if error}
+                      <span class="missing-source">{error}</span>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          {#if report.unusedSamples.length === 0 && report.unusedPresets.length === 0 && report.duplicates.length === 0 && report.invalidXml.length === 0}
+            <p class="list-empty">No issues found.</p>
+          {/if}
+        </div>
+      {/if}
+    </div>
   </div>
 
 {:else if state === "error"}
@@ -1460,6 +1827,20 @@
   }
   .stat--warn .stat-value { color: var(--accent); }
   .stat--error .stat-value { color: #c47a7a; }
+  .stat--clickable {
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    border-radius: 4px;
+    padding: 0.25rem 0.35rem;
+    margin: -0.25rem -0.35rem;
+    transition: background 0.15s;
+  }
+  .stat--clickable:hover {
+    background: rgba(128, 128, 128, 0.1);
+  }
   .stat-label {
     font-size: 0.78rem;
     color: var(--text-secondary);
@@ -1544,10 +1925,98 @@
     font-size: 0.72rem;
     margin-left: 0.5rem;
   }
+  .broken-ref-path {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-left: 0.25rem;
+  }
+  .broken-ref-sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding-left: 0.25rem;
+    margin-bottom: 0.25rem;
+  }
+  .broken-ref-source {
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    background: rgba(128, 128, 128, 0.1);
+    border-radius: 3px;
+    padding: 0 0.3rem;
+    cursor: default;
+  }
+  .sample-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .sample-search {
+    flex: 1;
+    min-width: 140px;
+    padding: 0.3rem 0.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    outline: none;
+  }
+  .sample-search:focus {
+    border-color: var(--teal);
+  }
+  .sample-filter-btns {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .sample-count {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--teal);
+    color: #fff;
+    border-color: var(--teal);
+  }
+  .tree-dir-row {
+    display: flex;
+    align-items: center;
+  }
+  .new-folder-btn {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 0.3rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .tree-dir-row:hover .new-folder-btn {
+    opacity: 1;
+  }
+  .new-folder-input {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0;
+    margin-left: 1rem;
+  }
+  .new-folder-input .sample-search {
+    flex: 0 1 200px;
+    min-width: 100px;
+  }
   .file-tree {
     font-family: 'DM Mono', monospace;
     font-size: 0.78rem;
-    max-height: 500px;
+    max-height: 70vh;
     overflow-y: auto;
   }
   .tree-item {
@@ -1760,5 +2229,104 @@
   .btn-accent:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .tree-dir--drop-target {
+    background: var(--accent-dim);
+    border-radius: 3px;
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+  }
+  .tree-file--dragging {
+    opacity: 0.3;
+  }
+
+  .ref-count-btn {
+    flex-shrink: 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--teal);
+    border: 1px solid var(--teal);
+    border-radius: 3px;
+    padding: 0 0.3rem;
+    background: none;
+    cursor: pointer;
+  }
+  .ref-count-btn:hover {
+    background: var(--accent-dim);
+  }
+  .ref-list {
+    padding-left: 2.2rem;
+    padding-bottom: 0.25rem;
+  }
+  .ref-item {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    padding: 0.05rem 0;
+  }
+
+  .broken-refs-banner {
+    background: rgba(196, 122, 122, 0.08);
+    border: 1px solid rgba(196, 122, 122, 0.3);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .broken-refs-list {
+    margin-top: 0.5rem;
+  }
+  .broken-ref-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+  .list-heading--error {
+    color: #c47a7a;
+  }
+  .tree-file-badge--warn {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .suggestions {
+    padding: 0.3rem 0 0.3rem 1rem;
+  }
+  .suggestions-label {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+  }
+  .suggestion-btn {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--teal);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.2rem 0.5rem;
+    margin: 0.15rem 0;
+    cursor: pointer;
+    text-align: left;
+  }
+  .suggestion-btn:hover {
+    border-color: var(--teal);
+    background: var(--accent-dim);
+  }
+
+  .analysis-section {
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .analysis-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .moved-msg--error {
+    color: #c47a7a;
   }
 </style>

@@ -15,7 +15,7 @@ const KEY_HANDLE = "rootHandle";
 const IDB_SONGS = "songCache";
 const KEY_SONGS = "arrangementSongs";
 /** App-managed dirs — trash and pre-fix backups, not real card content. Never scanned. */
-const APP_MANAGED_DIRS = new Set(["SOFT_DELETE", "REPAIR_BACKUP"]);
+const APP_MANAGED_DIRS = new Set(["SOFT_DELETE", "REPAIR_BACKUP", "MOVE_BACKUP"]);
 const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
 
 export function ext(name: string): string {
