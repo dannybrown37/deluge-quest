@@ -1111,6 +1111,141 @@
     return root;
   }
 
+  let selectedPaths = $state(new Set<string>());
+  let lastClickedPath = $state<string | null>(null);
+  let showMovePicker = $state(false);
+  let batchMoveRunning = $state(false);
+  let batchMoveResult = $state<{ moved: number; errors: number; details: string[] } | null>(null);
+  let currentBreadcrumb = $state("");
+
+  function toggleSelect(path: string, e?: MouseEvent) {
+    const next = new Set(selectedPaths);
+    if (e?.shiftKey && lastClickedPath) {
+      const allVisible = filteredSamplePaths;
+      const a = allVisible.indexOf(lastClickedPath);
+      const b = allVisible.indexOf(path);
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        for (let i = lo; i <= hi; i++) next.add(allVisible[i]);
+      }
+    } else if (next.has(path)) {
+      next.delete(path);
+    } else {
+      next.add(path);
+    }
+    lastClickedPath = path;
+    selectedPaths = next;
+  }
+
+  function selectAllInFolder(folderPath: string) {
+    const prefix = folderPath + "/";
+    const inFolder = filteredSamplePaths.filter(p => {
+      if (!p.startsWith(prefix)) return false;
+      const rest = p.slice(prefix.length);
+      return !rest.includes("/");
+    });
+    const next = new Set(selectedPaths);
+    const allSelected = inFolder.every(p => next.has(p));
+    if (allSelected) {
+      inFolder.forEach(p => next.delete(p));
+    } else {
+      inFolder.forEach(p => next.add(p));
+    }
+    selectedPaths = next;
+  }
+
+  function selectAllVisible() {
+    const next = new Set(selectedPaths);
+    const allSelected = filteredSamplePaths.every(p => next.has(p));
+    if (allSelected) {
+      filteredSamplePaths.forEach(p => next.delete(p));
+    } else {
+      filteredSamplePaths.forEach(p => next.add(p));
+    }
+    selectedPaths = next;
+  }
+
+  function clearSelection() {
+    selectedPaths = new Set();
+    lastClickedPath = null;
+  }
+
+  async function batchMoveTo(targetFolder: string) {
+    if (!rootHandle || batchMoveRunning || selectedPaths.size === 0) return;
+    batchMoveRunning = true;
+    batchMoveResult = null;
+    const details: string[] = [];
+    let moved = 0;
+    let errors = 0;
+
+    const paths = [...selectedPaths];
+    for (const oldPath of paths) {
+      const fileName = oldPath.split("/").pop()!;
+      const newPath = `${targetFolder}/${fileName}`;
+      if (oldPath === newPath) continue;
+      if (allSamplePaths.includes(newPath)) {
+        errors++;
+        details.push(`${fileName} — already exists in ${targetFolder}/`);
+        continue;
+      }
+      try {
+        await moveSampleTo(oldPath, newPath);
+        moved++;
+        details.push(`${fileName} → ${targetFolder}/`);
+      } catch {
+        errors++;
+        details.push(`${fileName} — move failed`);
+      }
+    }
+    batchMoveResult = { moved, errors, details };
+    batchMoveRunning = false;
+    clearSelection();
+    showMovePicker = false;
+  }
+
+  let showDeleteConfirm = $state(false);
+  let batchDeleteRunning = $state(false);
+  let batchDeleteResult = $state<{ deleted: number; errors: number; details: string[] } | null>(null);
+
+  async function batchDelete() {
+    if (!rootHandle || batchDeleteRunning || selectedPaths.size === 0) return;
+    batchDeleteRunning = true;
+    batchDeleteResult = null;
+    const details: string[] = [];
+    let deleted = 0;
+    let errors = 0;
+
+    const paths = [...selectedPaths];
+    for (const samplePath of paths) {
+      const fileName = samplePath.split("/").pop()!;
+      try {
+        await moveToTrash(rootHandle, samplePath);
+        deleted++;
+        details.push(`${fileName} → SOFT_DELETE/`);
+
+        const moved = new Set(movedFiles);
+        moved.add(samplePath);
+        movedFiles = moved;
+      } catch {
+        errors++;
+        details.push(`${fileName} — failed`);
+      }
+    }
+    batchDeleteResult = { deleted, errors, details };
+    batchDeleteRunning = false;
+    clearSelection();
+    showDeleteConfirm = false;
+  }
+
+  function collectAllFolderPaths(node: SampleFolderNode): string[] {
+    const paths: string[] = [];
+    for (const child of node.children.values()) {
+      if (child.folderPath) paths.push(child.folderPath);
+      paths.push(...collectAllFolderPaths(child));
+    }
+    return paths;
+  }
+
   let sampleSearch: string = $state("");
   let sampleFilter: "all" | "referenced" | "unused" = $state("all");
 
@@ -1318,7 +1453,7 @@
     <div class="list-section">
       <div class="list-tabs">
         {#each [
-          { id: "samples", label: `Samples (${report.totalSamples})` },
+          { id: "samples", label: `Sample Library (${report.totalSamples})` },
           { id: "songs", label: `Songs (${filteredDelugeOnlySongs.length + filteredExternalSongs.length})` },
           { id: "analysis", label: "Analysis" },
         ] as tab}
@@ -1449,13 +1584,133 @@
             <span class="sample-count">{filteredSamplePaths.length} / {allSamplePaths.length}</span>
           </div>
 
-          <div class="file-tree">
+          {#if selectedPaths.size > 0}
+            <div class="selection-toolbar">
+              <span class="selection-count">{selectedPaths.size} selected</span>
+              {#if canWrite}
+                <button class="btn btn-sm btn-primary" onclick={() => { showMovePicker = true; }} disabled={batchMoveRunning || batchDeleteRunning}>
+                  {batchMoveRunning ? "Moving..." : "Move to..."}
+                </button>
+                <button class="btn btn-sm btn-danger" onclick={() => { showDeleteConfirm = true; }} disabled={batchMoveRunning || batchDeleteRunning}>
+                  {batchDeleteRunning ? "Deleting..." : "Delete"}
+                </button>
+              {/if}
+              <button class="btn btn-sm btn-secondary" onclick={clearSelection}>Clear</button>
+            </div>
+          {/if}
+
+          {#if batchMoveResult}
+            <div class="fix-all-result" class:fix-all-result--success={batchMoveResult.errors === 0}>
+              <p><strong>{batchMoveResult.moved}</strong> moved, <strong>{batchMoveResult.errors}</strong> errors</p>
+              {#if batchMoveResult.details.length > 0}
+                <details>
+                  <summary>Details</summary>
+                  <ul class="fix-all-details">
+                    {#each batchMoveResult.details as detail}
+                      <li>{detail}</li>
+                    {/each}
+                  </ul>
+                </details>
+              {/if}
+            </div>
+          {/if}
+
+          {#if batchDeleteResult}
+            <div class="fix-all-result" class:fix-all-result--success={batchDeleteResult.errors === 0}>
+              <p><strong>{batchDeleteResult.deleted}</strong> deleted, <strong>{batchDeleteResult.errors}</strong> errors</p>
+              {#if batchDeleteResult.details.length > 0}
+                <details>
+                  <summary>Details</summary>
+                  <ul class="fix-all-details">
+                    {#each batchDeleteResult.details as detail}
+                      <li>{detail}</li>
+                    {/each}
+                  </ul>
+                </details>
+              {/if}
+            </div>
+          {/if}
+
+          {#if showMovePicker}
+            <div class="move-picker-overlay" onclick={() => { showMovePicker = false; }} role="presentation">
+              <div class="move-picker" onclick={(e) => e.stopPropagation()} role="dialog">
+                <div class="move-picker-header">
+                  <h4 class="list-heading">Move {selectedPaths.size} file{selectedPaths.size === 1 ? "" : "s"} to...</h4>
+                  <button class="btn btn-sm btn-secondary" onclick={() => { showMovePicker = false; }}>Cancel</button>
+                </div>
+                <div class="move-picker-tree">
+                  {#snippet pickerFolder(node: SampleFolderNode, depth: number)}
+                    {#each [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0])) as [name, child]}
+                      <button
+                        class="move-picker-folder"
+                        style="padding-left: {0.5 + depth * 1}rem"
+                        onclick={() => batchMoveTo(child.folderPath)}
+                        disabled={batchMoveRunning}
+                      >
+                        {name}/
+                        <span class="tree-count">{child.totalFiles}</span>
+                      </button>
+                      {@render pickerFolder(child, depth + 1)}
+                    {/each}
+                  {/snippet}
+                  {@render pickerFolder(sampleTree, 0)}
+                </div>
+              </div>
+            </div>
+          {/if}
+
+          {#if showDeleteConfirm}
+            <div class="move-picker-overlay" onclick={() => { showDeleteConfirm = false; }} role="presentation">
+              <div class="move-picker" onclick={(e) => e.stopPropagation()} role="dialog">
+                <div class="move-picker-header">
+                  <h4 class="list-heading">Delete {selectedPaths.size} file{selectedPaths.size === 1 ? "" : "s"}?</h4>
+                </div>
+                <p class="confirm-detail">Files will be moved to <strong>SOFT_DELETE/</strong> on the card. You can recover them later from that folder.</p>
+                {#if [...selectedPaths].some(p => refSources.has(p))}
+                  {@const refCount = [...selectedPaths].filter(p => refSources.has(p)).length}
+                  <p class="confirm-warn">{refCount} of these file{refCount === 1 ? " is" : "s are"} referenced by songs/kits. Deleting will create broken references.</p>
+                {/if}
+                <div class="confirm-actions">
+                  <button class="btn btn-sm btn-danger" onclick={batchDelete} disabled={batchDeleteRunning}>
+                    {batchDeleteRunning ? "Deleting..." : "Delete"}
+                  </button>
+                  <button class="btn btn-sm btn-secondary" onclick={() => { showDeleteConfirm = false; }}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          {/if}
+
+          <div class="file-tree" onscroll={(e) => {
+            const container = e.currentTarget as HTMLElement;
+            const folders = container.querySelectorAll('[data-folder-path]');
+            let best = '';
+            for (const el of folders) {
+              const rect = (el as HTMLElement).getBoundingClientRect();
+              const containerRect = container.getBoundingClientRect();
+              if (rect.top <= containerRect.top + 40) {
+                best = (el as HTMLElement).dataset.folderPath ?? '';
+              }
+            }
+            currentBreadcrumb = best;
+          }}>
+            {#if currentBreadcrumb}
+              <div class="breadcrumb-bar">{currentBreadcrumb}</div>
+            {/if}
             {#snippet sampleFolderChildren(node: SampleFolderNode)}
               {#each [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0])) as [name, child]}
                 {@const isOpen = expandedDirs.has(child.folderPath)}
                 {@const isDragOver = dragOverFolder === child.folderPath}
-                <div class="tree-item">
+                <div class="tree-item" data-folder-path={child.folderPath}>
                   <div class="tree-dir-row">
+                    {#if canWrite}
+                      <input
+                        type="checkbox"
+                        class="folder-checkbox"
+                        title="Select all in {name}/"
+                        onclick={(e) => { e.stopPropagation(); selectAllInFolder(child.folderPath); }}
+                        checked={child.files.length > 0 && child.files.every(f => selectedPaths.has(f.path))}
+                      />
+                    {/if}
                     <button
                       class="tree-dir"
                       class:tree-dir--drop-target={isDragOver}
@@ -1498,10 +1753,19 @@
                         <div
                           class="tree-file tree-file--sample"
                           class:tree-file--dragging={draggedPath === file.path}
+                          class:tree-file--selected={selectedPaths.has(file.path)}
                           draggable={canWrite ? "true" : undefined}
                           ondragstart={(e) => handleDragStart(e, file.path)}
                           ondragend={handleDragEnd}
                         >
+                          {#if canWrite}
+                            <input
+                              type="checkbox"
+                              class="file-checkbox"
+                              checked={selectedPaths.has(file.path)}
+                              onclick={(e) => { e.stopPropagation(); toggleSelect(file.path, e); }}
+                            />
+                          {/if}
                           <button
                             class="play-btn"
                             class:play-btn--active={playingFile === file.path}
@@ -2410,5 +2674,138 @@
 
   .moved-msg--error {
     color: #c47a7a;
+  }
+
+  .selection-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: rgba(90, 171, 172, 0.12);
+    border: 1px solid rgba(90, 171, 172, 0.3);
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+  }
+  .selection-count {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--teal);
+    margin-right: auto;
+  }
+
+  .file-checkbox, .folder-checkbox {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: var(--teal);
+  }
+  .folder-checkbox {
+    margin-right: -0.1rem;
+  }
+
+  .tree-file--selected {
+    background: rgba(90, 171, 172, 0.08);
+    border-radius: 3px;
+  }
+
+  .move-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .move-picker {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    width: min(500px, 90vw);
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .move-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+  .move-picker-tree {
+    overflow-y: auto;
+    flex: 1;
+  }
+  .move-picker-folder {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    border: none;
+    background: none;
+    color: var(--text);
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    text-align: left;
+    border-radius: 4px;
+  }
+  .move-picker-folder:hover {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+  .move-picker-folder:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: #c47a7a;
+    border: 1px solid #c47a7a;
+  }
+  .btn-danger:hover {
+    background: rgba(196, 122, 122, 0.12);
+  }
+  .btn-danger:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .confirm-detail {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin: 0 0 0.5rem;
+    line-height: 1.4;
+  }
+  .confirm-warn {
+    font-size: 0.82rem;
+    color: #c47a7a;
+    margin: 0 0 0.75rem;
+    line-height: 1.4;
+  }
+  .confirm-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+
+  .breadcrumb-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0.25rem 0.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>
