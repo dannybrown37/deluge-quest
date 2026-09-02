@@ -71,6 +71,10 @@ export class SongPlayer {
   private eqMid: BiquadFilterNode | null = null;
   private eqHigh: BiquadFilterNode | null = null;
 
+  private filterCutoff = 20000;
+  private filterRes = 0.5;
+  private filterNode: BiquadFilterNode | null = null;
+
   private startCtxTime = 0;
   private startOffsetSec = 0;
   private scheduledUpToSec = 0;
@@ -186,9 +190,16 @@ export class SongPlayer {
     eqMid.connect(eqHigh);
     eqHigh.connect(compressor);
 
+    const filterNode = ctx.createBiquadFilter();
+    filterNode.type = 'lowpass';
+    filterNode.frequency.value = this.filterCutoff;
+    filterNode.Q.value = this.filterRes;
+    this.filterNode = filterNode;
+
     const masterGain = ctx.createGain();
     masterGain.gain.value = 0.8;
-    masterGain.connect(eqLow);
+    masterGain.connect(filterNode);
+    filterNode.connect(eqLow);
     this.masterGain = masterGain;
 
     const trackCount = this.opts.tracks.length;
@@ -290,6 +301,7 @@ export class SongPlayer {
     this.eqLow = null;
     this.eqMid = null;
     this.eqHigh = null;
+    this.filterNode = null;
   }
 
   getTrackVolume(trackIdx: number): number {
@@ -326,6 +338,23 @@ export class SongPlayer {
     const node = band === 'low' ? this.eqLow : band === 'mid' ? this.eqMid : this.eqHigh;
     if (node && this.ctx) {
       node.gain.setTargetAtTime(gainDb, this.ctx.currentTime, 0.01);
+    }
+  }
+
+  getFilterCutoff(): number { return this.filterCutoff; }
+  getFilterRes(): number { return this.filterRes; }
+
+  setFilterCutoff(hz: number) {
+    this.filterCutoff = hz;
+    if (this.filterNode && this.ctx) {
+      this.filterNode.frequency.setTargetAtTime(hz, this.ctx.currentTime, 0.01);
+    }
+  }
+
+  setFilterRes(q: number) {
+    this.filterRes = q;
+    if (this.filterNode && this.ctx) {
+      this.filterNode.Q.setTargetAtTime(q, this.ctx.currentTime, 0.01);
     }
   }
 

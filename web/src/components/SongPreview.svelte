@@ -57,6 +57,98 @@
     player?.setEQ(band, gainDb);
   }
 
+  let filterCutoff = $state(20000);
+  let filterRes = $state(0.5);
+
+  function setFilterCutoff(hz: number) {
+    filterCutoff = hz;
+    player?.setFilterCutoff(hz);
+  }
+
+  function setFilterRes(q: number) {
+    filterRes = q;
+    player?.setFilterRes(q);
+  }
+
+  // Knob helpers — value 0..1 maps to angle -135..135
+  function valToAngle(v: number): number { return v * 270 - 135; }
+  function angleToVal(a: number): number { return (Math.max(-135, Math.min(135, a)) + 135) / 270; }
+
+  // EQ knob: -12..12 dB → 0..1
+  function eqToNorm(db: number): number { return (db + 12) / 24; }
+  function normToEq(n: number): number { return Math.round(n * 24 - 12); }
+
+  // Filter cutoff: exponential 80 Hz..20 kHz → 0..1
+  function cutoffToNorm(hz: number): number { return Math.log(hz / 80) / Math.log(20000 / 80); }
+  function normToCutoff(n: number): number { return Math.round(80 * Math.pow(20000 / 80, n)); }
+
+  // Resonance: 0.5..20 → 0..1
+  function resToNorm(q: number): number { return (q - 0.5) / 19.5; }
+  function normToRes(n: number): number { return +(0.5 + n * 19.5).toFixed(1); }
+
+  interface KnobDef {
+    id: string;
+    label: string;
+    color: 'gold' | 'black';
+    getNorm: () => number;
+    setFromNorm: (n: number) => void;
+    display: () => string;
+  }
+
+  const knobDefs: KnobDef[] = [
+    { id: 'cutoff', label: 'Cutoff', color: 'gold',
+      getNorm: () => cutoffToNorm(filterCutoff),
+      setFromNorm: (n) => setFilterCutoff(normToCutoff(n)),
+      display: () => filterCutoff >= 1000 ? `${(filterCutoff / 1000).toFixed(1)}k` : `${filterCutoff}` },
+    { id: 'res', label: 'Res', color: 'gold',
+      getNorm: () => resToNorm(filterRes),
+      setFromNorm: (n) => setFilterRes(normToRes(n)),
+      display: () => `${filterRes}` },
+    { id: 'eqLow', label: 'Low', color: 'black',
+      getNorm: () => eqToNorm(eq.low),
+      setFromNorm: (n) => setEQ('low', normToEq(n)),
+      display: () => `${eq.low > 0 ? '+' : ''}${eq.low}` },
+    { id: 'eqMid', label: 'Mid', color: 'black',
+      getNorm: () => eqToNorm(eq.mid),
+      setFromNorm: (n) => setEQ('mid', normToEq(n)),
+      display: () => `${eq.mid > 0 ? '+' : ''}${eq.mid}` },
+    { id: 'eqHigh', label: 'High', color: 'black',
+      getNorm: () => eqToNorm(eq.high),
+      setFromNorm: (n) => setEQ('high', normToEq(n)),
+      display: () => `${eq.high > 0 ? '+' : ''}${eq.high}` },
+  ];
+
+  let draggingKnob: number | null = $state(null);
+  let dragStartY = 0;
+  let dragStartNorm = 0;
+
+  function handleKnobStart(idx: number, e: MouseEvent) {
+    e.preventDefault();
+    draggingKnob = idx;
+    dragStartY = e.clientY;
+    dragStartNorm = knobDefs[idx].getNorm();
+    document.addEventListener('mousemove', handleKnobMove);
+    document.addEventListener('mouseup', handleKnobEnd);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'grabbing';
+  }
+
+  function handleKnobMove(e: MouseEvent) {
+    if (draggingKnob === null) return;
+    e.preventDefault();
+    const delta = (dragStartY - e.clientY) / 150;
+    const n = Math.max(0, Math.min(1, dragStartNorm + delta));
+    knobDefs[draggingKnob].setFromNorm(n);
+  }
+
+  function handleKnobEnd() {
+    draggingKnob = null;
+    document.removeEventListener('mousemove', handleKnobMove);
+    document.removeEventListener('mouseup', handleKnobEnd);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  }
+
   let trackVolumes: number[] = $state([]);
   let trackMuted: boolean[] = $state([]);
 
@@ -313,6 +405,8 @@
         : undefined,
     });
     for (const { key } of EQ_BANDS) p.setEQ(key, eq[key]);
+    p.setFilterCutoff(filterCutoff);
+    p.setFilterRes(filterRes);
     for (let i = 0; i < data.tracks.length; i++) {
       p.setTrackVolume(i, trackVolumes[i] ?? 1);
       p.setTrackMuted(i, trackMuted[i] ?? false);
@@ -538,20 +632,28 @@
         </span>
       {/if}
 
-      <div class="eq">
-        {#each EQ_BANDS as { key, label }}
-          <div class="eq-band">
-            <input
-              type="range"
-              min="-12"
-              max="12"
-              step="1"
-              value={eq[key]}
-              oninput={(e) => setEQ(key, Number((e.target as HTMLInputElement).value))}
-              title="{label} ({EQ_FREQ_LABEL[key]})"
-            />
-            <span class="eq-label">{label}</span>
-            <span class="eq-value">{eq[key] > 0 ? '+' : ''}{eq[key]}</span>
+      <div class="knob-strip">
+        {#each knobDefs as def, ki}
+          {@const angle = valToAngle(def.getNorm())}
+          {#if ki === 2}
+            <div class="knob-divider"></div>
+          {/if}
+          <div class="knob-group">
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div
+              class="knob-hitbox"
+              onmousedown={(e) => handleKnobStart(ki, e)}
+              title="{def.label}"
+            >
+              <div class="knob-3d" style="transform: rotate({angle}deg)">
+                <div class="knob-barrel knob-barrel--{def.color}"></div>
+                <div class="knob-top knob-top--{def.color}">
+                  <div class="knob-notch {def.color === 'gold' ? 'knob-notch--dark' : ''}"></div>
+                </div>
+              </div>
+            </div>
+            <span class="knob-label">{def.label}</span>
+            <span class="knob-value">{def.display()}</span>
           </div>
         {/each}
       </div>
@@ -1018,38 +1120,147 @@
     min-width: 4ch;
   }
 
-  .eq {
+  .knob-strip {
     display: flex;
     align-items: center;
-    gap: 0.9rem;
+    gap: 0.4rem;
     margin-left: auto;
     padding-left: 0.75rem;
     border-left: 1px solid var(--border);
   }
 
-  .eq-band {
+  .knob-divider {
+    width: 1px;
+    height: 48px;
+    background: var(--border);
+    margin: 0 0.3rem;
+  }
+
+  .knob-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .knob-hitbox {
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    justify-content: center;
+    cursor: grab;
+    flex-shrink: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  .knob-hitbox:active { cursor: grabbing; }
+
+  .knob-3d {
+    position: relative;
+    width: 32px;
+    height: 32px;
   }
 
-  .eq-band input[type="range"] {
-    width: 64px;
-    accent-color: var(--teal);
+  .knob-barrel {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+  }
+  .knob-barrel--gold {
+    box-shadow:
+      0 3px 1px #7A5818,
+      0 4px 1px #6A4810,
+      0 5px 2px rgba(0,0,0,0.5);
+    background: linear-gradient(180deg,
+      #C4942A 0%, #9A7420 40%, #7A5818 100%
+    );
+  }
+  .knob-barrel--black {
+    box-shadow:
+      0 3px 1px #1A1A1E,
+      0 4px 1px #111,
+      0 5px 2px rgba(0,0,0,0.5);
+    background: linear-gradient(180deg,
+      #3A3A40 0%, #252528 40%, #1A1A1E 100%
+    );
   }
 
-  .eq-label {
+  .knob-top {
+    position: absolute;
+    inset: 2px;
+    border-radius: 50%;
+    z-index: 1;
+  }
+  .knob-top--gold {
+    background:
+      repeating-conic-gradient(from 0deg,
+        #C4942A 0deg 2.5deg,
+        #D4A847 2.5deg 3.5deg,
+        #B08828 3.5deg 5deg,
+        #C4942A 5deg 7.5deg
+      );
+    border: 1px solid #A07828;
+    box-shadow:
+      inset 0 2px 4px rgba(255,255,200,0.2),
+      inset 0 -2px 4px rgba(0,0,0,0.2);
+  }
+  .knob-top--gold:hover {
+    box-shadow:
+      inset 0 2px 4px rgba(255,255,200,0.3),
+      inset 0 -2px 4px rgba(0,0,0,0.15),
+      0 0 8px rgba(212,168,71,0.3);
+  }
+  .knob-top--black {
+    background:
+      repeating-conic-gradient(from 0deg,
+        #252528 0deg 2.5deg,
+        #3A3A40 2.5deg 3.5deg,
+        #1E1E22 3.5deg 5deg,
+        #2A2A2E 5deg 7.5deg
+      );
+    border: 1px solid #444;
+    box-shadow:
+      inset 0 2px 4px rgba(255,255,255,0.06),
+      inset 0 -2px 4px rgba(0,0,0,0.3);
+  }
+  .knob-top--black:hover {
+    box-shadow:
+      inset 0 2px 4px rgba(255,255,255,0.1),
+      inset 0 -2px 4px rgba(0,0,0,0.2),
+      0 0 6px rgba(255,255,255,0.08);
+  }
+
+  .knob-notch {
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 7px;
+    background: #CCC;
+    border-radius: 1px;
+    box-shadow: 0 0 2px rgba(0,0,0,0.4);
+  }
+  .knob-notch--dark {
+    background: #2A1A0A;
+    box-shadow: 0 0 2px rgba(0,0,0,0.2);
+  }
+
+  .knob-label {
     font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
+    font-size: 0.62rem;
     color: var(--text-secondary);
+    line-height: 1;
   }
 
-  .eq-value {
+  .knob-value {
     font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
+    font-size: 0.58rem;
     color: var(--text-secondary);
-    min-width: 2.4ch;
-    text-align: right;
+    opacity: 0.7;
+    line-height: 1;
   }
 
   .timeline-container {
