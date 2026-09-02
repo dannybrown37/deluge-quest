@@ -68,6 +68,7 @@ wav-to-mp3:
   #!/bin/bash
   set -e
   cd web/public/audio
+  shopt -s nullglob
 
   count=0
   for wav in *.wav; do
@@ -76,7 +77,7 @@ wav-to-mp3:
       echo "Converting '$wav' → '$mp3'"
       ffmpeg -i "$wav" -q:a 0 -map a "$mp3" -y -loglevel error
       rm "$wav"
-      ((count++))
+      count=$((count + 1))
     fi
   done
 
