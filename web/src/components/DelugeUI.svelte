@@ -31,14 +31,18 @@
   let knobValues = [...DEFAULT_KNOB_VALUES];
   let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
   const knobMeta = [
-    { name: 'delay time',     style: 'black' },  // 0: left upper black — delay time
-    { name: 'delay fdbk',     style: 'black' },  // 1: left lower black — delay feedback
-    { name: 'filter',   style: 'gold'  },  // 2: left upper gold — filter cutoff
-    { name: 'resonance',      style: 'gold'  },  // 3: left lower gold — filter resonance
-    { name: 'reverb',    style: 'black' },  // 4: black knob left of screen — reverb send
-    { name: 'tempo',    style: 'black' },  // 5: right black (left position)
-    { name: 'output',   style: 'gold'  },  // 6: right gold (rightmost)
+    { name: 'delay time',     style: 'black', hint: 'Delay Time' },
+    { name: 'delay fdbk',     style: 'black', hint: 'Delay Feedback' },
+    { name: 'filter',         style: 'gold',  hint: 'Cutoff' },
+    { name: 'resonance',      style: 'gold',  hint: 'Resonance' },
+    { name: 'reverb',         style: 'black', hint: 'Reverb' },
+    { name: 'tempo',          style: 'black', hint: 'Speed' },
+    { name: 'output',         style: 'gold',  hint: 'Volume' },
   ];
+
+  function knobTip(i: number): string {
+    return knobMeta[i].hint;
+  }
 
   let screenText = 'DELUGE TOOLS';
   let screenSubtext = 'drop a song to begin';
@@ -49,15 +53,56 @@
   let dragStartY = 0;
   let dragStartAngle = 0;
 
-  interface Song { file: string; name: string; }
+  interface Song { file: string; name: string; year?: string | number; genre?: string; }
   let songs: Song[] = [];
   let currentSongIndex = 0;
   let songLoaded = false;
+  let browsing = false;
+  let browseIndex = 0;
+
+  function marquee(node: HTMLElement, _text: string) {
+    const inner = node.firstElementChild as HTMLElement;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function measure() {
+      if (reduceMotion) return;
+      node.classList.remove('is-scrolling');
+      node.style.removeProperty('--marquee-shift');
+      node.style.removeProperty('--marquee-duration');
+      inner.style.animation = '';
+      const overflow = inner.scrollWidth - node.clientWidth;
+      if (overflow > 2) {
+        node.style.setProperty('--marquee-shift', `-${overflow + 12}px`);
+        const seconds = (overflow + 12) / 45 + 2;
+        inner.style.animation = `oled-marquee ${seconds}s ease-in-out infinite alternate`;
+        node.classList.add('is-scrolling');
+      }
+    }
+    requestAnimationFrame(measure);
+    return {
+      update() { requestAnimationFrame(measure); },
+    };
+  }
+
+  function idleText(): string {
+    return songs[currentSongIndex]?.name.toUpperCase() ?? 'DELUGE TOOLS';
+  }
+
+  function idleSubtext(): string {
+    if (!songs[currentSongIndex]) return 'drop a song to begin';
+    return songLoaded ? 'press play' : 'press load';
+  }
 
   async function fetchSongList() {
     try {
       const resp = await fetch('/audio/songs.json');
-      if (resp.ok) songs = await resp.json();
+      if (resp.ok) {
+        songs = await resp.json();
+        if (songs.length > 0) {
+          currentSongIndex = Math.floor(Math.random() * songs.length);
+          screenText = idleText();
+          screenSubtext = idleSubtext();
+        }
+      }
     } catch { /* no songs available */ }
   }
 
@@ -187,8 +232,8 @@
   }
 
   function handlePadLeave() {
-    screenText = 'DELUGE TOOLS';
-    screenSubtext = 'drop a song to begin';
+    screenText = idleText();
+    screenSubtext = idleSubtext();
   }
 
   function handlePadClick(pad: Pad) {
@@ -256,6 +301,11 @@
     if (songs.length > 0) await loadSong(currentSongIndex);
   }
 
+  // Commas are legal in a path segment; some static hosts 404 on the %2C form.
+  function songUrl(file: string): string {
+    return `/audio/${encodeURIComponent(file).replace(/%2C/g, ',')}`;
+  }
+
   async function loadSong(idx: number) {
     if (!audioCtx || songs.length === 0) return;
     if (isPlaying && sourceNode) {
@@ -270,7 +320,7 @@
     screenText = 'LOADING';
     screenSubtext = song.name;
     try {
-      const resp = await fetch(`/audio/${encodeURIComponent(song.file)}`);
+      const resp = await fetch(songUrl(song.file));
       if (!resp.ok) { screenText = 'ERROR'; screenSubtext = 'file not found'; return; }
       const buf = await resp.arrayBuffer();
       audioBuffer = await audioCtx.decodeAudioData(buf);
@@ -294,12 +344,46 @@
     updatePlaybackRate();
   }
 
-  async function handleLoad() {
+  function handleLoad() {
     if (songs.length === 0) return;
+    browsing = !browsing;
+    if (browsing) {
+      browseIndex = currentSongIndex;
+      screenText = 'LOAD SONG';
+      screenSubtext = `${songs.length} songs`;
+    } else {
+      screenText = idleText();
+      screenSubtext = idleSubtext();
+    }
+  }
+
+  function handleReset() {
+    resetKnobs();
+    screenText = idleText();
+    screenSubtext = 'knobs reset';
+  }
+
+  async function chooseSong(idx: number) {
+    browsing = false;
     await initAudio();
     resetKnobs();
-    const nextIdx = (currentSongIndex + 1) % songs.length;
-    await loadSong(nextIdx);
+    await loadSong(idx);
+  }
+
+  function handleOutsideClick(e: MouseEvent) {
+    if (!browsing) return;
+    const t = e.target as HTMLElement;
+    if (t.closest('.song-browser') || t.closest('.load-btn')) return;
+    browsing = false;
+    screenSubtext = idleSubtext();
+  }
+
+  function handleBrowseKeys(e: KeyboardEvent) {
+    if (!browsing) return;
+    if (e.key === 'Escape') { browsing = false; screenSubtext = idleSubtext(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); browseIndex = (browseIndex + 1) % songs.length; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); browseIndex = (browseIndex - 1 + songs.length) % songs.length; }
+    if (e.key === 'Enter') { e.preventDefault(); chooseSong(browseIndex); }
   }
 
   function updateVolume() {
@@ -347,8 +431,8 @@
       sourceNode.stop();
       sourceNode = null;
       isPlaying = false;
-      screenText = 'PAUSED';
-      screenSubtext = formatTime(playOffset, audioBuffer.duration);
+      screenText = idleText();
+      screenSubtext = `paused · ${formatTime(playOffset, audioBuffer.duration)}`;
       return;
     }
 
@@ -363,14 +447,14 @@
         isPlaying = false;
         playOffset = 0;
         sourceNode = null;
-        screenText = 'DELUGE TOOLS';
-        screenSubtext = 'drop a song to begin';
+        screenText = idleText();
+        screenSubtext = idleSubtext();
       }
     };
     sourceNode.start(0, playOffset);
     playStartTime = audioCtx.currentTime;
     isPlaying = true;
-    screenText = 'PLAYING';
+    screenText = idleText();
     screenSubtext = formatTime(playOffset, audioBuffer.duration);
     updateScreenTimer();
   }
@@ -406,11 +490,11 @@
     if (draggingKnob !== null) {
       draggingKnob = null;
       if (isPlaying) {
-        screenText = 'PLAYING';
+        screenText = idleText();
         updateScreenTimer();
       } else {
-        screenText = 'DELUGE TOOLS';
-        screenSubtext = 'drop a song to begin';
+        screenText = idleText();
+        screenSubtext = idleSubtext();
       }
     }
   }
@@ -433,12 +517,16 @@
     initPads();
     fetchSongList();
 
+    window.addEventListener('keydown', handleBrowseKeys);
+    window.addEventListener('mousedown', handleOutsideClick);
     window.addEventListener('mousemove', handleKnobMove);
     window.addEventListener('mouseup', handleKnobEnd);
     window.addEventListener('touchmove', handleKnobMove, { passive: false });
     window.addEventListener('touchend', handleKnobEnd);
 
     return () => {
+      window.removeEventListener('keydown', handleBrowseKeys);
+      window.removeEventListener('mousedown', handleOutsideClick);
       window.removeEventListener('mousemove', handleKnobMove);
       window.removeEventListener('mouseup', handleKnobEnd);
       window.removeEventListener('touchmove', handleKnobMove);
@@ -465,6 +553,7 @@
           role="slider" tabindex="0"
           aria-label={knobMeta[0].name}
           aria-valuenow={knobValues[0]}
+          title={knobTip(0)}
           on:mousedown={(e) => handleKnobStart(0, e)}
           on:touchstart={(e) => handleKnobStart(0, e)}
           on:wheel|preventDefault={(e) => handleKnobWheel(0, e)}
@@ -483,6 +572,7 @@
           role="slider" tabindex="0"
           aria-label={knobMeta[1].name}
           aria-valuenow={knobValues[1]}
+          title={knobTip(1)}
           on:mousedown={(e) => handleKnobStart(1, e)}
           on:touchstart={(e) => handleKnobStart(1, e)}
           on:wheel|preventDefault={(e) => handleKnobWheel(1, e)}
@@ -501,6 +591,7 @@
           role="slider" tabindex="0"
           aria-label={knobMeta[2].name}
           aria-valuenow={knobValues[2]}
+          title={knobTip(2)}
           on:mousedown={(e) => handleKnobStart(2, e)}
           on:touchstart={(e) => handleKnobStart(2, e)}
           on:wheel|preventDefault={(e) => handleKnobWheel(2, e)}
@@ -519,6 +610,7 @@
           role="slider" tabindex="0"
           aria-label={knobMeta[3].name}
           aria-valuenow={knobValues[3]}
+          title={knobTip(3)}
           on:mousedown={(e) => handleKnobStart(3, e)}
           on:touchstart={(e) => handleKnobStart(3, e)}
           on:wheel|preventDefault={(e) => handleKnobWheel(3, e)}
@@ -540,6 +632,7 @@
             role="slider" tabindex="0"
             aria-label={knobMeta[4].name}
             aria-valuenow={knobValues[4]}
+            title={knobTip(4)}
             on:mousedown={(e) => handleKnobStart(4, e)}
             on:touchstart={(e) => handleKnobStart(4, e)}
             on:wheel|preventDefault={(e) => handleKnobWheel(4, e)}
@@ -557,13 +650,37 @@
           <div class="deluge-logo">✦ deluge</div>
           <div class="oled-row">
             <div class="oled-screen">
-              <div class="oled-text">{screenText}</div>
+              <div class="oled-text" use:marquee={screenText}><span>{screenText}</span></div>
               <div class="oled-subtext">{screenSubtext || ' '}</div>
+              {#if browsing}
+                <div class="song-browser" role="listbox" aria-label="Song list" tabindex="-1">
+                  {#each songs as song, i}
+                    <button
+                      class="song-option"
+                      class:is-current={i === currentSongIndex}
+                      class:is-cursor={i === browseIndex}
+                      role="option"
+                      aria-selected={i === currentSongIndex}
+                      on:click={() => chooseSong(i)}
+                      on:mouseenter={() => browseIndex = i}
+                    >
+                      <span class="song-name">{song.name}</span>
+                      <span class="song-meta">
+                        {#if song.genre}<span class="song-genre">{song.genre}</span>{/if}
+                        {#if song.year}<span class="song-year">{song.year}</span>{/if}
+                      </span>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
             </div>
             <button
               class="load-btn"
+              class:load-btn--open={browsing}
               on:click={handleLoad}
+              aria-expanded={browsing}
               aria-label="Load song"
+              title="Load"
             >
               <div class="load-btn-surface">LOAD</div>
             </button>
@@ -579,6 +696,7 @@
             role="slider" tabindex="0"
             aria-label={knobMeta[5].name}
             aria-valuenow={knobValues[5]}
+            title={knobTip(5)}
             on:mousedown={(e) => handleKnobStart(5, e)}
             on:touchstart={(e) => handleKnobStart(5, e)}
             on:wheel|preventDefault={(e) => handleKnobWheel(5, e)}
@@ -590,6 +708,19 @@
               </div>
             </div>
           </div>
+          <button
+            class="play-btn reset-btn"
+            on:click={handleReset}
+            title="Reset"
+            aria-label="Reset knobs to default"
+          >
+            <div class="play-btn-surface">
+              <svg viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <path d="M10 6a4 4 0 1 1-1.2-2.85"/>
+                <path d="M10.4 1.2v2.6H7.8"/>
+              </svg>
+            </div>
+          </button>
         </div>
         <!-- Gold (output level) + play button below -->
         <div class="knob-col">
@@ -598,6 +729,7 @@
             role="slider" tabindex="0"
             aria-label={knobMeta[6].name}
             aria-valuenow={knobValues[6]}
+            title={knobTip(6)}
             on:mousedown={(e) => handleKnobStart(6, e)}
             on:touchstart={(e) => handleKnobStart(6, e)}
             on:wheel|preventDefault={(e) => handleKnobWheel(6, e)}
@@ -614,6 +746,7 @@
             class:play-btn--active={isPlaying}
             on:click={togglePlay}
             aria-label={isPlaying ? 'Pause' : 'Play'}
+            title={isPlaying ? 'Pause' : 'Play'}
           >
             <div class="play-btn-surface">
               {#if isPlaying}
@@ -641,6 +774,7 @@
               on:mouseleave={handlePadLeave}
               on:click={() => handlePadClick(pad)}
               aria-label={pad.label || `Pad ${pad.row + 1}-${pad.col + 1}`}
+              title={pad.label}
             ></button>
           {/each}
           <div class="grid-gap"></div>
@@ -654,6 +788,7 @@
               on:mouseleave={handlePadLeave}
               on:click={() => handlePadClick(pad)}
               aria-label={pad.label || `Sidebar ${pad.row + 1}-${pad.col + 1}`}
+              title={pad.label}
             ></button>
           {/each}
         {/each}
@@ -973,6 +1108,7 @@
     text-transform: lowercase;
   }
   .oled-screen {
+    position: relative;
     background: #020204;
     border: 1px solid #1A1A1E;
     border-radius: 3px;
@@ -990,7 +1126,17 @@
     letter-spacing: 0.08em;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+  }
+  .oled-text > span {
+    display: inline-block;
+    will-change: transform;
+  }
+  @keyframes -global-oled-marquee {
+    0%, 18%   { transform: translateX(0); }
+    82%, 100% { transform: translateX(var(--marquee-shift, 0)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .oled-text { text-overflow: ellipsis; }
   }
   .oled-subtext {
     font-family: 'DM Mono', monospace;
@@ -999,6 +1145,66 @@
     margin-top: 0.1rem;
     letter-spacing: 0.04em;
   }
+
+  .song-browser {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: calc(100% + 5px);
+    z-index: 30;
+    width: 620px;
+    max-width: 88vw;
+    max-height: 320px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: #08080B;
+    border: 1px solid #3A3A42;
+    border-radius: 4px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.85);
+    padding: 4px;
+  }
+  .song-option {
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.3rem 0.45rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    color: #C9C5BC;
+    border-radius: 3px;
+  }
+  .song-option.is-cursor {
+    background: #2A2A33;
+    color: #FFFFFF;
+  }
+  .song-option.is-current {
+    color: #D4A847;
+  }
+  .song-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .song-meta {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 0.6rem;
+    font-size: 0.66rem;
+    color: #6E6A63;
+    letter-spacing: 0.06em;
+  }
+  .song-option.is-cursor .song-meta { color: #9A968E; }
+
+  .song-browser::-webkit-scrollbar { width: 8px; }
+  .song-browser::-webkit-scrollbar-thumb { background: #3A3A42; border-radius: 4px; }
 
   /* === Pad grid: 16 main + gap + 2 sidebar === */
   .pad-grid {
