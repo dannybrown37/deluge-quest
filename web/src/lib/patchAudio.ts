@@ -304,7 +304,7 @@ export function createSubVoice(
 ) {
   const oscAType = OSC_MAP[patch.osc1.type] || 'sawtooth';
   const oscBType = OSC_MAP[patch.osc2.type] || 'square';
-  const oscBVol = volumeLevel(patch.params.oscBVolume);
+  const oscBVol = patch.params.oscBVolume ? volumeLevel(patch.params.oscBVolume) : 0;
 
   const oscA = ctx.createOscillator();
   oscA.type = oscAType;
@@ -348,7 +348,7 @@ export function createSubVoice(
     oscB.stop(start + dur);
   }
 
-  const noiseVol = volumeLevel(patch.params.noiseVolume);
+  const noiseVol = patch.params.noiseVolume ? volumeLevel(patch.params.noiseVolume) : 0;
   if (noiseVol > 0.01) {
     const bufferSize = ctx.sampleRate * 2;
     const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
@@ -373,8 +373,8 @@ export function createFMVoice(
 ) {
   const carrierFreq = freq * Math.pow(2, detuneCents / 1200);
 
-  const mod1Amt = hexToNorm(patch.params.modulator1Amount) * carrierFreq * 5;
-  const mod2Amt = hexToNorm(patch.params.modulator2Amount) * carrierFreq * 5;
+  const mod1Amt = (patch.params.modulator1Amount ? hexToNorm(patch.params.modulator1Amount) : 0) * carrierFreq * 5;
+  const mod2Amt = (patch.params.modulator2Amount ? hexToNorm(patch.params.modulator2Amount) : 0) * carrierFreq * 5;
 
   const mod1Ratio = patch.modulator1 ? Math.pow(2, patch.modulator1.transpose / 12) : 1;
   const mod2Ratio = patch.modulator2 ? Math.pow(2, patch.modulator2.transpose / 12) : 1;
@@ -413,7 +413,7 @@ export function createFMVoice(
   carrier1.connect(c1Gain);
   c1Gain.connect(dest);
 
-  const oscBVol = volumeLevel(patch.params.oscBVolume);
+  const oscBVol = patch.params.oscBVolume ? volumeLevel(patch.params.oscBVolume) : 0;
   const c2Gain = ctx.createGain();
   c2Gain.gain.value = oscBVol;
   carrier2.connect(c2Gain);

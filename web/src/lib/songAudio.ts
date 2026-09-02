@@ -5,6 +5,8 @@ import {
   envAttackTime,
   envDecayReleaseTime,
   envSustainLevel,
+  lpfFreqHz,
+  lpfResQ,
   type AudioPatch,
 } from './patchAudio';
 import type { PreviewTrack, PreviewPatch } from './pyodide';
@@ -538,13 +540,19 @@ export class SongPlayer {
     const s1 = envSustainLevel(patch.envelope1.sustain);
     const r1 = envDecayReleaseTime(patch.envelope1.release);
 
+    const lpf = ctx.createBiquadFilter();
+    lpf.type = 'lowpass';
+    lpf.frequency.value = Math.min(20000, patch.params.lpfFrequency ? lpfFreqHz(patch.params.lpfFrequency) : 20000);
+    lpf.Q.value = patch.params.lpfResonance ? lpfResQ(patch.params.lpfResonance) : 0.5;
+    lpf.connect(dest);
+
     const noteGain = ctx.createGain();
     noteGain.gain.setValueAtTime(0, when);
     noteGain.gain.linearRampToValueAtTime(vel, when + a1);
     noteGain.gain.linearRampToValueAtTime(vel * s1, when + a1 + d1);
     noteGain.gain.setValueAtTime(vel * s1, when + durSec);
     noteGain.gain.linearRampToValueAtTime(0, when + durSec + r1);
-    noteGain.connect(dest);
+    noteGain.connect(lpf);
 
     const audioPatch = patch as unknown as AudioPatch;
     const unisonCount = Math.max(1, patch.unisonNum);
