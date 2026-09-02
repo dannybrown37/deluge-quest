@@ -202,13 +202,13 @@
   const AUDITION_PALETTE = ['#4488DD','#DD55AA','#DDBB33','#5AABAC','#CC3030','#AACC30','#3355CC','#FF6622'];
 
   const TOOLS: { group: string; label: string; link: string; color: string; subtext: string }[] = [
-    { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: AUDITION_PALETTE[0], subtext: 'library analysis & stats' },
-    { group: 'preview',   label: 'Song Preview',     link: '/preview',   color: AUDITION_PALETTE[1], subtext: 'arrangement preview & playback' },
-    { group: 'score',     label: 'Score Converter',  link: '/score',     color: AUDITION_PALETTE[2], subtext: 'Deluge XML → MusicXML' },
-    { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: AUDITION_PALETTE[3], subtext: 'MIDI → Deluge XML' },
-    { group: 'manage',    label: 'Card Management',  link: '/manage',    color: AUDITION_PALETTE[4], subtext: 'organize samples & songs' },
+    { group: 'manage',    label: 'Card Management',  link: '/manage',    color: AUDITION_PALETTE[0], subtext: 'organize samples & songs' },
+    { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: AUDITION_PALETTE[1], subtext: 'library analysis & stats' },
+    { group: 'preview',   label: 'Song Preview',     link: '/preview',   color: AUDITION_PALETTE[2], subtext: 'arrangement preview & playback' },
+    { group: 'score',     label: 'Score Converter',  link: '/score',     color: AUDITION_PALETTE[3], subtext: 'Deluge XML → MusicXML' },
+    { group: 'kits',      label: 'Kit Builder',      link: '/kits',      color: AUDITION_PALETTE[4], subtext: 'build & edit drum kits' },
     { group: 'patch',     label: 'Patch Generator',  link: '/patch',     color: AUDITION_PALETTE[5], subtext: 'random synth presets' },
-    { group: 'kits',      label: 'Kit Builder',      link: '/kits',      color: AUDITION_PALETTE[6], subtext: 'build & edit drum kits' },
+    { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: AUDITION_PALETTE[6], subtext: 'MIDI → Deluge XML' },
   ];
 
   const FUTURE_TOOLS: { group: string; label: string; subtext: string; color: string }[] = [
@@ -881,13 +881,13 @@
     {/if}
 
     <div class="grid-labels">
+      <div class="grid-label-group grid-label-group--manage-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Manage</span></div>
+      <div class="grid-label-group grid-label-group--manage-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Kits</span></div>
       <div class="grid-label-group grid-label-group--stats-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Songs</span></div>
-      <div class="grid-label-group grid-label-group--stats-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Card</span></div>
+      <div class="grid-label-group grid-label-group--stats-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Patch</span></div>
       <div class="grid-label-group grid-label-group--preview-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Preview</span></div>
-      <div class="grid-label-group grid-label-group--preview-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Patch</span></div>
+      <div class="grid-label-group grid-label-group--preview-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Import</span></div>
       <div class="grid-label-group grid-label-group--score-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Score</span></div>
-      <div class="grid-label-group grid-label-group--score-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Kits</span></div>
-      <div class="grid-label-group grid-label-group--midi-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Import</span></div>
       <div class="grid-labels-gap"></div>
       <div class="grid-label-group grid-label-group--github"><span class="grid-label-text">GitHub</span></div>
       <div class="grid-label-group grid-label-group--about"><span class="grid-label-text">About</span></div>
@@ -1373,13 +1373,13 @@
   .grid-label-text {
     line-height: 1;
   }
-  .grid-label-group--stats-up { grid-column: 1 / 3; }
-  .grid-label-group--stats-down { grid-column: 3 / 5; }
-  .grid-label-group--preview-up { grid-column: 5 / 7; }
-  .grid-label-group--preview-down { grid-column: 7 / 9; }
-  .grid-label-group--score-up { grid-column: 9 / 11; }
-  .grid-label-group--score-down { grid-column: 11 / 13; }
-  .grid-label-group--midi-up { grid-column: 13 / 15; }
+  .grid-label-group--manage-up { grid-column: 1 / 3; }
+  .grid-label-group--manage-down { grid-column: 3 / 5; }
+  .grid-label-group--stats-up { grid-column: 5 / 7; }
+  .grid-label-group--stats-down { grid-column: 7 / 9; }
+  .grid-label-group--preview-up { grid-column: 9 / 11; }
+  .grid-label-group--preview-down { grid-column: 11 / 13; }
+  .grid-label-group--score-up { grid-column: 13 / 15; }
   .grid-label-group--github,
   .grid-label-group--about {
     font-size: 0.36rem;
