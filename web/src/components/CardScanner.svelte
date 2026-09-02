@@ -691,6 +691,42 @@
     return allSamplePaths.filter(p => p.split("/").pop()!.toLowerCase() === missingName);
   }
 
+  let fixAllRunning = $state(false);
+  let fixAllResult = $state<{ fixed: number; skipped: number; errors: number; details: string[] } | null>(null);
+
+  async function fixAllBrokenRefs() {
+    if (!rootHandle || !report || fixAllRunning) return;
+    fixAllRunning = true;
+    fixAllResult = null;
+    const details: string[] = [];
+    let fixed = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    const refs = [...report.missingReferences];
+    for (const ref of refs) {
+      if (relinkedRefs.has(ref.sample)) continue;
+      const matches = findSuggestions(ref.sample);
+      if (matches.length === 1) {
+        try {
+          await relinkMissingRef(ref.sample, matches[0]);
+          fixed++;
+          details.push(`${ref.sample.split("/").pop()} → ${matches[0]}`);
+        } catch {
+          errors++;
+          details.push(`${ref.sample.split("/").pop()} — error`);
+        }
+      } else if (matches.length === 0) {
+        skipped++;
+      } else {
+        skipped++;
+        details.push(`${ref.sample.split("/").pop()} — ${matches.length} matches, skipped`);
+      }
+    }
+    fixAllResult = { fixed, skipped, errors, details };
+    fixAllRunning = false;
+  }
+
   function handleDragStart(e: DragEvent, path: string) {
     draggedPath = path;
     e.dataTransfer!.effectAllowed = "move";
@@ -1300,10 +1336,34 @@
             <div class="broken-refs-banner">
               <div class="songs-header">
                 <h4 class="list-heading list-heading--error">{report.missingReferences.length} broken reference{report.missingReferences.length === 1 ? "" : "s"}</h4>
-                <button class="btn btn-secondary btn-sm" onclick={() => toggleDir("__broken_refs__")}>
-                  {expandedDirs.has("__broken_refs__") ? "Hide" : "Show"}
-                </button>
+                <div class="broken-refs-actions">
+                  {#if canWrite && report.missingReferences.length > 0}
+                    <button
+                      class="btn btn-primary btn-sm"
+                      onclick={fixAllBrokenRefs}
+                      disabled={fixAllRunning}
+                    >{fixAllRunning ? "Fixing..." : "Fix All"}</button>
+                  {/if}
+                  <button class="btn btn-secondary btn-sm" onclick={() => toggleDir("__broken_refs__")}>
+                    {expandedDirs.has("__broken_refs__") ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
+              {#if fixAllResult}
+                <div class="fix-all-result" class:fix-all-result--success={fixAllResult.errors === 0}>
+                  <p><strong>{fixAllResult.fixed}</strong> fixed, <strong>{fixAllResult.skipped}</strong> no match, <strong>{fixAllResult.errors}</strong> errors</p>
+                  {#if fixAllResult.details.length > 0}
+                    <details>
+                      <summary>Details</summary>
+                      <ul class="fix-all-details">
+                        {#each fixAllResult.details as detail}
+                          <li>{detail}</li>
+                        {/each}
+                      </ul>
+                    </details>
+                  {/if}
+                </div>
+              {/if}
               {#if expandedDirs.has("__broken_refs__")}
                 <div class="broken-refs-list">
                   {#each report.missingReferences as ref}
@@ -2271,6 +2331,28 @@
     border-radius: 6px;
     padding: 0.5rem 0.75rem;
     margin-bottom: 0.75rem;
+  }
+  .broken-refs-actions {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+  }
+  .fix-all-result {
+    margin: 0.5rem 0;
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+    background: rgba(196, 122, 122, 0.12);
+    font-size: 0.82rem;
+  }
+  .fix-all-result p { margin: 0; }
+  .fix-all-result--success {
+    background: rgba(90, 171, 172, 0.12);
+  }
+  .fix-all-details {
+    margin: 0.25rem 0 0;
+    padding-left: 1.2rem;
+    font-size: 0.78rem;
+    opacity: 0.85;
   }
   .broken-refs-list {
     margin-top: 0.5rem;
