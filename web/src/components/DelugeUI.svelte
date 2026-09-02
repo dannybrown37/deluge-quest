@@ -53,7 +53,7 @@
   let dragStartY = 0;
   let dragStartAngle = 0;
 
-  interface Song { file: string; name: string; year?: string | number; genre?: string; }
+  interface Song { file: string; name: string; year?: string | number; genre?: string; duration?: string; }
   let songs: Song[] = [];
   let currentSongIndex = 0;
   let songLoaded = false;
@@ -750,6 +750,7 @@
                     >
                       <span class="song-name">{song.name}</span>
                       <span class="song-meta">
+                        {#if song.duration}<span class="song-duration">{song.duration}</span>{/if}
                         {#if song.genre}<span class="song-genre">{song.genre}</span>{/if}
                         {#if song.year}<span class="song-year">{song.year}</span>{/if}
                       </span>
