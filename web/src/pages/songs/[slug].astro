@@ -70,7 +70,14 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
   <div class="song-page">
     <div class="desktop-view">
       <div class="song-header">
-        <h1 class="song-title">{song.name}</h1>
+        <div class="song-title-row">
+          <button class="hero-play-btn" id="hero-play" aria-label="Play">
+            <svg class="hero-play-icon" id="hero-play-icon" viewBox="0 0 24 24" width="18" height="18"><polygon points="4,0 24,12 4,24" fill="currentColor"/></svg>
+            <svg class="hero-pause-icon" id="hero-pause-icon" viewBox="0 0 24 24" width="18" height="18" style="display:none"><rect x="2" y="1" width="7" height="22" fill="currentColor"/><rect x="15" y="1" width="7" height="22" fill="currentColor"/></svg>
+          </button>
+          <h1 class="song-title">{song.name}</h1>
+          <span class="hero-play-time" id="hero-play-time"></span>
+        </div>
         <div class="song-meta">
           {song.genre && <span class="tag">{song.genre}</span>}
           {song.year && <span class="tag">{song.year}</span>}
@@ -98,7 +105,35 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
 </BaseLayout>
 
 <script>
+  import { homeAudio } from '../../lib/homeAudio';
+
   document.addEventListener('astro:page-load', () => {
+    const heroBtn = document.getElementById('hero-play');
+    const playIcon = document.getElementById('hero-play-icon');
+    const pauseIcon = document.getElementById('hero-pause-icon');
+    const timeEl = document.getElementById('hero-play-time');
+
+    function syncHeroBtn() {
+      if (!playIcon || !pauseIcon || !timeEl) return;
+      playIcon.style.display = homeAudio.isPlaying ? 'none' : '';
+      pauseIcon.style.display = homeAudio.isPlaying ? '' : 'none';
+      heroBtn?.classList.toggle('hero-play-btn--active', homeAudio.isPlaying);
+      if (homeAudio.songLoaded) {
+        timeEl.textContent = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
+      }
+    }
+
+    heroBtn?.addEventListener('click', async () => {
+      await homeAudio.initAudio();
+      if (!homeAudio.songLoaded && homeAudio.songs.length > 0) {
+        await homeAudio.loadSong(homeAudio.currentSongIndex);
+      }
+      await homeAudio.togglePlay();
+      syncHeroBtn();
+    });
+
+    homeAudio.subscribe(syncHeroBtn);
+
     const btn = document.getElementById('desktop-share');
     if (!btn) return;
     const url = btn.dataset.url!;
@@ -130,6 +165,44 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
 
   .mobile-view {
     display: none;
+  }
+
+  .song-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+  .hero-play-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(180deg, #3A3A40 0%, #252528 40%, #1A1A1E 100%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: box-shadow 0.15s;
+  }
+  .hero-play-btn:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 12px rgba(212,168,71,0.35);
+  }
+  .hero-play-btn--active {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 8px rgba(212,168,71,0.25);
+  }
+  .hero-play-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .hero-play-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    min-width: 4.5rem;
   }
 
   .song-header {

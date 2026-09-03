@@ -25,6 +25,7 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     <ClientRouter />
   </head>
   <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
     <nav class="nav">
       <div class="nav-inner">
         <a href="/" class="nav-brand">
@@ -37,6 +38,7 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
           <span class="nav-toggle-bar"></span>
         </button>
         <div class="nav-links">
+          <span class="nav-section-label">Tools</span>
           <a href="/manage" class="nav-link">Manage</a>
           <a href="/stats" class="nav-link">Stats</a>
           <a href="/preview" class="nav-link">Preview</a>
@@ -44,6 +46,10 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
           <a href="/kits" class="nav-link">Kits</a>
           <a href="/patch" class="nav-link">Patch</a>
           <a href="/import" class="nav-link">Import</a>
+          <span class="nav-section-label">The Site</span>
+          <a href="https://github.com/dannybrown37/delugekit" class="nav-link nav-about-link" target="_blank" rel="noopener">GitHub</a>
+          <a href="/about" class="nav-link nav-about-link">About</a>
+          <a href="/songs" class="nav-link nav-about-link">Songs By Me</a>
         </div>
       </div>
     </nav>
@@ -60,7 +66,7 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
         <a href="/" class="mini-home-link" aria-label="Go to player">⬡</a>
       </div>
     </div>
-    <main>
+    <main id="main-content" tabindex="-1">
       <slot />
     </main>
     <footer class="footer">
@@ -140,6 +146,23 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
 </style>
 
 <style>
+  .skip-link {
+    position: absolute;
+    top: -100%;
+    left: 1rem;
+    z-index: 200;
+    padding: 0.5rem 1rem;
+    background: var(--accent);
+    color: var(--ground);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    border-radius: 0 0 6px 6px;
+    text-decoration: none;
+  }
+  .skip-link:focus-visible {
+    top: 0;
+  }
+
   .nav {
     border-bottom: 1px solid var(--border);
     background: var(--ground);
@@ -166,6 +189,11 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     font-size: 0.95rem;
   }
   .nav-brand:hover { text-decoration: none; }
+  .nav-brand:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
   .nav-logo {
     font-size: 1.2rem;
     color: var(--accent);
@@ -179,15 +207,28 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     display: flex;
     gap: 1.5rem;
   }
+  .nav-section-label {
+    display: none;
+  }
   .nav-link {
     font-family: 'DM Mono', monospace;
     font-size: 0.85rem;
     color: var(--text-secondary);
     text-decoration: none;
+    padding: 0.5rem 0.25rem;
+    margin: -0.5rem -0.25rem;
+    border-radius: 4px;
   }
   .nav-link:hover {
     color: var(--text);
     text-decoration: none;
+  }
+  .nav-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .nav-link.nav-about-link {
+    display: none;
   }
 
   /* Hamburger toggle */
@@ -203,6 +244,10 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     border: 1px solid var(--border);
     border-radius: 6px;
     cursor: pointer;
+  }
+  .nav-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   .nav-toggle-bar {
     display: block;
@@ -243,11 +288,29 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     }
     .nav-link {
       padding: 0.6rem 0;
+      margin: 0;
       font-size: 0.95rem;
+      border-radius: 0;
       border-bottom: 1px solid var(--border);
     }
     .nav-link:last-child {
       border-bottom: none;
+    }
+    .nav-section-label {
+      display: block;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.75rem 0 0.2rem;
+    }
+    .nav-section-label:first-child {
+      padding-top: 0.25rem;
+    }
+    .nav-link.nav-about-link {
+      display: block;
     }
   }
 
