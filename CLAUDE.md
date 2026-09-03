@@ -81,7 +81,7 @@ Every page is a thin `.astro` shell wrapping `BaseLayout` plus a single Svelte i
 
 | Page | Component | What it does |
 |---|---|---|
-| `/` | `DelugeUI.svelte` | Interactive 8×16 Deluge pad-grid nav + demo audio player |
+| `/` | `DelugeUI.svelte` | Interactive 8×16 pad-grid with drum sounds (velocity gradient per 4×4 block), sidebar tools column, demo audio player |
 | `/manage` | `CardScanner.svelte` | SD card management: sample browser with drag-drop reorganization (auto-updates XML refs), song sorting, broken ref repair, analysis, incremental backup |
 | `/stats` | `SongAnalyzer.svelte` | Batch song stats table over a card or file selection |
 | `/preview` | `SongPreview.svelte` | Web Audio playback of a song with per-track mute/volume |

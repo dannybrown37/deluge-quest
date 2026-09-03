@@ -55,7 +55,6 @@
   let dragStartAngle = 0;
 
   export let initialSongName: string | undefined = undefined;
-  $: isSongPage = !!initialSongName;
   let padAudioCtx: AudioContext | null = null;
   let padEffects: PadEffectsChain | null = null;
 
@@ -154,27 +153,20 @@
     { group: 'future-1', label: 'Coming Soon', subtext: '', color: AUDITION_PALETTE[7] },
   ];
 
-  function toolAt(r: number, c: number): typeof TOOLS[number] | undefined {
-    const blockRow = Math.floor(r / 4);
-    const blockCol = Math.floor(c / 4);
-    const idx = blockRow * 4 + blockCol;
-    return TOOLS[idx];
-  }
-
-  function futureAt(r: number, c: number): typeof FUTURE_TOOLS[number] | undefined {
-    const blockRow = Math.floor(r / 4);
-    if (blockRow !== 1) return undefined;
-    const blockCol = Math.floor(c / 4);
-    const toolsOnRow1 = TOOLS.length - 4;
-    const idx = blockCol - toolsOnRow1;
-    if (idx < 0 || idx >= FUTURE_TOOLS.length) return undefined;
-    return FUTURE_TOOLS[idx];
-  }
-
   function soundAt(r: number, c: number): number {
     const blockRow = Math.floor(r / 4);
     const blockCol = Math.floor(c / 4);
     return blockRow * 4 + blockCol;
+  }
+
+  const SIDEBAR_LEFT: { rows: number[]; color: string; link: string; label: string; group: string; subtext: string }[] = [
+    { rows: [0, 1, 2], color: GREEN,   link: 'https://github.com/dannybrown37/deluge', label: 'GitHub', group: 'github', subtext: 'view source code' },
+    { rows: [3, 4, 5], color: '#CC3030', link: '/songs', label: 'Songs', group: 'songs', subtext: 'browse all tracks' },
+    { rows: [6, 7],    color: GREEN,   link: '/about', label: 'About', group: 'about', subtext: 'open source / community' },
+  ];
+
+  function sidebarLeftAt(r: number): typeof SIDEBAR_LEFT[number] {
+    return SIDEBAR_LEFT.find(s => s.rows.includes(r))!;
   }
 
   function initPads() {
@@ -182,45 +174,28 @@
     for (let r = 0; r < ROWS; r++) {
       const row: Pad[] = [];
       for (let c = 0; c < COLS; c++) {
+        const idx = soundAt(r, c);
         let color = OFF;
         let glowIntensity = 0;
         let active = false;
-        let link: string | undefined;
         let label: string | undefined;
         let group: string | undefined;
         let soundIndex: number | undefined;
         let velocity: number | undefined;
 
-        if (isSongPage) {
-          const idx = soundAt(r, c);
-          if (idx < PAD_SOUNDS.length) {
-            const sound = PAD_SOUNDS[idx];
-            const localR = r % 4, localC = c % 4;
-            velocity = velocityForPosition(localR, localC);
-            color = sound.color;
-            glowIntensity = glowForVelocity(velocity);
-            active = true;
-            label = sound.name;
-            group = `sound-${idx}`;
-            soundIndex = idx;
-          }
-        } else {
-          const tool = toolAt(r, c);
-          if (tool) {
-            const localR = r % 4, localC = c % 4;
-            color = tool.color; glowIntensity = 0.9 - (localR * 4 + localC) * 0.05; active = true;
-            link = tool.link; label = tool.label; group = tool.group;
-          } else {
-            const future = futureAt(r, c);
-            if (future) {
-              const fLocalR = r % 4, fLocalC = c % 4;
-              color = future.color; glowIntensity = 0.15 - (fLocalR * 4 + fLocalC) * 0.008;
-              group = future.group; label = future.label;
-            }
-          }
+        if (idx < PAD_SOUNDS.length) {
+          const sound = PAD_SOUNDS[idx];
+          const localR = r % 4, localC = c % 4;
+          velocity = velocityForPosition(localR, localC);
+          color = sound.color;
+          glowIntensity = glowForVelocity(velocity);
+          active = true;
+          label = sound.name;
+          group = `sound-${idx}`;
+          soundIndex = idx;
         }
 
-        row.push({ row: r, col: c, color, glowIntensity, active, link, label, group, soundIndex, velocity });
+        row.push({ row: r, col: c, color, glowIntensity, active, label, group, soundIndex, velocity });
       }
       pads.push(row);
     }
@@ -236,16 +211,24 @@
         let label: string | undefined;
         let group: string | undefined;
 
-        const MUTE_COLORS = ['#40A060','#CC3030','#CC3030','#CC3030','#CC3030','#CC3030','#CC3030','#CC3030'];
-        const AUDITION_COLORS = ['#4488DD','#DD55AA','#DDBB33','#5AABAC','#CC3030','#AACC30','#3355CC','#FF6622'];
-
         if (c === 0) {
-          color = MUTE_COLORS[r]; glowIntensity = 0.5; active = true;
-          link = 'https://github.com/dannybrown37/deluge';
-          label = 'GitHub'; group = 'github';
+          const s = sidebarLeftAt(r);
+          color = s.color; glowIntensity = 0.5; active = true;
+          link = s.link; label = s.label; group = s.group;
         } else {
-          color = AUDITION_COLORS[r]; glowIntensity = 0.5; active = true;
-          link = '/about'; label = 'About'; group = 'about';
+          const toolIdx = r;
+          if (toolIdx < TOOLS.length) {
+            const tool = TOOLS[toolIdx];
+            color = tool.color; glowIntensity = 0.5; active = true;
+            link = tool.link; label = tool.label; group = tool.group;
+          } else {
+            const futureIdx = toolIdx - TOOLS.length;
+            if (futureIdx < FUTURE_TOOLS.length) {
+              const f = FUTURE_TOOLS[futureIdx];
+              color = f.color; glowIntensity = 0.15; active = false;
+              label = f.label; group = f.group;
+            }
+          }
         }
 
         row.push({ row: r, col: c, color, glowIntensity, active, link, label, group });
@@ -265,9 +248,11 @@
     const allTools = [...TOOLS, ...FUTURE_TOOLS];
     const match = allTools.find(t => t.group === pad.group);
     if (match) { screenSubtext = match.subtext; }
-    else if (pad.group === 'about') screenSubtext = 'open source / community';
-    else if (pad.group === 'github') screenSubtext = 'view source code';
-    else screenSubtext = '';
+    else {
+      const sidebarMatch = SIDEBAR_LEFT.find(s => s.group === pad.group);
+      if (sidebarMatch) screenSubtext = sidebarMatch.subtext;
+      else screenSubtext = '';
+    }
   }
 
   function handlePadLeave() {
@@ -356,11 +341,17 @@
     screenSubtext = 'knobs reset';
   }
 
+  function songSlug(name: string): string {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  }
+
   async function chooseSong(idx: number) {
     browsing = false;
     await initAudio();
     resetKnobs();
     await loadSong(idx);
+    const song = songs[idx];
+    if (song) navigate(`/songs/${songSlug(song.name)}`);
   }
 
   function handleOutsideClick(e: MouseEvent) {
@@ -751,16 +742,17 @@
     {/if}
 
     <div class="grid-labels">
-      <div class="grid-label-group grid-label-group--manage-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Manage</span></div>
-      <div class="grid-label-group grid-label-group--manage-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Kits</span></div>
-      <div class="grid-label-group grid-label-group--stats-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Songs</span></div>
-      <div class="grid-label-group grid-label-group--stats-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Patch</span></div>
-      <div class="grid-label-group grid-label-group--preview-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Preview</span></div>
-      <div class="grid-label-group grid-label-group--preview-down"><span class="grid-label-arrow">↓</span><span class="grid-label-text">Import</span></div>
-      <div class="grid-label-group grid-label-group--score-up"><span class="grid-label-arrow">↑</span><span class="grid-label-text">Score</span></div>
+      <div class="grid-label-group grid-label-group--sound0"><span class="grid-label-text">Kick</span></div>
+      <div class="grid-label-group grid-label-group--sound1"><span class="grid-label-text">Snare</span></div>
+      <div class="grid-label-group grid-label-group--sound2"><span class="grid-label-text">Hat</span></div>
+      <div class="grid-label-group grid-label-group--sound3"><span class="grid-label-text">Clap</span></div>
+      <div class="grid-label-group grid-label-group--sound4"><span class="grid-label-text">Tom</span></div>
+      <div class="grid-label-group grid-label-group--sound5"><span class="grid-label-text">Zap</span></div>
+      <div class="grid-label-group grid-label-group--sound6"><span class="grid-label-text">Blip</span></div>
+      <div class="grid-label-group grid-label-group--sound7"><span class="grid-label-text">Sweep</span></div>
       <div class="grid-labels-gap"></div>
-      <div class="grid-label-group grid-label-group--github"><span class="grid-label-text">GitHub</span></div>
-      <div class="grid-label-group grid-label-group--about"><span class="grid-label-text">About</span></div>
+      <div class="grid-label-group grid-label-group--sidebar-left"></div>
+      <div class="grid-label-group grid-label-group--sidebar-right"><span class="grid-label-text">Tools</span></div>
     </div>
   </div>
 
@@ -1236,27 +1228,23 @@
     letter-spacing: 0.06em;
     color: rgba(255,255,255,0.3);
   }
-  .grid-label-arrow {
-    font-size: 0.35rem;
-    line-height: 1;
-  }
   .grid-label-text {
     line-height: 1;
   }
-  .grid-label-group--manage-up { grid-column: 1 / 3; }
-  .grid-label-group--manage-down { grid-column: 3 / 5; }
-  .grid-label-group--stats-up { grid-column: 5 / 7; }
-  .grid-label-group--stats-down { grid-column: 7 / 9; }
-  .grid-label-group--preview-up { grid-column: 9 / 11; }
-  .grid-label-group--preview-down { grid-column: 11 / 13; }
-  .grid-label-group--score-up { grid-column: 13 / 15; }
-  .grid-label-group--github,
-  .grid-label-group--about {
+  .grid-label-group--sound0 { grid-column: 1 / 3; }
+  .grid-label-group--sound1 { grid-column: 3 / 5; }
+  .grid-label-group--sound2 { grid-column: 5 / 7; }
+  .grid-label-group--sound3 { grid-column: 7 / 9; }
+  .grid-label-group--sound4 { grid-column: 9 / 11; }
+  .grid-label-group--sound5 { grid-column: 11 / 13; }
+  .grid-label-group--sound6 { grid-column: 13 / 15; }
+  .grid-label-group--sound7 { grid-column: 15 / 17; }
+  .grid-label-group--sidebar-left { grid-column: 18; }
+  .grid-label-group--sidebar-right {
+    grid-column: 19;
     font-size: 0.36rem;
     letter-spacing: 0.04em;
     color: rgba(255,255,255,0.25);
   }
-  .grid-label-group--github { grid-column: 18; }
-  .grid-label-group--about { grid-column: 19; }
 
 </style>
