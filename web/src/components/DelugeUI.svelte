@@ -3,6 +3,7 @@
   import { navigate } from 'astro:transitions/client';
   import { homeAudio } from '../lib/homeAudio';
   import { PAD_SOUNDS, velocityForPosition, glowForVelocity, PadEffectsChain } from '../lib/padSounds';
+  import { AudioVisualizer } from '../lib/audioVisualizer';
 
   interface Pad {
     row: number;
@@ -65,6 +66,8 @@
   let browsing = false;
   let browseIndex = 0;
   let unsubscribe: (() => void) | null = null;
+  let vizCanvas: HTMLCanvasElement;
+  let visualizer: AudioVisualizer | null = null;
 
   function syncFromAudio() {
     isPlaying = homeAudio.isPlaying;
@@ -304,9 +307,22 @@
     e.preventDefault();
   }
 
+  function initVisualizer() {
+    if (visualizer || !vizCanvas) return;
+    visualizer = new AudioVisualizer(vizCanvas);
+    visualizer.resize();
+    visualizer.start();
+  }
+
+  function connectVisualizerToAudio() {
+    if (!visualizer || !homeAudio.analyserNode) return;
+    visualizer.connect(homeAudio.analyserNode);
+  }
+
   async function initAudio() {
     await homeAudio.initAudio();
     applyKnobs();
+    connectVisualizerToAudio();
     if (songs.length > 0 && homeAudio.loadedSongIndex !== homeAudio.currentSongIndex) await loadSong(homeAudio.currentSongIndex);
   }
 
@@ -465,7 +481,11 @@
     fetchSongList();
 
     requestAnimationFrame(measureAvailable);
-    function onResize() { measureAvailable(); }
+    initVisualizer();
+    function onResize() {
+      measureAvailable();
+      visualizer?.resize();
+    }
 
     unsubscribe = homeAudio.subscribe(() => {
       syncFromAudio();
@@ -493,6 +513,7 @@
       window.removeEventListener('touchmove', handleKnobMove);
       window.removeEventListener('touchend', handleKnobEnd);
       if (padAudioCtx) { try { padAudioCtx.close(); } catch {} padAudioCtx = null; padEffects = null; }
+      visualizer?.destroy(); visualizer = null;
     };
   });
 </script>
@@ -776,6 +797,8 @@
   <div class="wood-panel wood-panel--right"></div>
 </div>
 </div>
+
+<canvas class="audio-visualizer" bind:this={vizCanvas}></canvas>
 
 <style>
   /* === Scaler wrapper === */
@@ -1264,6 +1287,13 @@
     font-size: 0.36rem;
     letter-spacing: 0.04em;
     color: rgba(255,255,255,0.25);
+  }
+
+  .audio-visualizer {
+    display: block;
+    width: 100%;
+    height: 120px;
+    margin-top: 1rem;
   }
 
 </style>

@@ -20,6 +20,7 @@ class HomeAudioPlayer {
   delayNode: DelayNode | null = null;
   delayFeedback: GainNode | null = null;
   delayWet: GainNode | null = null;
+  analyserNode: AnalyserNode | null = null;
 
   isPlaying = false;
   playStartTime = 0;
@@ -180,7 +181,10 @@ class HomeAudioPlayer {
     this.dryGain.connect(this.gainNode);
     this.wetGain.connect(this.gainNode);
     this.delayWet.connect(this.gainNode);
-    this.gainNode.connect(this.audioCtx.destination);
+    this.analyserNode = this.audioCtx.createAnalyser();
+    this.analyserNode.fftSize = 256;
+    this.gainNode.connect(this.analyserNode);
+    this.analyserNode.connect(this.audioCtx.destination);
   }
 
   private songUrl(file: string): string {

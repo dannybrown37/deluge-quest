@@ -108,6 +108,7 @@ per audio file for shareable song links.
 | `songAudio.ts` | Song-level scheduler over `patchAudio` voices + card samples for `/preview` |
 | `kitXml.ts` | `Kit`/`KitRow` model and Deluge kit XML serialization for `/kits` |
 | `padSounds.ts` | 8 Web Audio synth percussion sounds (kick, snare, hat, clap, tom, zap, blip, sweep) for the DelugeUI pad grid on `/songs/[slug]` pages. Velocity-to-glow mapping |
+| `audioVisualizer.ts` | Canvas-based audio visualizer using `AnalyserNode` — frequency bars (gold/teal) when music plays, ambient wave when idle. Used on home page below the Deluge grid |
 
 ## Key Design Decisions
 

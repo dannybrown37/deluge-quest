@@ -72,8 +72,8 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
       <div class="song-header">
         <div class="song-title-row">
           <button class="hero-play-btn" id="hero-play" aria-label="Play">
-            <svg class="hero-play-icon" id="hero-play-icon" viewBox="0 0 24 24" width="18" height="18"><polygon points="4,0 24,12 4,24" fill="currentColor"/></svg>
-            <svg class="hero-pause-icon" id="hero-pause-icon" viewBox="0 0 24 24" width="18" height="18" style="display:none"><rect x="2" y="1" width="7" height="22" fill="currentColor"/><rect x="15" y="1" width="7" height="22" fill="currentColor"/></svg>
+            <svg class="hero-play-icon" id="hero-play-icon" viewBox="0 0 24 24" width="14" height="14"><polygon points="4,0 24,12 4,24" fill="currentColor"/></svg>
+            <svg class="hero-pause-icon" id="hero-pause-icon" viewBox="0 0 24 24" width="14" height="14" style="display:none"><rect x="2" y="1" width="7" height="22" fill="currentColor"/><rect x="15" y="1" width="7" height="22" fill="currentColor"/></svg>
           </button>
           <h1 class="song-title">{song.name}</h1>
           <span class="hero-play-time" id="hero-play-time"></span>
@@ -174,8 +174,8 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
     gap: 0.75rem;
   }
   .hero-play-btn {
-    width: 40px;
-    height: 40px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     border: none;
     cursor: pointer;
