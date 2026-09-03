@@ -1,0 +1,167 @@
+---
+import fs from 'node:fs';
+import path from 'node:path';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { parseFile } from 'music-metadata';
+
+interface SongInfo {
+  file: string;
+  name: string;
+  slug: string;
+  year?: string;
+  genre?: string;
+  duration?: string;
+}
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+function fmtDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+const audioDir = path.join(process.cwd(), 'public', 'audio');
+const files = fs.readdirSync(audioDir)
+  .filter(f => /\.(mp3|wav|ogg|flac|m4a)$/i.test(f))
+  .sort();
+
+const songs: SongInfo[] = await Promise.all(files.map(async f => {
+  const base = f.replace(/\.[^.]+$/, '');
+  const m = base.match(/^(.*?)\s*\[([^\]]*)\]$/);
+  const name = m ? m[1].trim() : base;
+  const tags = m ? m[2].split(',').map(s => s.trim()).filter(Boolean) : [];
+  let duration: string | undefined;
+  try {
+    const meta = await parseFile(path.join(audioDir, f));
+    if (meta.format.duration) duration = fmtDuration(meta.format.duration);
+  } catch {}
+  return {
+    file: f,
+    name,
+    slug: slugify(name),
+    year: tags.find(t => /^\d{4}$/.test(t)),
+    genre: tags.find(t => !/^\d{4}$/.test(t)),
+    duration,
+  };
+}));
+
+const byYear = [...songs].sort((a, b) => {
+  const ya = parseInt(a.year ?? '0');
+  const yb = parseInt(b.year ?? '0');
+  return yb - ya || a.name.localeCompare(b.name);
+});
+---
+
+<BaseLayout title="Songs" description="Tracks made on the Synthstrom Deluge">
+  <div class="songs-page">
+    <h1 class="page-title">Songs</h1>
+    <p class="page-sub">Tracks made on the Synthstrom Deluge</p>
+    <ul class="song-list">
+      {byYear.map(song => (
+        <li>
+          <a href={`/songs/${song.slug}`} class="song-row">
+            <span class="song-name">{song.name}</span>
+            <span class="song-meta">
+              {song.genre && <span class="song-genre">{song.genre}</span>}
+              {song.year && <span class="song-year">{song.year}</span>}
+              {song.duration && <span class="song-dur">{song.duration}</span>}
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</BaseLayout>
+
+<style>
+  .songs-page {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+
+  .page-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+  }
+
+  .page-sub {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+  }
+
+  .song-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .song-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    gap: 1rem;
+  }
+  .song-row:hover {
+    text-decoration: none;
+  }
+  .song-row:hover .song-name {
+    color: var(--accent);
+  }
+
+  .song-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text);
+    transition: color 0.1s;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .song-meta {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    align-items: baseline;
+  }
+
+  .song-genre {
+    font-size: 0.7rem;
+    color: var(--teal);
+  }
+
+  .song-year {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+  }
+
+  .song-dur {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    min-width: 3rem;
+    text-align: right;
+  }
+
+  @media (max-width: 500px) {
+    .songs-page { padding: 1.5rem 1rem; }
+    .song-genre { display: none; }
+  }
+</style>

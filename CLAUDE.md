@@ -89,10 +89,13 @@ Every page is a thin `.astro` shell wrapping `BaseLayout` plus a single Svelte i
 | `/patch` | `PatchGenerator.svelte` | Generate synth presets with live Web Audio preview |
 | `/score` | `ScoreConverter.svelte` | Song XML → MusicXML download |
 | `/import` | `MidiImporter.svelte` | MIDI → Deluge song XML |
+| `/songs` | — | Song index: list of all tracks with links to individual pages |
+| `/songs/[slug]` | `SongPlayer.svelte` | Shareable per-song page with mobile-friendly audio player, OG tags |
 | `/about` | — | Static |
 
 `src/pages/audio/songs.json.ts` is an Astro endpoint that enumerates `public/audio/*.mp3` at
-build time for the home-page player.
+build time for the home-page player. `src/pages/songs/[slug].astro` generates one static page
+per audio file for shareable song links.
 
 ### `web/src/lib/`
 

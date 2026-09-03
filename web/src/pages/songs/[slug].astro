@@ -1,0 +1,208 @@
+---
+import fs from 'node:fs';
+import path from 'node:path';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import DelugeUI from '../../components/DelugeUI.svelte';
+import SongPlayer from '../../components/SongPlayer.svelte';
+import { parseFile } from 'music-metadata';
+
+interface SongInfo {
+  file: string;
+  name: string;
+  slug: string;
+  year?: string;
+  genre?: string;
+  duration?: string;
+  durationSeconds?: number;
+}
+
+export async function getStaticPaths() {
+  const audioDir = path.join(process.cwd(), 'public', 'audio');
+  const files = fs.readdirSync(audioDir)
+    .filter((f: string) => /\.(mp3|wav|ogg|flac|m4a)$/i.test(f))
+    .sort();
+
+  const paths = await Promise.all(files.map(async (f: string) => {
+    const base = f.replace(/\.[^.]+$/, '');
+    const m = base.match(/^(.*?)\s*\[([^\]]*)\]$/);
+    const songName = m ? m[1].trim() : base;
+    const tags = m ? m[2].split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+    const slug = songName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+    let duration: string | undefined;
+    let durationSeconds: number | undefined;
+    try {
+      const meta = await parseFile(path.join(audioDir, f));
+      if (meta.format.duration) {
+        const secs = Math.floor(meta.format.duration);
+        const mins = Math.floor(secs / 60);
+        const rem = secs % 60;
+        duration = `${mins}:${String(rem).padStart(2, '0')}`;
+        durationSeconds = secs;
+      }
+    } catch {}
+
+    const song: SongInfo = {
+      file: f,
+      name: songName,
+      slug,
+      year: tags.find((t: string) => /^\d{4}$/.test(t)),
+      genre: tags.find((t: string) => !/^\d{4}$/.test(t)),
+      duration,
+      durationSeconds,
+    };
+
+    return { params: { slug }, props: { song } };
+  }));
+
+  return paths;
+}
+
+const { song } = Astro.props as { song: SongInfo };
+const pageUrl = `https://delugekit.com/songs/${song.slug}`;
+const description = [song.genre, song.year, song.duration].filter(Boolean).join(' · ');
+---
+
+<BaseLayout
+  title={song.name}
+  description={`${song.name} — ${description} — Made on the Synthstrom Deluge`}
+>
+  <div class="song-page">
+    <div class="desktop-view">
+      <div class="song-header">
+        <h1 class="song-title">{song.name}</h1>
+        <div class="song-meta">
+          {song.genre && <span class="tag">{song.genre}</span>}
+          {song.year && <span class="tag">{song.year}</span>}
+          {song.duration && <span class="tag">{song.duration}</span>}
+        </div>
+      </div>
+      <DelugeUI client:load initialSongName={song.name} />
+      <div class="song-footer">
+        <button class="share-btn" id="desktop-share" data-url={pageUrl} data-name={song.name}>Share</button>
+        <span class="credit">Made on the <a href="https://synthstrom.com/product/deluge/" target="_blank" rel="noopener">Synthstrom Deluge</a></span>
+      </div>
+    </div>
+
+    <div class="mobile-view">
+      <SongPlayer
+        client:load
+        name={song.name}
+        year={song.year}
+        genre={song.genre}
+        duration={song.duration}
+        pageUrl={pageUrl}
+      />
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const btn = document.getElementById('desktop-share');
+    if (!btn) return;
+    const url = btn.dataset.url!;
+    const name = btn.dataset.name!;
+    btn.addEventListener('click', () => {
+      if (navigator.share) {
+        navigator.share({ title: `${name} — DelugeKit`, url });
+      } else {
+        navigator.clipboard.writeText(url);
+        btn.textContent = 'Link copied';
+        setTimeout(() => { btn.textContent = 'Share'; }, 2000);
+      }
+    });
+  });
+</script>
+
+<style>
+  .song-page {
+    padding: 1.5rem 1rem 2rem;
+    overflow: hidden;
+  }
+
+  .desktop-view {
+    display: block;
+    text-align: center;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  .mobile-view {
+    display: none;
+  }
+
+  .song-header {
+    max-width: 960px;
+    margin: 0 auto 1rem;
+    text-align: center;
+  }
+
+  .song-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+
+  .song-meta {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 0.2rem 0.6rem;
+    border-radius: 99px;
+  }
+
+  .song-footer {
+    max-width: 960px;
+    margin: 1.5rem auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+  }
+
+  .share-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 0.4rem 1.25rem;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+  .share-btn:hover {
+    background: var(--accent);
+    color: var(--ground);
+  }
+
+  .credit {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  .credit a {
+    color: var(--teal);
+  }
+
+  @media (max-width: 700px) {
+    .desktop-view { display: none; }
+    .mobile-view {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 56px - 80px);
+    }
+  }
+</style>

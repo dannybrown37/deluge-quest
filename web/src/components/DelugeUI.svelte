@@ -51,6 +51,8 @@
   let dragStartY = 0;
   let dragStartAngle = 0;
 
+  export let initialSongName: string | undefined = undefined;
+
   $: songs = homeAudio.songs;
   $: currentSongIndex = homeAudio.currentSongIndex;
   $: songLoaded = homeAudio.songLoaded;
@@ -105,6 +107,13 @@
   async function fetchSongList() {
     await homeAudio.fetchSongList();
     songs = homeAudio.songs;
+    if (initialSongName && songs.length > 0) {
+      const target = initialSongName.toLowerCase();
+      const idx = songs.findIndex(s => s.name.toLowerCase() === target);
+      if (idx >= 0) {
+        homeAudio.currentSongIndex = idx;
+      }
+    }
     currentSongIndex = homeAudio.currentSongIndex;
     if (songs.length > 0) {
       screenText = idleText();
