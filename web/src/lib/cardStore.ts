@@ -15,7 +15,7 @@ const KEY_HANDLE = "rootHandle";
 const IDB_SONGS = "songCache";
 const KEY_SONGS = "arrangementSongs";
 /** App-managed dirs — trash and pre-fix backups, not real card content. Never scanned. */
-const APP_MANAGED_DIRS = new Set(["SOFT_DELETE", "REPAIR_BACKUP", "MOVE_BACKUP"]);
+export const APP_MANAGED_DIRS = new Set(["SOFT_DELETE", "REPAIR_BACKUP", "MOVE_BACKUP"]);
 const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
 
 export function ext(name: string): string {
@@ -321,6 +321,22 @@ class CardStoreImpl {
     this.sampleIndex = new Map();
     this.sampleBufferCache.clear();
     this.sampleBufferOrder = [];
+  }
+}
+
+export async function walkHandle(
+  dirHandle: FileSystemDirectoryHandle,
+  path: string,
+  out: { path: string; handle: FileSystemFileHandle }[],
+): Promise<void> {
+  for await (const entry of (dirHandle as any).values()) {
+    if (entry.kind === "directory" && APP_MANAGED_DIRS.has(entry.name)) continue;
+    const entryPath = path ? `${path}/${entry.name}` : entry.name;
+    if (entry.kind === "file") {
+      out.push({ path: entryPath, handle: entry as FileSystemFileHandle });
+    } else if (entry.kind === "directory") {
+      await walkHandle(entry as FileSystemDirectoryHandle, entryPath, out);
+    }
   }
 }
 

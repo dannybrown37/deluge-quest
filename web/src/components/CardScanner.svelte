@@ -1,6 +1,6 @@
 <script lang="ts">
   import { TRASH_DIR, MOVE_BACKUP_DIR, getOrCreateDir, moveToTrash, moveFile, updateXmlReferences } from "../lib/softDelete";
-  import { cardStore } from "../lib/cardStore";
+  import { cardStore, walkHandle } from "../lib/cardStore";
 
   type State = "idle" | "indexing" | "processing" | "done" | "error";
 
@@ -56,7 +56,7 @@
   let report: CardReport | null = $state(null);
   let dragOver = $state(false);
   let cardName = $state("");
-  let listCategory = $state<"samples" | "songs" | "analysis">("samples");
+  let listCategory = $state<"samples" | "songs" | "analysis" | "backup">("samples");
   let progress = $state("");
   let progressPct = $state(0);
   let canWrite = $state(false);
@@ -91,6 +91,28 @@
   }
   let moveHistory = $state<MoveRecord[]>([]);
   let undoingMove = $state<string | null>(null);
+
+  interface BackupFileEntry {
+    path: string;
+    size: number;
+  }
+  interface BackupDiff {
+    newFiles: BackupFileEntry[];
+    changedFiles: BackupFileEntry[];
+    unchangedCount: number;
+    totalCopyBytes: number;
+    onlyInBackup: string[];
+  }
+  let backupHandle = $state<FileSystemDirectoryHandle | null>(null);
+  let backupDiff = $state<BackupDiff | null>(null);
+  let backupProgress = $state("");
+  let backupProgressPct = $state(0);
+  let backupRunning = $state(false);
+  let backupScanning = $state(false);
+  let backupComplete = $state(false);
+  let backupError = $state("");
+  let backupCopiedCount = $state(0);
+  let backupCopiedBytes = $state(0);
 
   let movedCount = $derived(movedFiles.size);
   let hasFileSystemAccess = $derived(typeof window !== "undefined" && "showDirectoryPicker" in window);
@@ -977,6 +999,148 @@
     }
   }
 
+  function allCardFiles(): { path: string; size: number; lastModified: number }[] {
+    const files: { path: string; size: number; lastModified: number }[] = [];
+    for (const [path, xml] of cardStore.songXmls) {
+      const mod = cardStore.songLastModified.get(path) ?? 0;
+      files.push({ path, size: new Blob([xml]).size, lastModified: mod });
+    }
+    for (const [path, xml] of cardStore.presetIndex) {
+      files.push({ path, size: new Blob([xml]).size, lastModified: 0 });
+    }
+    for (const info of cardStore.sampleIndex.values()) {
+      files.push({ path: info.path, size: info.size, lastModified: 0 });
+    }
+    return files;
+  }
+
+  async function pickBackupDestination() {
+    try {
+      const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+      backupHandle = handle;
+      backupDiff = null;
+      backupComplete = false;
+      backupError = "";
+      await computeBackupDiff();
+    } catch (e: any) {
+      if (e.name !== "AbortError") {
+        backupError = e.message || "Failed to open backup folder";
+      }
+    }
+  }
+
+  async function computeBackupDiff() {
+    if (!backupHandle) return;
+    backupScanning = true;
+    backupError = "";
+    backupProgress = "Scanning backup folder...";
+    backupProgressPct = 0;
+    await new Promise(r => setTimeout(r, 0));
+
+    try {
+      const destEntries: { path: string; handle: FileSystemFileHandle }[] = [];
+      await walkHandle(backupHandle, "", destEntries);
+
+      const destFiles = new Map<string, { size: number; lastModified: number }>();
+      let scanned = 0;
+      for (const entry of destEntries) {
+        const file = await entry.handle.getFile();
+        destFiles.set(entry.path.toLowerCase(), { size: file.size, lastModified: file.lastModified });
+        scanned++;
+        if (scanned % 25 === 0) {
+          backupProgress = `Scanning backup (${scanned}/${destEntries.length})`;
+          backupProgressPct = Math.round((scanned / destEntries.length) * 100);
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
+
+      const cardFiles = allCardFiles();
+      const newFiles: BackupFileEntry[] = [];
+      const changedFiles: BackupFileEntry[] = [];
+      let unchangedCount = 0;
+      const seenDest = new Set<string>();
+
+      for (const cf of cardFiles) {
+        const key = cf.path.toLowerCase();
+        seenDest.add(key);
+        const dest = destFiles.get(key);
+        if (!dest) {
+          newFiles.push({ path: cf.path, size: cf.size });
+        } else if (cf.size > 0 && cf.size !== dest.size) {
+          changedFiles.push({ path: cf.path, size: cf.size });
+        } else if (cf.lastModified > 0 && cf.lastModified !== dest.lastModified) {
+          changedFiles.push({ path: cf.path, size: cf.size });
+        } else {
+          unchangedCount++;
+        }
+      }
+
+      const onlyInBackup: string[] = [];
+      for (const [key] of destFiles) {
+        if (!seenDest.has(key)) {
+          const entry = destEntries.find(e => e.path.toLowerCase() === key);
+          if (entry) onlyInBackup.push(entry.path);
+        }
+      }
+
+      const totalCopyBytes = [...newFiles, ...changedFiles].reduce((s, f) => s + f.size, 0);
+
+      backupDiff = { newFiles, changedFiles, unchangedCount, totalCopyBytes, onlyInBackup };
+      backupProgress = "";
+    } catch (e: any) {
+      backupError = e.message || "Failed to scan backup folder";
+    } finally {
+      backupScanning = false;
+    }
+  }
+
+  async function runBackup() {
+    if (!backupHandle || !backupDiff || !rootHandle) return;
+    backupRunning = true;
+    backupComplete = false;
+    backupError = "";
+    backupCopiedCount = 0;
+    backupCopiedBytes = 0;
+
+    const filesToCopy = [...backupDiff.newFiles, ...backupDiff.changedFiles];
+    const total = filesToCopy.length;
+
+    try {
+      for (let i = 0; i < filesToCopy.length; i++) {
+        const { path: filePath } = filesToCopy[i];
+        backupProgress = `Copying ${i + 1}/${total}: ${filePath.split("/").pop()}`;
+        backupProgressPct = Math.round(((i + 1) / total) * 100);
+
+        const parts = filePath.split("/");
+        const fileName = parts.pop()!;
+        const dirPath = parts.join("/");
+
+        const srcDirHandle = await getOrCreateDir(rootHandle, dirPath);
+        const srcFileHandle = await srcDirHandle.getFileHandle(fileName);
+        const file = await srcFileHandle.getFile();
+        const data = await file.arrayBuffer();
+
+        const destDirHandle = await getOrCreateDir(backupHandle, dirPath);
+        const destFileHandle = await destDirHandle.getFileHandle(fileName, { create: true });
+        const writable = await destFileHandle.createWritable();
+        await writable.write(data);
+        await writable.close();
+
+        backupCopiedCount = i + 1;
+        backupCopiedBytes += data.byteLength;
+
+        if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+      }
+
+      backupComplete = true;
+      backupProgress = "";
+    } catch (e: any) {
+      backupError = e.message || "Backup failed";
+    } finally {
+      backupRunning = false;
+    }
+  }
+
   function formatBytes(n: number): string {
     if (n < 1024) return `${n} B`;
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -1614,6 +1778,7 @@
           { id: "samples", label: `Sample Library (${report.totalSamples})` },
           { id: "songs", label: `Songs (${filteredDelugeOnlySongs.length + filteredExternalSongs.length})` },
           { id: "analysis", label: "Analysis" },
+          { id: "backup", label: "Backup" },
         ] as tab}
           <button
             class="list-tab"
@@ -2185,6 +2350,114 @@
 
           {#if report.unusedSamples.length === 0 && report.unusedPresets.length === 0 && report.duplicates.length === 0 && report.invalidXml.length === 0}
             <p class="list-empty">No issues found.</p>
+          {/if}
+        </div>
+
+      {:else if listCategory === "backup"}
+        <div class="list-group">
+          {#if !hasFileSystemAccess}
+            <p class="list-empty">Backup requires a Chromium-based browser with File System Access API.</p>
+          {:else if !canWrite}
+            <p class="list-empty">Backup requires direct folder access. Use "Choose folder" to open your card.</p>
+          {:else if !backupHandle && !backupScanning}
+            <div class="backup-pick">
+              <p class="backup-intro">Pick a folder to back up your card into. Only new and changed files will be copied.</p>
+              <button class="btn btn-accent" onclick={pickBackupDestination}>Choose backup folder</button>
+            </div>
+          {:else if backupScanning}
+            <div class="backup-progress">
+              <p class="status-msg">{backupProgress}</p>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: {backupProgressPct}%"></div>
+              </div>
+            </div>
+          {:else if backupRunning}
+            <div class="backup-progress">
+              <p class="status-msg">{backupProgress}</p>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: {backupProgressPct}%"></div>
+              </div>
+              <p class="backup-running-detail">{backupCopiedCount} files copied ({formatBytes(backupCopiedBytes)})</p>
+            </div>
+          {:else if backupComplete}
+            <div class="backup-complete">
+              <p class="backup-success">Backup complete. {backupCopiedCount} file{backupCopiedCount === 1 ? "" : "s"} copied ({formatBytes(backupCopiedBytes)}).</p>
+              <div class="backup-actions">
+                <button class="btn btn-secondary" onclick={() => { backupComplete = false; computeBackupDiff(); }}>Re-scan</button>
+                <button class="btn btn-secondary" onclick={() => { backupHandle = null; backupDiff = null; backupComplete = false; }}>Change folder</button>
+              </div>
+            </div>
+          {:else if backupDiff}
+            <div class="backup-summary">
+              <div class="backup-dest">
+                <span class="backup-dest-label">Destination:</span>
+                <span class="backup-dest-name">{backupHandle?.name}</span>
+                <button class="btn btn-secondary btn-sm" onclick={() => { backupHandle = null; backupDiff = null; }}>Change</button>
+              </div>
+
+              <div class="backup-stats">
+                <span class="stat stat--new">{backupDiff.newFiles.length} new</span>
+                <span class="stat stat--changed">{backupDiff.changedFiles.length} changed</span>
+                <span class="stat">{backupDiff.unchangedCount} unchanged</span>
+                {#if backupDiff.onlyInBackup.length > 0}
+                  <span class="stat stat--warn">{backupDiff.onlyInBackup.length} only in backup</span>
+                {/if}
+              </div>
+
+              {#if backupDiff.newFiles.length + backupDiff.changedFiles.length > 0}
+                <div class="backup-copy-summary">
+                  <span>{backupDiff.newFiles.length + backupDiff.changedFiles.length} files to copy ({formatBytes(backupDiff.totalCopyBytes)})</span>
+                  <button class="btn btn-accent" onclick={runBackup}>Back Up Now</button>
+                </div>
+              {:else}
+                <p class="backup-uptodate">Everything is up to date.</p>
+              {/if}
+
+              {#if backupDiff.newFiles.length > 0}
+                <details class="backup-detail-list">
+                  <summary>New files ({backupDiff.newFiles.length})</summary>
+                  <div class="file-tree">
+                    {#each backupDiff.newFiles as f}
+                      <div class="tree-file">
+                        <span class="tree-file-name" title={f.path}>{f.path}</span>
+                        {#if f.size > 0}<span class="tree-file-size">{formatBytes(f.size)}</span>{/if}
+                      </div>
+                    {/each}
+                  </div>
+                </details>
+              {/if}
+
+              {#if backupDiff.changedFiles.length > 0}
+                <details class="backup-detail-list">
+                  <summary>Changed files ({backupDiff.changedFiles.length})</summary>
+                  <div class="file-tree">
+                    {#each backupDiff.changedFiles as f}
+                      <div class="tree-file">
+                        <span class="tree-file-name" title={f.path}>{f.path}</span>
+                        {#if f.size > 0}<span class="tree-file-size">{formatBytes(f.size)}</span>{/if}
+                      </div>
+                    {/each}
+                  </div>
+                </details>
+              {/if}
+
+              {#if backupDiff.onlyInBackup.length > 0}
+                <details class="backup-detail-list">
+                  <summary>Only in backup ({backupDiff.onlyInBackup.length})</summary>
+                  <div class="file-tree">
+                    {#each backupDiff.onlyInBackup as f}
+                      <div class="tree-file">
+                        <span class="tree-file-name" title={f}>{f}</span>
+                      </div>
+                    {/each}
+                  </div>
+                </details>
+              {/if}
+            </div>
+          {/if}
+
+          {#if backupError}
+            <p class="backup-error">{backupError}</p>
           {/if}
         </div>
       {/if}
@@ -3009,5 +3282,104 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .backup-pick {
+    text-align: center;
+    padding: 2rem 1rem;
+  }
+  .backup-intro {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+  }
+  .backup-progress {
+    padding: 1rem 0;
+  }
+  .backup-running-detail {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+  }
+  .backup-complete {
+    padding: 1rem 0;
+  }
+  .backup-success {
+    color: var(--teal);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.88rem;
+    margin-bottom: 0.75rem;
+  }
+  .backup-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .backup-summary {
+    padding: 0.5rem 0;
+  }
+  .backup-dest {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.82rem;
+  }
+  .backup-dest-label {
+    color: var(--text-secondary);
+  }
+  .backup-dest-name {
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+  }
+  .backup-stats {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+  .backup-copy-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 0.75rem;
+    background: rgba(90, 171, 172, 0.08);
+    border: 1px solid rgba(90, 171, 172, 0.2);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    margin-bottom: 0.75rem;
+  }
+  .backup-uptodate {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.88rem;
+    color: var(--teal);
+    padding: 0.5rem 0;
+  }
+  .backup-detail-list {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+  }
+  .backup-detail-list summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0.3rem 0;
+  }
+  .backup-detail-list .file-tree {
+    max-height: 300px;
+    overflow-y: auto;
+    padding-left: 0.5rem;
+  }
+  .backup-error {
+    color: #c47a7a;
+    font-size: 0.82rem;
+    margin-top: 0.5rem;
+  }
+  .stat--new {
+    color: var(--teal);
+    border-color: var(--teal);
+  }
+  .stat--changed {
+    color: var(--accent);
+    border-color: var(--accent);
   }
 </style>

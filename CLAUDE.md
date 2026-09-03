@@ -82,7 +82,7 @@ Every page is a thin `.astro` shell wrapping `BaseLayout` plus a single Svelte i
 | Page | Component | What it does |
 |---|---|---|
 | `/` | `DelugeUI.svelte` | Interactive 8×16 Deluge pad-grid nav + demo audio player |
-| `/manage` | `CardScanner.svelte` | SD card management: sample browser with drag-drop reorganization (auto-updates XML refs), song sorting, broken ref repair, analysis |
+| `/manage` | `CardScanner.svelte` | SD card management: sample browser with drag-drop reorganization (auto-updates XML refs), song sorting, broken ref repair, analysis, incremental backup |
 | `/stats` | `SongAnalyzer.svelte` | Batch song stats table over a card or file selection |
 | `/preview` | `SongPreview.svelte` | Web Audio playback of a song with per-track mute/volume |
 | `/kits` | `KitBuilder.svelte` | Build/edit Deluge kit XML from card samples (vim-style keys) |
@@ -102,7 +102,7 @@ per audio file for shareable song links.
 | Module | Role |
 |---|---|
 | `pyodide.ts` | The Python↔JS seam. Lazy singleton loader + 4 bridges: `analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML` |
-| `cardStore.ts` | Singleton `cardStore` — the SD card handle, sample index, and song cache, shared across `/manage`, `/stats`, `/kits`, `/preview`. Persists the `FileSystemDirectoryHandle` and a song-XML cache in IndexedDB (`deluge-card-store`, v2) |
+| `cardStore.ts` | Singleton `cardStore` — the SD card handle, sample index, and song cache, shared across `/manage`, `/stats`, `/kits`, `/preview`. Persists the `FileSystemDirectoryHandle` and a song-XML cache in IndexedDB (`deluge-card-store`, v2). Also exports `walkHandle()` for walking arbitrary directory handles (used by backup) and `APP_MANAGED_DIRS` |
 | `softDelete.ts` | `moveToTrash(root, path)`, `moveFile(root, from, to)`, `updateXmlReferences(root, xmlPaths, xmlTexts, moves)` — file moves with XML ref updating. Backups to `MOVE_BACKUP/` |
 | `patchAudio.ts` | Web Audio synth engine (subtractive + FM voices, envelopes) for `/patch` |
 | `songAudio.ts` | Song-level scheduler over `patchAudio` voices + card samples for `/preview` |
