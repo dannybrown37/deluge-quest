@@ -54,6 +54,20 @@
   let draggingKnob: number | null = null;
   let dragStartY = 0;
   let dragStartAngle = 0;
+  let knobDisplayTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function holdKnobDisplay() {
+    if (knobDisplayTimer) clearTimeout(knobDisplayTimer);
+    knobDisplayTimer = setTimeout(() => {
+      knobDisplayTimer = null;
+      screenText = idleText();
+      if (isPlaying) {
+        screenSubtext = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
+      } else {
+        screenSubtext = idleSubtext();
+      }
+    }, 800);
+  }
 
   export let initialSongName: string | undefined = undefined;
   let padAudioCtx: AudioContext | null = null;
@@ -81,7 +95,7 @@
     songLoaded = homeAudio.songLoaded;
     currentSongIndex = homeAudio.currentSongIndex;
     songs = homeAudio.songs;
-    if (isPlaying) {
+    if (isPlaying && !knobDisplayTimer && draggingKnob === null) {
       screenText = idleText();
       screenSubtext = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
     }
@@ -472,10 +486,7 @@
   function handleKnobEnd() {
     if (draggingKnob !== null) {
       draggingKnob = null;
-      screenText = idleText();
-      if (!isPlaying) {
-        screenSubtext = idleSubtext();
-      }
+      holdKnobDisplay();
     }
   }
 
@@ -490,6 +501,7 @@
     if (idx === 6) updateVolume();
     if (idx === 5) updatePlaybackRate();
     if (idx === 2 || idx === 3) updateFilter();
+    holdKnobDisplay();
   }
 
   onMount(() => {
@@ -530,6 +542,7 @@
       window.removeEventListener('mouseup', handleKnobEnd);
       window.removeEventListener('touchmove', handleKnobMove);
       window.removeEventListener('touchend', handleKnobEnd);
+      if (knobDisplayTimer) clearTimeout(knobDisplayTimer);
       if (padAudioCtx) { try { padAudioCtx.close(); } catch {} padAudioCtx = null; padEffects = null; }
       visualizer?.destroy(); visualizer = null;
     };
