@@ -31,6 +31,11 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
           <span class="nav-logo">⬡</span>
           <span class="nav-name">DelugeKit</span>
         </a>
+        <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
+          <span class="nav-toggle-bar"></span>
+          <span class="nav-toggle-bar"></span>
+          <span class="nav-toggle-bar"></span>
+        </button>
         <div class="nav-links">
           <a href="/manage" class="nav-link">Manage</a>
           <a href="/stats" class="nav-link">Stats</a>
@@ -63,6 +68,29 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
         <p>Open source tools for the <a href="https://synthstrom.com/product/deluge/" target="_blank" rel="noopener">Synthstrom Deluge</a></p>
       </div>
     </footer>
+
+    <script>
+      function initNavToggle() {
+        const btn = document.querySelector('.nav-toggle');
+        const links = document.querySelector('.nav-links');
+        if (!btn || !links) return;
+
+        btn.addEventListener('click', () => {
+          const open = links.classList.toggle('nav-open');
+          btn.classList.toggle('nav-toggle-open', open);
+          btn.setAttribute('aria-expanded', String(open));
+        });
+
+        links.querySelectorAll('.nav-link').forEach(a => {
+          a.addEventListener('click', () => {
+            links.classList.remove('nav-open');
+            btn.classList.remove('nav-toggle-open');
+            btn.setAttribute('aria-expanded', 'false');
+          });
+        });
+      }
+      document.addEventListener('astro:page-load', initNavToggle);
+    </script>
 
     <script>
       import { homeAudio } from '../lib/homeAudio';
@@ -160,6 +188,67 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
   .nav-link:hover {
     color: var(--text);
     text-decoration: none;
+  }
+
+  /* Hamburger toggle */
+  .nav-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    width: 36px;
+    height: 36px;
+    padding: 6px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .nav-toggle-bar {
+    display: block;
+    width: 100%;
+    height: 2px;
+    background: var(--text-secondary);
+    border-radius: 1px;
+    transition: transform 0.2s, opacity 0.2s;
+  }
+  .nav-toggle-open .nav-toggle-bar:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+  }
+  .nav-toggle-open .nav-toggle-bar:nth-child(2) {
+    opacity: 0;
+  }
+  .nav-toggle-open .nav-toggle-bar:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+  }
+
+  @media (max-width: 768px) {
+    .nav-toggle {
+      display: flex;
+    }
+    .nav-links {
+      display: none;
+      position: absolute;
+      top: 56px;
+      left: 0;
+      right: 0;
+      background: var(--ground);
+      border-bottom: 1px solid var(--border);
+      flex-direction: column;
+      padding: 0.5rem 1.5rem 1rem;
+      gap: 0;
+    }
+    .nav-links.nav-open {
+      display: flex;
+    }
+    .nav-link {
+      padding: 0.6rem 0;
+      font-size: 0.95rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-link:last-child {
+      border-bottom: none;
+    }
   }
 
   main {
