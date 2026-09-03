@@ -84,6 +84,14 @@
   let relinkingRef = $state<string | null>(null);
   let suggestionsFor = $state<string | null>(null);
 
+  interface MoveRecord {
+    from: string;
+    to: string;
+    updatedXmls: string[];
+  }
+  let moveHistory = $state<MoveRecord[]>([]);
+  let undoingMove = $state<string | null>(null);
+
   let movedCount = $derived(movedFiles.size);
   let hasFileSystemAccess = $derived(typeof window !== "undefined" && "showDirectoryPicker" in window);
 
@@ -636,6 +644,8 @@
         };
       }
 
+      moveHistory = [{ from: oldPath, to: newPath, updatedXmls: result.updated }, ...moveHistory].slice(0, 20);
+
       const updatedCount = result.updated.length;
       const errorCount = result.errors.length;
       if (errorCount > 0) {
@@ -649,6 +659,70 @@
       moveStatus = { message: `Move failed: ${e.message}`, type: "error" };
     } finally {
       movingPaths = new Set([...movingPaths].filter(p => p !== oldPath));
+    }
+  }
+
+  async function undoMove(record: MoveRecord) {
+    if (!rootHandle || undoingMove) return;
+    undoingMove = record.to;
+    try {
+      await moveFile(rootHandle, record.to, record.from);
+
+      for (const xmlPath of record.updatedXmls) {
+        const parts = xmlPath.split("/");
+        const fileName = parts.pop()!;
+        const dirPath = parts.join("/");
+        const backupPath = `${MOVE_BACKUP_DIR}/${xmlPath}`;
+        const backupParts = backupPath.split("/");
+        const backupName = backupParts.pop()!;
+        const backupDir = backupParts.join("/");
+        try {
+          const backupDirHandle = await getOrCreateDir(rootHandle, backupDir);
+          const backupFileHandle = await backupDirHandle.getFileHandle(backupName);
+          const backupFile = await backupFileHandle.getFile();
+          const backupText = await backupFile.text();
+
+          const destDirHandle = await getOrCreateDir(rootHandle, dirPath);
+          const destFileHandle = await destDirHandle.getFileHandle(fileName, { create: true });
+          const writable = await destFileHandle.createWritable();
+          await writable.write(backupText);
+          await writable.close();
+
+          xmlTexts.set(xmlPath, backupText);
+        } catch {
+          // backup may not exist if XML wasn't affected
+        }
+      }
+
+      const newRefs = new Map(refSources);
+      const refs = newRefs.get(record.to);
+      if (refs) {
+        newRefs.delete(record.to);
+        newRefs.set(record.from, refs);
+      }
+      refSources = newRefs;
+
+      allSamplePaths = allSamplePaths.map(p => p === record.to ? record.from : p).sort();
+
+      const info = cardStore.sampleIndex.get(record.to.toLowerCase());
+      if (info) {
+        cardStore.sampleIndex.delete(record.to.toLowerCase());
+        cardStore.sampleIndex.set(record.from.toLowerCase(), { ...info, path: record.from });
+      }
+
+      if (report) {
+        report = {
+          ...report,
+          unusedSamples: report.unusedSamples.map(p => p === record.to ? record.from : p).sort(),
+        };
+      }
+
+      moveHistory = moveHistory.filter(r => r !== record);
+      moveStatus = { message: `Undid move: ${record.from.split("/").pop()} restored.`, type: "success" };
+    } catch (e: any) {
+      moveStatus = { message: `Undo failed: ${e.message}`, type: "error" };
+    } finally {
+      undoingMove = null;
     }
   }
 
@@ -727,10 +801,10 @@
     fixAllRunning = false;
   }
 
-  function handleDragStart(e: DragEvent, path: string) {
+  function handleDragStart(e: DragEvent, path: string, isFolder = false) {
     draggedPath = path;
     e.dataTransfer!.effectAllowed = "move";
-    e.dataTransfer!.setData("text/plain", path);
+    e.dataTransfer!.setData("text/plain", isFolder ? `folder:${path}` : path);
   }
 
   function handleDragEnd() {
@@ -750,6 +824,7 @@
 
   let newFolderParent: string | null = $state(null);
   let newFolderName: string = $state("");
+  let createdFolders = $state(new Set<string>());
 
   async function createFolder(parentPath: string) {
     if (!rootHandle || !newFolderName.trim()) return;
@@ -761,7 +836,9 @@
         dir = await dir.getDirectoryHandle(part);
       }
       await dir.getDirectoryHandle(name, { create: true });
-      moveStatus = { message: `Created folder "${parentPath ? parentPath + "/" : ""}${name}/"`, type: "success" };
+      const fullPath = parentPath ? `${parentPath}/${name}` : name;
+      createdFolders = new Set([...createdFolders, fullPath]);
+      moveStatus = { message: `Created folder "${fullPath}/"`, type: "success" };
     } catch (e: any) {
       moveStatus = { message: `Failed to create folder: ${e.message}`, type: "error" };
     }
@@ -772,9 +849,51 @@
   async function handleFolderDrop(e: DragEvent, targetFolder: string) {
     e.preventDefault();
     dragOverFolder = null;
-    const sourcePath = e.dataTransfer?.getData("text/plain");
-    if (!sourcePath || !rootHandle) return;
+    const raw = e.dataTransfer?.getData("text/plain");
+    if (!raw || !rootHandle) return;
     draggedPath = null;
+
+    if (raw.startsWith("folder:")) {
+      const sourceFolder = raw.slice(7);
+      if (sourceFolder === targetFolder || targetFolder.startsWith(sourceFolder + "/")) return;
+      const folderName = sourceFolder.split("/").pop()!;
+      const filesToMove = allSamplePaths.filter(p => p.startsWith(sourceFolder + "/"));
+      if (filesToMove.length === 0) {
+        moveStatus = { message: "Folder is empty.", type: "error" };
+        return;
+      }
+      let moved = 0;
+      let skipped = 0;
+      for (const filePath of filesToMove) {
+        const relative = filePath.slice(sourceFolder.length + 1);
+        const newPath = `${targetFolder}/${folderName}/${relative}`;
+        if (allSamplePaths.includes(newPath)) { skipped++; continue; }
+        await moveSampleTo(filePath, newPath);
+        moved++;
+      }
+      moveStatus = { message: `Moved ${moved} file${moved === 1 ? "" : "s"} to ${targetFolder}/${folderName}/${skipped ? ` (${skipped} skipped)` : ""}`, type: "success" };
+      return;
+    }
+
+    const sourcePath = raw;
+
+    if (selectedPaths.has(sourcePath) && selectedPaths.size > 1) {
+      const paths = [...selectedPaths];
+      let moved = 0;
+      let skipped = 0;
+      for (const p of paths) {
+        const fn = p.split("/").pop()!;
+        const sf = p.split("/").slice(0, -1).join("/");
+        if (sf === targetFolder) { skipped++; continue; }
+        const np = `${targetFolder}/${fn}`;
+        if (allSamplePaths.includes(np)) { skipped++; continue; }
+        await moveSampleTo(p, np);
+        moved++;
+      }
+      selectedPaths = new Set();
+      moveStatus = { message: `Moved ${moved} file${moved === 1 ? "" : "s"} to ${targetFolder}/${skipped ? ` (${skipped} skipped)` : ""}`, type: "success" };
+      return;
+    }
 
     const fileName = sourcePath.split("/").pop()!;
     const sourceFolder = sourcePath.split("/").slice(0, -1).join("/");
@@ -1034,6 +1153,7 @@
     path: string;
     refs: string[];
     isUnused: boolean;
+    size: number;
   }
 
   interface SampleFolderNode {
@@ -1044,7 +1164,13 @@
     folderPath: string;
   }
 
-  function buildSampleTree(paths: string[], refs: Map<string, Set<string>>, unused: Set<string>): SampleFolderNode {
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function buildSampleTree(paths: string[], refs: Map<string, Set<string>>, unused: Set<string>, extraFolders: Set<string> = new Set(), sizes: Map<string, number> = new Map()): SampleFolderNode {
     const root: SampleFolderNode = { name: "", files: [], children: new Map(), totalFiles: paths.length, folderPath: "" };
     for (const p of paths) {
       const parts = p.split("/");
@@ -1064,7 +1190,20 @@
         path: p,
         refs: fileRefs ? [...fileRefs].sort() : [],
         isUnused: unused.has(p),
+        size: sizes.get(p) ?? 0,
       });
+    }
+    for (const folderPath of extraFolders) {
+      const parts = folderPath.split("/");
+      let node = root;
+      let currentPath = "";
+      for (const part of parts) {
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        if (!node.children.has(part)) {
+          node.children.set(part, { name: part, files: [], children: new Map(), totalFiles: 0, folderPath: currentPath });
+        }
+        node = node.children.get(part)!;
+      }
     }
     function computeTotals(node: SampleFolderNode): number {
       let total = node.files.length;
@@ -1260,7 +1399,7 @@
     return paths;
   });
 
-  let sampleTree = $derived(buildSampleTree(filteredSamplePaths, refSources, unusedSet));
+  let sampleTree = $derived(buildSampleTree(filteredSamplePaths, refSources, unusedSet, createdFolders, allSampleSizes));
   let presetsTree = $derived(buildTree(report?.unusedPresets ?? []));
 
   interface MissingFolderNode {
@@ -1442,6 +1581,25 @@
         <p class="moved-msg" class:moved-msg--error={moveStatus.type === "error"}>
           {moveStatus.message}
         </p>
+      {/if}
+      {#if moveHistory.length > 0}
+        <details class="move-history">
+          <summary>Recent moves ({moveHistory.length})</summary>
+          <ul class="move-history-list">
+            {#each moveHistory as record}
+              <li class="move-history-item">
+                <span class="move-history-paths" title="{record.from} → {record.to}">
+                  {record.from.split("/").pop()} → {record.to.split("/").slice(-2).join("/")}
+                </span>
+                <button
+                  class="btn btn-sm btn-secondary"
+                  disabled={undoingMove !== null}
+                  onclick={() => undoMove(record)}
+                >{undoingMove === record.to ? "Undoing…" : "Undo"}</button>
+              </li>
+            {/each}
+          </ul>
+        </details>
       {/if}
     </div>
 
@@ -1700,7 +1858,13 @@
               {#each [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0])) as [name, child]}
                 {@const isOpen = expandedDirs.has(child.folderPath)}
                 {@const isDragOver = dragOverFolder === child.folderPath}
-                <div class="tree-item" data-folder-path={child.folderPath}>
+                <div
+                  class="tree-item"
+                  data-folder-path={child.folderPath}
+                  draggable={canWrite ? "true" : undefined}
+                  ondragstart={(e) => { e.stopPropagation(); handleDragStart(e, child.folderPath, true); }}
+                  ondragend={handleDragEnd}
+                >
                   <div class="tree-dir-row">
                     {#if canWrite}
                       <input
@@ -1773,6 +1937,9 @@
                             title={playingFile === file.path ? "Stop" : "Play"}
                           >{playingFile === file.path ? "◼" : "▶"}</button>
                           <span class="tree-file-name">{file.name}</span>
+                          {#if file.size > 0}
+                            <span class="tree-file-size">{formatSize(file.size)}</span>
+                          {/if}
                           {#if file.isUnused}
                             <span class="tree-file-badge tree-file-badge--warn">unused</span>
                           {:else if file.refs.length > 0}
@@ -2400,6 +2567,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .tree-file-size {
+    font-size: 0.65rem;
+    color: var(--text-muted, #888);
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
   .tree-file-badge {
     font-size: 0.65rem;
     color: var(--teal);
@@ -2674,6 +2847,35 @@
 
   .moved-msg--error {
     color: #c47a7a;
+  }
+
+  .move-history {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+  }
+  .move-history summary {
+    cursor: pointer;
+    color: var(--text-muted, #888);
+  }
+  .move-history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.3rem 0 0 0;
+  }
+  .move-history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+    border-bottom: 1px solid var(--border, #333);
+  }
+  .move-history-paths {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
   }
 
   .selection-toolbar {

@@ -80,8 +80,9 @@ export async function updateXmlReferences(
 
   const affectedXmls = new Set<string>();
   for (const [oldPath] of moves) {
+    const oldLower = oldPath.toLowerCase();
     for (const [xmlPath, text] of xmlTexts) {
-      if (text.includes(oldPath)) affectedXmls.add(xmlPath);
+      if (text.toLowerCase().includes(oldLower)) affectedXmls.add(xmlPath);
     }
   }
 
@@ -103,7 +104,11 @@ export async function updateXmlReferences(
 
       let newText = originalText;
       for (const [oldPath, newPath] of moves) {
-        newText = newText.replaceAll(`"${oldPath}"`, `"${newPath}"`);
+        const pattern = new RegExp(
+          `"${oldPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`,
+          "gi",
+        );
+        newText = newText.replace(pattern, `"${newPath}"`);
       }
 
       const destWritable = await (await dirHandle.getFileHandle(fileName, { create: true })).createWritable();
