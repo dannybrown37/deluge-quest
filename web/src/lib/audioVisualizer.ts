@@ -4,6 +4,13 @@ const BAR_COUNT = 64;
 const IDLE_WAVE_SPEED = 0.0008;
 const IDLE_WAVE_AMPLITUDE = 0.15;
 
+const CIRCUIT_COLS = 16;
+const CIRCUIT_ROWS = 8;
+const NODE_RADIUS = 3;
+const CONNECTION_DECAY = 0.92;
+
+export type VisualizerMode = 'bars' | 'circuit';
+
 export class AudioVisualizer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -14,11 +21,25 @@ export class AudioVisualizer {
   private idlePhase = 0;
   private lastTime = 0;
   private dpr = 1;
+  private _mode: VisualizerMode = 'bars';
+
+  private nodeEnergy: Float32Array = new Float32Array(CIRCUIT_COLS * CIRCUIT_ROWS);
+  private connectionStrength: Float32Array = new Float32Array(CIRCUIT_COLS * CIRCUIT_ROWS);
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  }
+
+  get mode(): VisualizerMode {
+    return this._mode;
+  }
+
+  set mode(m: VisualizerMode) {
+    this._mode = m;
+    this.nodeEnergy.fill(0);
+    this.connectionStrength.fill(0);
   }
 
   connect(analyser: AnalyserNode) {
@@ -69,11 +90,20 @@ export class AudioVisualizer {
       hasSignal = sum > 200;
     }
 
-    if (hasSignal) {
-      this.drawBars(w, h);
+    if (this._mode === 'bars') {
+      if (hasSignal) {
+        this.drawBars(w, h);
+      } else {
+        this.idlePhase += dt * IDLE_WAVE_SPEED;
+        this.drawIdleWave(w, h);
+      }
     } else {
-      this.idlePhase += dt * IDLE_WAVE_SPEED;
-      this.drawIdleWave(w, h);
+      if (hasSignal) {
+        this.drawCircuit(w, h, dt);
+      } else {
+        this.idlePhase += dt * IDLE_WAVE_SPEED;
+        this.drawCircuitIdle(w, h, dt);
+      }
     }
 
     this.raf = requestAnimationFrame(this.tick);
@@ -131,6 +161,143 @@ export class AudioVisualizer {
       ctx.closePath();
       ctx.fillStyle = this.hexWithAlpha(color, alpha);
       ctx.fill();
+    }
+  }
+
+  private drawCircuit(w: number, h: number, _dt: number) {
+    if (!this.freqData) return;
+    const ctx = this.ctx;
+    const binCount = this.freqData.length;
+
+    const padX = 20;
+    const padY = 10;
+    const spacingX = (w - padX * 2) / (CIRCUIT_COLS - 1);
+    const spacingY = (h - padY * 2) / (CIRCUIT_ROWS - 1);
+    const centerCol = (CIRCUIT_COLS - 1) / 2;
+    const centerRow = (CIRCUIT_ROWS - 1) / 2;
+    const maxDist = Math.sqrt(centerCol * centerCol + centerRow * centerRow);
+
+    for (let row = 0; row < CIRCUIT_ROWS; row++) {
+      for (let col = 0; col < CIRCUIT_COLS; col++) {
+        const idx = row * CIRCUIT_COLS + col;
+        const dx = col - centerCol;
+        const dy = row - centerRow;
+        const dist = Math.sqrt(dx * dx + dy * dy) / maxDist;
+
+        const freqBin = Math.floor(dist * binCount * 0.6);
+        const rawValue = this.freqData[Math.min(freqBin, binCount - 1)] / 255;
+
+        const proximity = 1 - dist * 0.3;
+        const target = rawValue * rawValue * proximity;
+        this.nodeEnergy[idx] += (target - this.nodeEnergy[idx]) * 0.15;
+        this.connectionStrength[idx] = this.connectionStrength[idx] * CONNECTION_DECAY +
+          this.nodeEnergy[idx] * (1 - CONNECTION_DECAY);
+      }
+    }
+
+    ctx.lineWidth = 1;
+    for (let row = 0; row < CIRCUIT_ROWS; row++) {
+      for (let col = 0; col < CIRCUIT_COLS; col++) {
+        const idx = row * CIRCUIT_COLS + col;
+        const energy = this.connectionStrength[idx];
+        if (energy < 0.05) continue;
+
+        const x = padX + col * spacingX;
+        const y = padY + row * spacingY;
+        const dist = Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
+        const color = dist < 0.5 ? GOLD : TEAL;
+
+        if (col < CIRCUIT_COLS - 1) {
+          const rightEnergy = this.connectionStrength[idx + 1];
+          const linkStrength = Math.min(energy, rightEnergy);
+          if (linkStrength > 0.05) {
+            ctx.strokeStyle = this.hexWithAlpha(color, linkStrength * 0.5);
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(padX + (col + 1) * spacingX, y);
+            ctx.stroke();
+          }
+        }
+
+        if (row < CIRCUIT_ROWS - 1) {
+          const belowEnergy = this.connectionStrength[idx + CIRCUIT_COLS];
+          const linkStrength = Math.min(energy, belowEnergy);
+          if (linkStrength > 0.05) {
+            ctx.strokeStyle = this.hexWithAlpha(color, linkStrength * 0.4);
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x, padY + (row + 1) * spacingY);
+            ctx.stroke();
+          }
+        }
+      }
+    }
+
+    for (let row = 0; row < CIRCUIT_ROWS; row++) {
+      for (let col = 0; col < CIRCUIT_COLS; col++) {
+        const idx = row * CIRCUIT_COLS + col;
+        const energy = this.nodeEnergy[idx];
+        const x = padX + col * spacingX;
+        const y = padY + row * spacingY;
+        const dist = Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
+        const color = dist < 0.5 ? GOLD : TEAL;
+
+        const baseRadius = NODE_RADIUS + energy * 4;
+
+        if (energy > 0.15) {
+          const glowRadius = baseRadius + energy * 8;
+          const gradient = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
+          gradient.addColorStop(0, this.hexWithAlpha(color, energy * 0.4));
+          gradient.addColorStop(1, this.hexWithAlpha(color, 0));
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = this.hexWithAlpha(color, 0.2 + energy * 0.8);
+        ctx.beginPath();
+        ctx.arc(x, y, baseRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  private drawCircuitIdle(w: number, h: number, _dt: number) {
+    const ctx = this.ctx;
+    const padX = 20;
+    const padY = 10;
+    const spacingX = (w - padX * 2) / (CIRCUIT_COLS - 1);
+    const spacingY = (h - padY * 2) / (CIRCUIT_ROWS - 1);
+    const centerCol = (CIRCUIT_COLS - 1) / 2;
+    const centerRow = (CIRCUIT_ROWS - 1) / 2;
+    const maxDist = Math.sqrt(centerCol * centerCol + centerRow * centerRow);
+
+    for (let row = 0; row < CIRCUIT_ROWS; row++) {
+      for (let col = 0; col < CIRCUIT_COLS; col++) {
+        const x = padX + col * spacingX;
+        const y = padY + row * spacingY;
+        const dist = Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
+
+        const wave = Math.sin(this.idlePhase * 1.5 - dist * 4) * 0.5 + 0.5;
+        const dimAlpha = 0.06 + wave * 0.08;
+        const color = dist < 0.5 ? GOLD : TEAL;
+
+        ctx.fillStyle = this.hexWithAlpha(color, dimAlpha);
+        ctx.beginPath();
+        ctx.arc(x, y, NODE_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (col < CIRCUIT_COLS - 1 && wave > 0.6) {
+          const rx = padX + (col + 1) * spacingX;
+          ctx.strokeStyle = this.hexWithAlpha(color, 0.04);
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(rx, y);
+          ctx.stroke();
+        }
+      }
     }
   }
 

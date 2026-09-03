@@ -3,7 +3,7 @@
   import { navigate } from 'astro:transitions/client';
   import { homeAudio } from '../lib/homeAudio';
   import { PAD_SOUNDS, velocityForPosition, glowForVelocity, PadEffectsChain } from '../lib/padSounds';
-  import { AudioVisualizer } from '../lib/audioVisualizer';
+  import { AudioVisualizer, type VisualizerMode } from '../lib/audioVisualizer';
 
   interface Pad {
     row: number;
@@ -68,6 +68,13 @@
   let unsubscribe: (() => void) | null = null;
   let vizCanvas: HTMLCanvasElement;
   let visualizer: AudioVisualizer | null = null;
+  let vizMode: VisualizerMode = 'bars';
+  let vizHeight = 120;
+
+  function toggleVizMode() {
+    vizMode = vizMode === 'bars' ? 'circuit' : 'bars';
+    if (visualizer) visualizer.mode = vizMode;
+  }
 
   function syncFromAudio() {
     isPlaying = homeAudio.isPlaying;
@@ -148,9 +155,19 @@
     availableHeight = window.innerHeight - top - FOOTER_RESERVE;
   }
 
+  function measureViz() {
+    if (!scalerEl) return;
+    const scalerRect = scalerEl.getBoundingClientRect();
+    const footer = document.querySelector('.footer');
+    const footerH = footer ? footer.getBoundingClientRect().height : 0;
+    const remaining = window.innerHeight - scalerRect.bottom - footerH - 8;
+    vizHeight = Math.max(40, remaining);
+  }
+
   $: heightScale = housingHeight > 0 && availableHeight > 200 ? availableHeight / housingHeight : 1;
   $: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH, heightScale);
   $: offsetX = (wrapperWidth - DESIGN_WIDTH * scale) / 2;
+  $: if (scale && mounted) requestAnimationFrame(measureViz);
 
   const AUDITION_PALETTE = ['#4488DD','#DD55AA','#DDBB33','#5AABAC','#CC3030','#AACC30','#3355CC','#FF6622'];
 
@@ -480,10 +497,11 @@
     initPads();
     fetchSongList();
 
-    requestAnimationFrame(measureAvailable);
+    requestAnimationFrame(() => { measureAvailable(); measureViz(); });
     initVisualizer();
     function onResize() {
       measureAvailable();
+      measureViz();
       visualizer?.resize();
     }
 
@@ -798,7 +816,12 @@
 </div>
 </div>
 
-<canvas class="audio-visualizer" bind:this={vizCanvas}></canvas>
+<div class="viz-container" style="height: {vizHeight}px;">
+  <canvas class="audio-visualizer" bind:this={vizCanvas}></canvas>
+  <button class="viz-toggle" on:click={toggleVizMode} title="Switch visualizer mode">
+    {vizMode === 'bars' ? '⊞' : '≈'}
+  </button>
+</div>
 
 <style>
   /* === Scaler wrapper === */
@@ -1289,11 +1312,40 @@
     color: rgba(255,255,255,0.25);
   }
 
+  .viz-container {
+    position: relative;
+    margin-top: 1rem;
+  }
+
   .audio-visualizer {
     display: block;
     width: 100%;
-    height: 120px;
-    margin-top: 1rem;
+    height: 100%;
+  }
+
+  .viz-toggle {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.5);
+    font-size: 1rem;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.2s, color 0.2s;
+    line-height: 1;
+  }
+
+  .viz-toggle:hover {
+    background: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.8);
   }
 
 </style>
