@@ -107,7 +107,7 @@ class HomeAudioPlayer {
     if (!song) return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: song.name,
-      artist: 'Deluge Tools',
+      artist: 'DelugeKit',
       album: 'Demo Tracks',
     });
   }
@@ -126,6 +126,15 @@ class HomeAudioPlayer {
     set('stop', () => { if (this.isPlaying) this.togglePlay(); });
     set('nexttrack', () => { if (this.songs.length > 1) this.stepSong(1); });
     set('previoustrack', () => { if (this.songs.length > 1) this.stepSong(-1); });
+  }
+
+  reassertMediaSession() {
+    if (!this.isPlaying) return;
+    this.initKeeper();
+    this.keeper?.play().catch(() => {});
+    this.updateMediaMetadata();
+    this.setMediaState('playing');
+    this.initMediaSession();
   }
 
   createImpulse(ctx: AudioContext, duration = 2.5, decay = 3): AudioBuffer {

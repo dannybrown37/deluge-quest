@@ -14,7 +14,7 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <title>{title} — Deluge Tools</title>
+    <title>{title} — DelugeKit</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <ClientRouter />
   </head>
@@ -23,7 +23,7 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
       <div class="nav-inner">
         <a href="/" class="nav-brand">
           <span class="nav-logo">⬡</span>
-          <span class="nav-name">Deluge Tools</span>
+          <span class="nav-name">DelugeKit</span>
         </a>
         <div class="nav-links">
           <a href="/manage" class="nav-link">Manage</a>
@@ -85,8 +85,10 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
       }
 
       homeAudio.subscribe(updateMiniPlayer);
+      homeAudio.initMediaSession();
 
       document.addEventListener('astro:page-load', () => {
+        homeAudio.reassertMediaSession();
         updateMiniPlayer();
 
         const btn = document.getElementById('mini-play-btn');

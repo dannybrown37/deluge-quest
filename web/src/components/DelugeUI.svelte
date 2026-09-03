@@ -42,7 +42,7 @@
     return knobMeta[i].hint;
   }
 
-  let screenText = 'DELUGE TOOLS';
+  let screenText = 'DELUGEKIT';
   let screenSubtext = 'drop a song to begin';
   let pads: Pad[][] = [];
   let sidebarPads: Pad[][] = [];
@@ -94,7 +94,7 @@
   }
 
   function idleText(): string {
-    return songs[currentSongIndex]?.name.toUpperCase() ?? 'DELUGE TOOLS';
+    return songs[currentSongIndex]?.name.toUpperCase() ?? 'DELUGEKIT';
   }
 
   function idleSubtext(): string {
@@ -394,7 +394,6 @@
     mounted = true;
     initPads();
     fetchSongList();
-    homeAudio.initMediaSession();
 
     unsubscribe = homeAudio.subscribe(() => {
       syncFromAudio();

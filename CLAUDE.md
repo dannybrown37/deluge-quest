@@ -1,4 +1,4 @@
-# Deluge Tools
+# DelugeKit
 
 Browser-first toolset for the Synthstrom Deluge. A static Astro + Svelte site (`web/`) is the
 product; a Python package (`deluge_tools/`) supplies the file-format logic, shipped into the
