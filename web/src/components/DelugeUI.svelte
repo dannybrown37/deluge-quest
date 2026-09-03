@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from 'astro:transitions/client';
   import { homeAudio } from '../lib/homeAudio';
+  import { PAD_SOUNDS, velocityForPosition, glowForVelocity, PadEffectsChain } from '../lib/padSounds';
 
   interface Pad {
     row: number;
@@ -12,6 +13,8 @@
     link?: string;
     label?: string;
     group?: string;
+    soundIndex?: number;
+    velocity?: number;
   }
 
   const ROWS = 8;
@@ -52,6 +55,9 @@
   let dragStartAngle = 0;
 
   export let initialSongName: string | undefined = undefined;
+  $: isSongPage = !!initialSongName;
+  let padAudioCtx: AudioContext | null = null;
+  let padEffects: PadEffectsChain | null = null;
 
   $: songs = homeAudio.songs;
   $: currentSongIndex = homeAudio.currentSongIndex;
@@ -165,6 +171,12 @@
     return FUTURE_TOOLS[idx];
   }
 
+  function soundAt(r: number, c: number): number {
+    const blockRow = Math.floor(r / 4);
+    const blockCol = Math.floor(c / 4);
+    return blockRow * 4 + blockCol;
+  }
+
   function initPads() {
     pads = [];
     for (let r = 0; r < ROWS; r++) {
@@ -176,22 +188,39 @@
         let link: string | undefined;
         let label: string | undefined;
         let group: string | undefined;
+        let soundIndex: number | undefined;
+        let velocity: number | undefined;
 
-        const tool = toolAt(r, c);
-        if (tool) {
-          const localR = r % 4, localC = c % 4;
-          color = tool.color; glowIntensity = 0.9 - (localR * 4 + localC) * 0.05; active = true;
-          link = tool.link; label = tool.label; group = tool.group;
+        if (isSongPage) {
+          const idx = soundAt(r, c);
+          if (idx < PAD_SOUNDS.length) {
+            const sound = PAD_SOUNDS[idx];
+            const localR = r % 4, localC = c % 4;
+            velocity = velocityForPosition(localR, localC);
+            color = sound.color;
+            glowIntensity = glowForVelocity(velocity);
+            active = true;
+            label = sound.name;
+            group = `sound-${idx}`;
+            soundIndex = idx;
+          }
         } else {
-          const future = futureAt(r, c);
-          if (future) {
-            const fLocalR = r % 4, fLocalC = c % 4;
-            color = future.color; glowIntensity = 0.15 - (fLocalR * 4 + fLocalC) * 0.008;
-            group = future.group; label = future.label;
+          const tool = toolAt(r, c);
+          if (tool) {
+            const localR = r % 4, localC = c % 4;
+            color = tool.color; glowIntensity = 0.9 - (localR * 4 + localC) * 0.05; active = true;
+            link = tool.link; label = tool.label; group = tool.group;
+          } else {
+            const future = futureAt(r, c);
+            if (future) {
+              const fLocalR = r % 4, fLocalC = c % 4;
+              color = future.color; glowIntensity = 0.15 - (fLocalR * 4 + fLocalC) * 0.008;
+              group = future.group; label = future.label;
+            }
           }
         }
 
-        row.push({ row: r, col: c, color, glowIntensity, active, link, label, group });
+        row.push({ row: r, col: c, color, glowIntensity, active, link, label, group, soundIndex, velocity });
       }
       pads.push(row);
     }
@@ -228,6 +257,11 @@
   function handlePadHover(pad: Pad) {
     if (!pad.label) return;
     screenText = pad.label.toUpperCase();
+    if (pad.soundIndex !== undefined && pad.velocity !== undefined) {
+      const pct = Math.round(pad.velocity * 100);
+      screenSubtext = `velocity ${pct}%`;
+      return;
+    }
     const allTools = [...TOOLS, ...FUTURE_TOOLS];
     const match = allTools.find(t => t.group === pad.group);
     if (match) { screenSubtext = match.subtext; }
@@ -241,7 +275,24 @@
     screenSubtext = idleSubtext();
   }
 
+  function ensurePadAudio() {
+    if (!padAudioCtx) {
+      padAudioCtx = new AudioContext();
+      padEffects = new PadEffectsChain(padAudioCtx);
+      padEffects.updateVolume(knobValues[6]);
+      padEffects.updateFilter(knobValues[2], knobValues[3]);
+      padEffects.updateReverb(knobValues[4]);
+      padEffects.updateDelay(knobValues[0], knobValues[1]);
+    }
+    if (padAudioCtx.state === 'suspended') padAudioCtx.resume();
+  }
+
   function handlePadClick(pad: Pad) {
+    if (pad.soundIndex !== undefined && pad.velocity !== undefined) {
+      ensurePadAudio();
+      PAD_SOUNDS[pad.soundIndex].play(padAudioCtx!, padEffects!.input, pad.velocity);
+      return;
+    }
     if (pad.link) {
       if (pad.link.startsWith('http')) window.open(pad.link, '_blank', 'noopener');
       else navigate(pad.link);
@@ -334,12 +385,18 @@
     homeAudio.updateReverb(knobValues[4]);
     homeAudio.updateDelay(knobValues[0], knobValues[1]);
     homeAudio.updatePlaybackRate(knobValues[5]);
+    if (padEffects) {
+      padEffects.updateVolume(knobValues[6]);
+      padEffects.updateFilter(knobValues[2], knobValues[3]);
+      padEffects.updateReverb(knobValues[4]);
+      padEffects.updateDelay(knobValues[0], knobValues[1]);
+    }
   }
 
-  function updateVolume() { homeAudio.updateVolume(knobValues[6]); }
-  function updateReverb() { homeAudio.updateReverb(knobValues[4]); }
-  function updateDelay() { homeAudio.updateDelay(knobValues[0], knobValues[1]); }
-  function updateFilter() { homeAudio.updateFilter(knobValues[2], knobValues[3]); }
+  function updateVolume() { homeAudio.updateVolume(knobValues[6]); padEffects?.updateVolume(knobValues[6]); }
+  function updateReverb() { homeAudio.updateReverb(knobValues[4]); padEffects?.updateReverb(knobValues[4]); }
+  function updateDelay() { homeAudio.updateDelay(knobValues[0], knobValues[1]); padEffects?.updateDelay(knobValues[0], knobValues[1]); }
+  function updateFilter() { homeAudio.updateFilter(knobValues[2], knobValues[3]); padEffects?.updateFilter(knobValues[2], knobValues[3]); }
   function updatePlaybackRate() { homeAudio.updatePlaybackRate(knobValues[5]); }
 
   function getPlaybackRate(): number {
@@ -427,6 +484,7 @@
       window.removeEventListener('mouseup', handleKnobEnd);
       window.removeEventListener('touchmove', handleKnobMove);
       window.removeEventListener('touchend', handleKnobEnd);
+      if (padAudioCtx) { try { padAudioCtx.close(); } catch {} padAudioCtx = null; padEffects = null; }
     };
   });
 </script>
@@ -665,7 +723,7 @@
             <button
               class="pad"
               class:pad--lit={pad.glowIntensity > 0}
-              class:pad--clickable={!!pad.link}
+              class:pad--clickable={!!pad.link || pad.soundIndex !== undefined}
               style="--glow-color: {pad.color}; --glow-intensity: {pad.glowIntensity}"
               on:mouseenter={() => handlePadHover(pad)}
               on:mouseleave={handlePadLeave}
@@ -679,7 +737,7 @@
             <button
               class="pad"
               class:pad--lit={pad.glowIntensity > 0}
-              class:pad--clickable={!!pad.link}
+              class:pad--clickable={!!pad.link || pad.soundIndex !== undefined}
               style="--glow-color: {pad.color}; --glow-intensity: {pad.glowIntensity}"
               on:mouseenter={() => handlePadHover(pad)}
               on:mouseleave={handlePadLeave}

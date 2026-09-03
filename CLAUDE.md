@@ -107,6 +107,7 @@ per audio file for shareable song links.
 | `patchAudio.ts` | Web Audio synth engine (subtractive + FM voices, envelopes) for `/patch` |
 | `songAudio.ts` | Song-level scheduler over `patchAudio` voices + card samples for `/preview` |
 | `kitXml.ts` | `Kit`/`KitRow` model and Deluge kit XML serialization for `/kits` |
+| `padSounds.ts` | 8 Web Audio synth percussion sounds (kick, snare, hat, clap, tom, zap, blip, sweep) for the DelugeUI pad grid on `/songs/[slug]` pages. Velocity-to-glow mapping |
 
 ## Key Design Decisions
 
