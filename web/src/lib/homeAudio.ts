@@ -10,8 +10,8 @@ type Listener = () => void;
 
 class HomeAudioPlayer {
   audioCtx: AudioContext | null = null;
-  audioBuffer: AudioBuffer | null = null;
-  sourceNode: AudioBufferSourceNode | null = null;
+  mediaElement: HTMLAudioElement | null = null;
+  private mediaSource: MediaElementAudioSourceNode | null = null;
   gainNode: GainNode | null = null;
   filterNode: BiquadFilterNode | null = null;
   reverbNode: ConvolverNode | null = null;
@@ -23,16 +23,12 @@ class HomeAudioPlayer {
   analyserNode: AnalyserNode | null = null;
 
   isPlaying = false;
-  playStartTime = 0;
-  playOffset = 0;
   songLoaded = false;
   loadedSongIndex = -1;
 
   songs: Song[] = [];
   currentSongIndex = 0;
 
-  keeper: HTMLAudioElement | null = null;
-  private keeperUrl = '';
   private listeners: Set<Listener> = new Set();
   private timerRaf = 0;
 
@@ -50,12 +46,16 @@ class HomeAudioPlayer {
   }
 
   get elapsed(): number {
-    if (!this.isPlaying || !this.audioCtx || !this.sourceNode) return this.playOffset;
-    return this.playOffset + (this.audioCtx.currentTime - this.playStartTime) * this.sourceNode.playbackRate.value;
+    return this.mediaElement?.currentTime ?? 0;
+  }
+
+  get playOffset(): number {
+    return this.mediaElement?.currentTime ?? 0;
   }
 
   get duration(): number {
-    return this.audioBuffer?.duration ?? 0;
+    const d = this.mediaElement?.duration ?? 0;
+    return Number.isFinite(d) ? d : 0;
   }
 
   async fetchSongList(): Promise<void> {
@@ -69,74 +69,6 @@ class HomeAudioPlayer {
         }
       }
     } catch { /* no songs available */ }
-  }
-
-  private silentWavUrl(): string {
-    const sampleRate = 8000;
-    const frames = sampleRate;
-    const size = 44 + frames * 2;
-    const buf = new ArrayBuffer(size);
-    const view = new DataView(buf);
-    const ascii = (offset: number, text: string) => {
-      for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
-    };
-    ascii(0, 'RIFF');
-    view.setUint32(4, size - 8, true);
-    ascii(8, 'WAVEfmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    ascii(36, 'data');
-    view.setUint32(40, frames * 2, true);
-    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
-  }
-
-  private initKeeper() {
-    if (this.keeper) return;
-    this.keeperUrl = this.silentWavUrl();
-    this.keeper = new Audio(this.keeperUrl);
-    this.keeper.loop = true;
-    this.keeper.volume = 0;
-  }
-
-  updateMediaMetadata() {
-    if (!('mediaSession' in navigator)) return;
-    const song = this.currentSong;
-    if (!song) return;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: song.name,
-      artist: 'DelugeKit',
-      album: 'Demo Tracks',
-    });
-  }
-
-  private setMediaState(state: MediaSessionPlaybackState) {
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = state;
-  }
-
-  initMediaSession() {
-    if (!('mediaSession' in navigator)) return;
-    const set = (action: MediaSessionAction, handler: (() => void) | null) => {
-      try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* unsupported */ }
-    };
-    set('play', () => { if (!this.isPlaying) this.togglePlay(); });
-    set('pause', () => { if (this.isPlaying) this.togglePlay(); });
-    set('stop', () => { if (this.isPlaying) this.togglePlay(); });
-    set('nexttrack', () => { if (this.songs.length > 1) this.stepSong(1); });
-    set('previoustrack', () => { if (this.songs.length > 1) this.stepSong(-1); });
-  }
-
-  reassertMediaSession() {
-    if (!this.isPlaying) return;
-    this.initKeeper();
-    this.keeper?.play().catch(() => {});
-    this.updateMediaMetadata();
-    this.setMediaState('playing');
-    this.initMediaSession();
   }
 
   createImpulse(ctx: AudioContext, duration = 2.5, decay = 3): AudioBuffer {
@@ -158,8 +90,14 @@ class HomeAudioPlayer {
       return;
     }
     this.audioCtx = new AudioContext();
+
+    this.mediaElement = new Audio();
+    this.mediaElement.crossOrigin = 'anonymous';
+    this.mediaSource = this.audioCtx.createMediaElementSource(this.mediaElement);
+
     this.filterNode = this.audioCtx.createBiquadFilter();
     this.filterNode.type = 'lowpass';
+    this.filterNode.frequency.value = 22050;
     this.gainNode = this.audioCtx.createGain();
     this.dryGain = this.audioCtx.createGain();
     this.wetGain = this.audioCtx.createGain();
@@ -171,6 +109,9 @@ class HomeAudioPlayer {
     this.delayFeedback.gain.value = 0.35;
     this.delayWet = this.audioCtx.createGain();
     this.delayWet.gain.value = 0.4;
+
+    this.mediaSource.connect(this.filterNode);
+
     this.filterNode.connect(this.dryGain);
     this.filterNode.connect(this.reverbNode);
     this.filterNode.connect(this.delayNode);
@@ -185,6 +126,13 @@ class HomeAudioPlayer {
     this.analyserNode.fftSize = 256;
     this.gainNode.connect(this.analyserNode);
     this.analyserNode.connect(this.audioCtx.destination);
+
+    this.mediaElement.addEventListener('ended', () => {
+      this.isPlaying = false;
+      this.setMediaState('none');
+      cancelAnimationFrame(this.timerRaf);
+      this.notify();
+    });
   }
 
   private songUrl(file: string): string {
@@ -192,30 +140,36 @@ class HomeAudioPlayer {
   }
 
   async loadSong(idx: number): Promise<boolean> {
-    if (!this.audioCtx || this.songs.length === 0) return false;
-    if (this.isPlaying && this.sourceNode) {
-      this.sourceNode.onended = null;
-      this.sourceNode.stop();
-      this.sourceNode = null;
+    if (!this.mediaElement || this.songs.length === 0) return false;
+    if (this.isPlaying) {
+      this.mediaElement.pause();
       this.isPlaying = false;
     }
-    this.playOffset = 0;
     this.currentSongIndex = idx;
     const song = this.songs[idx];
-    try {
-      const resp = await fetch(this.songUrl(song.file));
-      if (!resp.ok) return false;
-      const buf = await resp.arrayBuffer();
-      this.audioBuffer = await this.audioCtx.decodeAudioData(buf);
-      this.songLoaded = true;
-      this.loadedSongIndex = idx;
-      this.updateMediaMetadata();
-      this.notify();
-      return true;
-    } catch (e) {
-      console.error('Audio load failed:', e);
-      return false;
-    }
+
+    return new Promise<boolean>((resolve) => {
+      const el = this.mediaElement!;
+      const onReady = () => {
+        el.removeEventListener('canplaythrough', onReady);
+        el.removeEventListener('error', onError);
+        this.songLoaded = true;
+        this.loadedSongIndex = idx;
+        this.updateMediaMetadata();
+        this.notify();
+        resolve(true);
+      };
+      const onError = () => {
+        el.removeEventListener('canplaythrough', onReady);
+        el.removeEventListener('error', onError);
+        console.error('Audio load failed:', song.file);
+        resolve(false);
+      };
+      el.addEventListener('canplaythrough', onReady, { once: true });
+      el.addEventListener('error', onError, { once: true });
+      el.src = this.songUrl(song.file);
+      el.load();
+    });
   }
 
   async stepSong(delta: number): Promise<void> {
@@ -226,46 +180,56 @@ class HomeAudioPlayer {
     if (wasPlaying) await this.togglePlay();
   }
 
+  private mediaSessionReady = false;
+
+  private initMediaSession() {
+    if (this.mediaSessionReady) return;
+    if (!('mediaSession' in navigator)) return;
+    this.mediaSessionReady = true;
+    const set = (action: MediaSessionAction, handler: (() => void) | null) => {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* unsupported */ }
+    };
+    set('play', () => { if (!this.isPlaying) this.togglePlay(); });
+    set('pause', () => { if (this.isPlaying) this.togglePlay(); });
+    set('stop', () => { if (this.isPlaying) this.togglePlay(); });
+    set('nexttrack', () => { if (this.songs.length > 1) this.stepSong(1); });
+    set('previoustrack', () => { if (this.songs.length > 1) this.stepSong(-1); });
+  }
+
+  updateMediaMetadata() {
+    if (!('mediaSession' in navigator)) return;
+    const song = this.currentSong;
+    if (!song) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.name,
+      artist: 'DelugeKit',
+      album: 'Demo Tracks',
+    });
+  }
+
+  private setMediaState(state: MediaSessionPlaybackState) {
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = state;
+  }
+
   async togglePlay(playbackRate = 1.0): Promise<void> {
     await this.initAudio();
-    if (!this.audioCtx || !this.audioBuffer || !this.gainNode) return;
+    if (!this.mediaElement || !this.songLoaded || !this.gainNode) return;
 
-    if (this.isPlaying && this.sourceNode) {
-      this.playOffset += (this.audioCtx.currentTime - this.playStartTime) * this.sourceNode.playbackRate.value;
-      this.sourceNode.stop();
-      this.sourceNode = null;
+    if (this.isPlaying) {
+      this.mediaElement.pause();
       this.isPlaying = false;
-      this.keeper?.pause();
       this.setMediaState('paused');
       cancelAnimationFrame(this.timerRaf);
       this.notify();
       return;
     }
 
-    if (this.playOffset >= this.audioBuffer.duration) this.playOffset = 0;
-
-    this.sourceNode = this.audioCtx.createBufferSource();
-    this.sourceNode.buffer = this.audioBuffer;
-    this.sourceNode.playbackRate.value = playbackRate;
-    this.sourceNode.connect(this.filterNode!);
-    this.sourceNode.onended = () => {
-      if (this.isPlaying) {
-        this.isPlaying = false;
-        this.playOffset = 0;
-        this.sourceNode = null;
-        this.keeper?.pause();
-        this.setMediaState('none');
-        cancelAnimationFrame(this.timerRaf);
-        this.notify();
-      }
-    };
-    this.sourceNode.start(0, this.playOffset);
-    this.playStartTime = this.audioCtx.currentTime;
+    this.mediaElement.playbackRate = playbackRate;
+    await this.mediaElement.play();
     this.isPlaying = true;
-    this.initKeeper();
-    this.keeper?.play().catch(() => {});
     this.updateMediaMetadata();
     this.setMediaState('playing');
+    this.initMediaSession();
     this.startTimer();
     this.notify();
   }
@@ -307,7 +271,7 @@ class HomeAudioPlayer {
 
   updatePlaybackRate(value: number) {
     const rate = value <= 64 ? 0.5 + (value / 64) * 0.5 : 1.0 + ((value - 64) / 63) * 1.0;
-    if (this.sourceNode) this.sourceNode.playbackRate.value = rate;
+    if (this.mediaElement) this.mediaElement.playbackRate = rate;
   }
 
   formatTime(current: number, total: number): string {

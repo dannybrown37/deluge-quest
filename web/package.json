@@ -20,5 +20,9 @@
   },
   "allowScripts": {
     "esbuild": true
+  },
+  "devDependencies": {
+    "happy-dom": "^20.13.2",
+    "vitest": "^5.0.0"
   }
 }

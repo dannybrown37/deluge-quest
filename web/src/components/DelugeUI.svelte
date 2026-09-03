@@ -789,7 +789,7 @@
       <div class="grid-label-group grid-label-group--sound6"><span class="grid-label-text">Blip</span></div>
       <div class="grid-label-group grid-label-group--sound7"><span class="grid-label-text">Sweep</span></div>
       <div class="grid-labels-gap"></div>
-      <div class="grid-label-group grid-label-group--sidebar-left"></div>
+      <div class="grid-label-group grid-label-group--sidebar-left"><span class="grid-label-text">About</span></div>
       <div class="grid-label-group grid-label-group--sidebar-right"><span class="grid-label-text">Tools</span></div>
     </div>
   </div>
