@@ -49,8 +49,9 @@ import DelugeUI from '../components/DelugeUI.svelte';
 
 <style>
   .landing {
-    padding: 2rem 1.5rem 2rem;
+    padding: 0.75rem 0.5rem 0.5rem;
     text-align: center;
+    overflow: hidden;
   }
 
   .mobile-hero {
@@ -58,9 +59,9 @@ import DelugeUI from '../components/DelugeUI.svelte';
   }
 
   @media (max-width: 700px) {
-    .deluge-desktop { display: none; }
-    .mobile-hero { display: block; }
-    .landing { padding: 2rem 1rem; }
+    .deluge-desktop { display: block; }
+    .mobile-hero { display: none; }
+    .landing { padding: 0.5rem 0.25rem 0.25rem; }
   }
 
   .mobile-title {

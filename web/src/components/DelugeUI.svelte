@@ -106,7 +106,7 @@
 
   function idleSubtext(): string {
     if (!songs[currentSongIndex]) return 'drop a song to begin';
-    return songLoaded ? 'press play' : 'press load';
+    return homeAudio.loadedSongIndex === currentSongIndex ? 'press play' : 'press load';
   }
 
   async function fetchSongList() {
@@ -133,9 +133,21 @@
   }
 
   const DESIGN_WIDTH = 900;
+  const FOOTER_RESERVE = 50;
   let wrapperWidth = DESIGN_WIDTH;
   let housingHeight = 0;
-  $: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH);
+  let scalerEl: HTMLElement;
+  let availableHeight = 9999;
+
+  function measureAvailable() {
+    if (!scalerEl) return;
+    const top = scalerEl.getBoundingClientRect().top + window.scrollY;
+    availableHeight = window.innerHeight - top - FOOTER_RESERVE;
+  }
+
+  $: heightScale = housingHeight > 0 && availableHeight > 200 ? availableHeight / housingHeight : 1;
+  $: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH, heightScale);
+  $: offsetX = (wrapperWidth - DESIGN_WIDTH * scale) / 2;
 
   const AUDITION_PALETTE = ['#4488DD','#DD55AA','#DDBB33','#5AABAC','#CC3030','#AACC30','#3355CC','#FF6622'];
 
@@ -295,7 +307,7 @@
   async function initAudio() {
     await homeAudio.initAudio();
     applyKnobs();
-    if (songs.length > 0 && !homeAudio.songLoaded) await loadSong(currentSongIndex);
+    if (songs.length > 0 && homeAudio.loadedSongIndex !== homeAudio.currentSongIndex) await loadSong(homeAudio.currentSongIndex);
   }
 
   async function loadSong(idx: number) {
@@ -452,6 +464,9 @@
     initPads();
     fetchSongList();
 
+    requestAnimationFrame(measureAvailable);
+    function onResize() { measureAvailable(); }
+
     unsubscribe = homeAudio.subscribe(() => {
       syncFromAudio();
     });
@@ -460,6 +475,7 @@
       syncFromAudio();
     }
 
+    window.addEventListener('resize', onResize);
     window.addEventListener('keydown', handleBrowseKeys);
     window.addEventListener('mousedown', handleOutsideClick);
     window.addEventListener('mousemove', handleKnobMove);
@@ -469,6 +485,7 @@
 
     return () => {
       unsubscribe?.();
+      window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', handleBrowseKeys);
       window.removeEventListener('mousedown', handleOutsideClick);
       window.removeEventListener('mousemove', handleKnobMove);
@@ -480,8 +497,8 @@
   });
 </script>
 
-<div class="deluge-scaler" bind:clientWidth={wrapperWidth} style="height: {housingHeight * scale}px;">
-<div class="deluge-housing" bind:clientHeight={housingHeight} style="transform: scale({scale}); transform-origin: top center;">
+<div class="deluge-scaler" bind:this={scalerEl} bind:clientWidth={wrapperWidth} style="height: {housingHeight * scale}px;">
+<div class="deluge-housing" bind:clientHeight={housingHeight} style="transform: scale({scale}); transform-origin: top left; position: relative; left: {offsetX}px;">
   <div class="wood-panel wood-panel--left"></div>
 
   <div class="deluge-body">
@@ -764,7 +781,9 @@
   /* === Scaler wrapper === */
   .deluge-scaler {
     width: 100%;
+    max-width: 100vw;
     position: relative;
+    overflow: hidden;
   }
 
   /* === Housing === */

@@ -25,6 +25,7 @@ class HomeAudioPlayer {
   playStartTime = 0;
   playOffset = 0;
   songLoaded = false;
+  loadedSongIndex = -1;
 
   songs: Song[] = [];
   currentSongIndex = 0;
@@ -203,6 +204,7 @@ class HomeAudioPlayer {
       const buf = await resp.arrayBuffer();
       this.audioBuffer = await this.audioCtx.decodeAudioData(buf);
       this.songLoaded = true;
+      this.loadedSongIndex = idx;
       this.updateMediaMetadata();
       this.notify();
       return true;

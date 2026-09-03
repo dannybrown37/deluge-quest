@@ -31,9 +31,9 @@
 
   async function toggle() {
     await homeAudio.initAudio();
-    if (!homeAudio.songLoaded) {
-      const idx = homeAudio.songs.findIndex(s => s.name.toLowerCase() === name.toLowerCase());
-      if (idx >= 0) await homeAudio.loadSong(idx);
+    const idx = homeAudio.songs.findIndex(s => s.name.toLowerCase() === name.toLowerCase());
+    if (idx >= 0 && homeAudio.loadedSongIndex !== idx) {
+      await homeAudio.loadSong(idx);
     }
     await homeAudio.togglePlay();
     sync();
