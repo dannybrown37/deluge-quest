@@ -26,7 +26,7 @@ This is a Deluge site, so all tracks here were made with sounds generated entire
 
 I'm Danny, a self-taught professional software engineer and classically/academically trained amateur musician.
 
-I love the Deluge! I got mine (still a 7-seg screen) at the end of 2019. I have owned dozens of instruments in my life, probably into the 100s now (easily so if you count effects pedals...), and the Deluge is by far my favorite, sparking the most creativity and resulting in the most output.
+I love the Deluge! I got my still-7-seg-screen unit at the end of 2019. I have owned dozens of instruments in my life, probably into the 100s now (easily so if you count effects pedals...), and the Deluge is by far my favorite, sparking the most creativity and resulting in the most output.
 
 I have been writing scripts to help me manage my Deluge files for years. This website represents a more ambitious quest to share tools, music, and a really cool website with the Deluge community.
 
