@@ -129,10 +129,16 @@ check: lint typecheck test web-lint web-typecheck web-test
 build: web-rebuild-wheel web-build
 
 # Run all tests with coverage, merge into one local HTML report
-coverage: test-cov web-test-cov
+coverage:
   #!/bin/bash
   set -e
   command -v lcov >/dev/null || { echo "Missing 'lcov'. Install with: sudo apt-get install -y lcov"; exit 1; }
+  just test-cov &
+  py_pid=$!
+  just web-test-cov &
+  web_pid=$!
+  wait "$py_pid"
+  wait "$web_pid"
   mkdir -p coverage
   sed 's|^SF:|SF:web/|' web/coverage/lcov.info > coverage/web.lcov
   lcov --add-tracefile coverage/python.lcov --add-tracefile coverage/web.lcov --output-file coverage/merged.lcov
