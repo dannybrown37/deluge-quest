@@ -30,6 +30,7 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-n auto"
+markers = ["no_parse_patch: skip the autouse parse_song patch fixture in test_cli.py"]
 
 [tool.ruff]
 line-length = 100
