@@ -1703,6 +1703,11 @@
           </button>
         </p>
       {/if}
+      <p class="dropzone-hint">
+        Don't have a card yet?
+        <a href="https://synthstrom.com/product/deluge/#downloads" target="_blank" rel="noopener">Download the official factory card</a> from Synthstrom,
+        unzip it, then browse to the extracted folder.
+      </p>
     </div>
   </div>
 
