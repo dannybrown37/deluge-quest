@@ -151,8 +151,9 @@ check: lint typecheck test web-lint web-typecheck web-test
 # Build everything (Python + web)
 build: web-rebuild-wheel web-build
 
-# Run all tests with coverage, merge into one local HTML report. Pass --open to open it in the browser.
-coverage open="":
+# Run all tests with coverage, merge into one local HTML report.
+# Pass --open to open it in the browser, --verbose for the full per-suite tables.
+coverage open="" verbose="":
   #!/bin/bash
   set -e
   command -v lcov >/dev/null || { echo "Missing 'lcov'. Install with: sudo apt-get install -y lcov"; exit 1; }
@@ -189,17 +190,25 @@ coverage open="":
   wait "$web_pid" || web_status=$?
   wait "$pyodide_pid" || pyodide_status=$?
 
-  printf "\n\033[1m=== Python coverage (pytest) ===\033[0m\n"
-  sed -n '/^Name /,/^TOTAL/p' coverage/python.log | colorize_pct
-  grep -E "passed|failed|error" coverage/python.log | tail -1
+  if [ -n "{{verbose}}" ]; then
+    printf "\n\033[1m=== Python coverage (pytest) ===\033[0m\n"
+    sed -n '/^Name /,/^TOTAL/p' coverage/python.log | colorize_pct
+    grep -E "passed|failed|error" coverage/python.log | tail -1
 
-  printf "\n\033[1m=== Web coverage (vitest) ===\033[0m\n"
-  sed -n '/^File /,$p' coverage/web.log
-  grep -E "Test Files|Tests " coverage/web.log
+    printf "\n\033[1m=== Web coverage (vitest) ===\033[0m\n"
+    sed -n '/^File /,$p' coverage/web.log
+    grep -E "Test Files|Tests " coverage/web.log
 
-  printf "\n\033[1m=== Pyodide integration (real Pyodide/WASM) ===\033[0m\n"
-  sed -n '/^File /,$p' coverage/pyodide.log
-  grep -E "Test Files|Tests " coverage/pyodide.log
+    printf "\n\033[1m=== Pyodide integration (real Pyodide/WASM) ===\033[0m\n"
+    sed -n '/^File /,$p' coverage/pyodide.log
+    grep -E "Test Files|Tests " coverage/pyodide.log
+  else
+    printf "\n\033[1m=== Test suites ===\033[0m\n"
+    printf "Python:  "; grep -E "passed|failed|error" coverage/python.log | tail -1
+    printf "Web:     "; grep -E "Tests " coverage/web.log
+    printf "Pyodide: "; grep -E "Tests " coverage/pyodide.log
+    printf "(pass --verbose for full per-suite coverage tables)\n"
+  fi
 
   if [ "$py_status" -ne 0 ] || [ "$web_status" -ne 0 ] || [ "$pyodide_status" -ne 0 ]; then
     printf "\nTests failed — full logs: coverage/python.log, coverage/web.log, coverage/pyodide.log\n" >&2
@@ -228,6 +237,12 @@ coverage open="":
   # lcov/genhtml don't report branches at all unless explicitly told to.
   lcov --rc lcov_branch_coverage=1 --add-tracefile coverage/python_fixed.lcov --add-tracefile coverage/web.lcov --add-tracefile coverage/pyodide.lcov --output-file coverage/merged.lcov > coverage/lcov-merge.log 2>&1
   genhtml --rc genhtml_branch_coverage=1 coverage/merged.lcov --output-directory coverage/html > coverage/genhtml.log 2>&1
+
+  # Per-suite tables above are single-suite — a file exercised only by the pyodide
+  # integration suite (like pyodide.ts) reads as 0% in the web-vitest table even
+  # though it's covered overall. This merged-per-file table is the real number.
+  printf "\n\033[1m=== Combined coverage by file ===\033[0m\n"
+  lcov --rc lcov_branch_coverage=1 --list coverage/merged.lcov 2>/dev/null | colorize_pct
 
   printf "\n\033[1m=== Combined coverage ===\033[0m\n"
   grep -A3 "^Summary coverage rate" coverage/lcov-merge.log | colorize_pct
