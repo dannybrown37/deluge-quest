@@ -662,7 +662,7 @@
         </div>
 
         <div class="screen-area">
-          <div class="deluge-logo">✦ deluge</div>
+          <div class="deluge-logo">✦ deluge.quest</div>
           <div class="oled-row">
             <div class="oled-screen">
               <div class="oled-text" use:marquee={screenText}><span>{screenText}</span></div>
