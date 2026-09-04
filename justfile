@@ -15,6 +15,23 @@ install:
   uv venv
   uv pip install -e ".[dev]"
 
+# Download the Synthstrom factory SD card contents as a test fixture (gitignored, not committed)
+fetch-fixtures:
+  #!/bin/bash
+  set -e
+  dest="tests/fixtures/factory-card"
+  if [ -d "$dest" ] && [ -n "$(ls -A "$dest" 2>/dev/null)" ]; then
+    echo "Factory card fixtures already present at $dest"
+    exit 0
+  fi
+  mkdir -p "$dest"
+  tmpzip=$(mktemp --suffix=.zip)
+  trap 'rm -f "$tmpzip"' EXIT
+  echo "Downloading factory card contents..."
+  curl -fL -o "$tmpzip" "https://s3.us-east-2.amazonaws.com/synthstrom-audible-deluge/Deluge+V2p1p0+factory+card+contents.zip"
+  unzip -q "$tmpzip" -d "$dest"
+  echo "Factory card fixtures extracted to $dest"
+
 # Run tests
 test:
   uv run pytest tests/ -v
