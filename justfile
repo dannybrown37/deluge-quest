@@ -96,6 +96,12 @@ web-test:
 web-test-cov:
   cd web && npx vitest run --coverage
 
+# Run the real-Pyodide integration test (real WASM runtime, real wheel, no mocks;
+# needs network on first run to fetch Pyodide's package set, then ~3s cached).
+# Included in `just coverage`; not part of `just check` since it's out-of-repo network I/O.
+web-test-pyodide:
+  cd web && npm run test:integration
+
 # Rebuild Python wheel for Pyodide
 web-rebuild-wheel:
   cd web && bash build-wheel.sh
@@ -173,11 +179,15 @@ coverage open="":
   py_pid=$!
   FORCE_COLOR=1 just web-test-cov > coverage/web.log 2>&1 &
   web_pid=$!
+  just web-test-pyodide > coverage/pyodide.log 2>&1 &
+  pyodide_pid=$!
 
   py_status=0
   web_status=0
+  pyodide_status=0
   wait "$py_pid" || py_status=$?
   wait "$web_pid" || web_status=$?
+  wait "$pyodide_pid" || pyodide_status=$?
 
   printf "\n\033[1m=== Python coverage (pytest) ===\033[0m\n"
   sed -n '/^Name /,/^TOTAL/p' coverage/python.log | colorize_pct
@@ -187,13 +197,18 @@ coverage open="":
   sed -n '/^File /,$p' coverage/web.log
   grep -E "Test Files|Tests " coverage/web.log
 
-  if [ "$py_status" -ne 0 ] || [ "$web_status" -ne 0 ]; then
-    printf "\nTests failed — full logs: coverage/python.log, coverage/web.log\n" >&2
+  printf "\n\033[1m=== Pyodide integration (real Pyodide/WASM) ===\033[0m\n"
+  sed -n '/^File /,$p' coverage/pyodide.log
+  grep -E "Test Files|Tests " coverage/pyodide.log
+
+  if [ "$py_status" -ne 0 ] || [ "$web_status" -ne 0 ] || [ "$pyodide_status" -ne 0 ]; then
+    printf "\nTests failed — full logs: coverage/python.log, coverage/web.log, coverage/pyodide.log\n" >&2
     exit 1
   fi
 
   sed 's|^SF:|SF:web/|' web/coverage/lcov.info > coverage/web.lcov
-  lcov --add-tracefile coverage/python.lcov --add-tracefile coverage/web.lcov --output-file coverage/merged.lcov > coverage/lcov-merge.log 2>&1
+  sed 's|^SF:|SF:web/|' web/coverage-integration/lcov.info > coverage/pyodide.lcov
+  lcov --add-tracefile coverage/python.lcov --add-tracefile coverage/web.lcov --add-tracefile coverage/pyodide.lcov --output-file coverage/merged.lcov > coverage/lcov-merge.log 2>&1
   genhtml coverage/merged.lcov --output-directory coverage/html > coverage/genhtml.log 2>&1
 
   printf "\n\033[1m=== Combined coverage ===\033[0m\n"

@@ -21,7 +21,19 @@ export async function loadPyodide(onProgress?: ProgressCallback): Promise<Pyodid
     onProgress?.("Loading deluge_tools", 70);
     await pyodide.loadPackage("micropip");
     const micropip = pyodide.pyimport("micropip");
-    await micropip.install("/py/deluge_tools-0.1.0-py3-none-any.whl");
+    // deps=False: the wheel's METADATA lists music21/mido as unconditional
+    // dependencies (pyproject.toml `dependencies`), but the browser-loaded
+    // modules (parser/converter/musicxml_writer/analyzer/card_scanner) are
+    // pure stdlib and never import music21. Without this, every page load
+    // pulls music21's full chain (matplotlib, numpy, Pillow, ...). mido is
+    // installed separately, on demand, by convertMidiToDelugeXml below.
+    // callKwargs (not a plain trailing object) is required: a normal call
+    // passes {deps: false} as the positional `keep_going` arg instead,
+    // which silently leaves deps at its default of True.
+    await micropip.install.callKwargs(
+      "/py/deluge_tools-0.1.0-py3-none-any.whl",
+      { deps: false }
+    );
 
     onProgress?.("Ready", 100);
     return pyodide;

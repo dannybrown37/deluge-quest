@@ -1,6 +1,7 @@
 # build output
 dist/
 coverage/
+coverage-integration/
 # generated types
 .astro/
 

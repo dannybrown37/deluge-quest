@@ -31,7 +31,7 @@ just setup          # uv venv + pip install -e ".[dev]" + npm install
 just check          # ruff check + pytest
 just web-dev        # Astro dev server at localhost:4321
 just build          # rebuild wheel, then static build
-just coverage       # pytest + vitest coverage, merged into one local HTML report
+just coverage       # pytest + vitest coverage (+ real-Pyodide integration test), merged into one local HTML report
 ```
 
 `justfile` is the task runner of record — prefer it over remembering raw commands. Raw
@@ -111,7 +111,7 @@ per audio file for shareable song links.
 
 | Module | Role |
 |---|---|
-| `pyodide.ts` | The Python↔JS seam. Lazy singleton loader + 4 bridges: `analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML` |
+| `pyodide.ts` | The Python↔JS seam. Lazy singleton loader + 4 bridges: `analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML`. Bridges covered by a real-Pyodide integration test, see Known Issues |
 | `cardStore.ts` | Singleton `cardStore` — the SD card handle, sample index, and song cache, shared across `/manage`, `/stats`, `/kits`, `/preview`. Persists the `FileSystemDirectoryHandle` and a song-XML cache in IndexedDB (`deluge-card-store`, v2). Also exports `walkHandle()` for walking arbitrary directory handles (used by backup) and `APP_MANAGED_DIRS` |
 | `softDelete.ts` | `moveToTrash(root, path)`, `moveFile(root, from, to)`, `updateXmlReferences(root, xmlPaths, xmlTexts, moves)` — file moves with XML ref updating. Backups to `MOVE_BACKUP/` |
 | `patchAudio.ts` | Web Audio synth engine (subtractive + FM voices, envelopes) for `/patch` |
@@ -158,10 +158,28 @@ per audio file for shareable song links.
 - ~~**Filter cutoff default not maxed**~~ **FIXED (×3)** — `homeAudio.initAudio()` creates a `BiquadFilterNode` whose default frequency is 350Hz, not 20kHz. Without an explicit `filterNode.frequency.value = 22050`, songs sound muffled. Regresses whenever `initAudio()` is rewritten — the fix is one line (`filterNode.frequency.value = 22050`) right after creating the node. Pages without knob UI (like `/songs/[slug]`) never called `updateFilter`, so the default stuck.
 - ~~**System play/pause buttons broken**~~ **FIXED (×2)** — `initMediaSession()` registers `MediaSession` handlers for hardware play/pause/next/prev, but was only called from `reassertMediaSession()` which nothing invoked. Fix: call `this.initMediaSession()` inside `togglePlay()` on play start. Regresses whenever `togglePlay()` is rewritten — look for the `initMediaSession()` call.
 - **Thin `web/` test coverage** — vitest is wired up (`web/src/lib/*.test.ts`, `just web-test`,
-  `just check`). Every file in `web/src/lib/` has 100% line coverage except `pyodide.ts`, which
-  is still untested — it needs a real Pyodide/WASM runtime for meaningful coverage, not a DOM
-  mock; flagged for the user to decide (thin marshal-shape test vs. skip) rather than attempted.
-  ~9,000 lines of Svelte still have no automated coverage.
+  `just check`). Every file in `web/src/lib/` has 100% line coverage. `pyodide.ts`'s 4 bridge
+  functions (`analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML`) are
+  covered by a real-runtime integration test (`web/src/lib/pyodide.integration.test.ts`, real
+  Pyodide/WASM + the real wheel, no DOM mocks) — run directly with `just web-test-pyodide`,
+  or as part of `just coverage` (not part of `just check`, since it's the one recipe with
+  out-of-repo network I/O on a cold cache). `loadPyodide()` itself (the browser CDN
+  loader/wiring) is still untested. ~9,000 lines of Svelte still have no automated coverage.
+- ~~**`micropip.install()` pulled `music21`/`matplotlib`/`numpy`/`pillow` on every page
+  load**~~ **FIXED** — found via the new `pyodide.integration.test.ts`. `pyproject.toml` lists
+  `music21` and `mido` as unconditional top-level `dependencies`, so the wheel's METADATA
+  declares them as `Requires-Dist` with no marker; `micropip.install()` with default dependency
+  resolution installed music21's full transitive chain (matplotlib, numpy, Pillow, fonttools,
+  …) on every page that called `loadPyodide()`, not just the CLI path that imports
+  `song_to_score()`. Fixed with `deps=False` (verified safe: no browser-loaded module
+  (parser/converter/musicxml_writer/analyzer/card_scanner) imports music21 at module level —
+  it's a lazy `from music21 import ...` inside `song_to_score()`, CLI-only; `mido` is installed
+  separately, on demand, by `convertMidiToDelugeXml`). **Gotcha**: `micropip.install(path,
+  {deps: false})` called plainly from JS does **not** work and fails silently — a trailing JS
+  object becomes the next *positional* Python arg (`keep_going`), not kwargs, so `deps` stays
+  at its default of `True` with no error. Must use
+  `micropip.install.callKwargs(path, {deps: false})`. Same trap applies to any other
+  Pyodide/micropip call taking Python kwargs from JS.
 - **Only 2 scales** — major and minor. Should support all 14 firmware presets + USER_SCALE label.
 - **`midiChannel`/`cv` instruments** parse correctly now but still render nothing in MusicXML/score output (`converter.py` skips them) — preview/inspector paths (`pyodide.ts`) are fine.
 - **Kit drums at C4** — no General MIDI mapping; all drums render as x-noteheads with lyric labels.
@@ -196,10 +214,11 @@ Keep new `deluge_tools` code stdlib-only unless it is deliberately CLI-only.
 
 ```bash
 cd web
-npm run dev          # Astro dev server at localhost:4321
-npm run build        # Static build → web/dist/  (acceptance bar: zero errors, zero warnings)
-bash build-wheel.sh  # Rebuild Python wheel into web/public/py/
-npx vercel           # Deploy to Vercel
+npm run dev              # Astro dev server at localhost:4321
+npm run build            # Static build → web/dist/  (acceptance bar: zero errors, zero warnings)
+npm run test:integration # Real-Pyodide integration test (slow, network on first run; not in `just check`)
+bash build-wheel.sh      # Rebuild Python wheel into web/public/py/
+npx vercel               # Deploy to Vercel
 ```
 
 **⚠️ The site loads `deluge_tools` from the checked-in wheel, not live source.** Any change to
