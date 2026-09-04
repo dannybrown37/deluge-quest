@@ -56,6 +56,7 @@
   let dragStartY = 0;
   let dragStartAngle = 0;
   let knobDisplayTimer: ReturnType<typeof setTimeout> | null = null;
+  let hoveredPad = false;
 
   function holdKnobDisplay() {
     if (knobDisplayTimer) clearTimeout(knobDisplayTimer);
@@ -97,7 +98,7 @@
     songLoaded = homeAudio.songLoaded;
     currentSongIndex = homeAudio.currentSongIndex;
     songs = homeAudio.songs;
-    if (shouldSyncScreen(isPlaying, knobDisplayTimer, draggingKnob)) {
+    if (shouldSyncScreen({ isPlaying, knobHoldTimer: knobDisplayTimer, draggingKnob, hoveredPad })) {
       screenText = idleText();
       screenSubtext = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
     }
@@ -287,6 +288,7 @@
 
   function handlePadHover(pad: Pad) {
     if (!pad.label) return;
+    hoveredPad = true;
     screenText = pad.label.toUpperCase();
     if (pad.soundIndex !== undefined && pad.velocity !== undefined) {
       const pct = Math.round(pad.velocity * 100);
@@ -304,8 +306,11 @@
   }
 
   function handlePadLeave() {
+    hoveredPad = false;
     screenText = idleText();
-    screenSubtext = idleSubtext();
+    screenSubtext = isPlaying
+      ? homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration)
+      : idleSubtext();
   }
 
   function ensurePadAudio() {

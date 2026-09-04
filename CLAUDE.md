@@ -1,4 +1,4 @@
-# DelugeKit
+# deluge.quest
 
 Browser-first toolset for the Synthstrom Deluge. A static Astro + Svelte site (`web/`) is the
 product; a Python package (`deluge_tools/`) supplies the file-format logic, shipped into the
@@ -119,7 +119,7 @@ per audio file for shareable song links.
 | `padSounds.ts` | 8 Web Audio synth percussion sounds (kick, snare, hat, clap, tom, zap, blip, sweep) for the DelugeUI pad grid on `/songs/[slug]` pages. Velocity-to-glow mapping |
 | `audioVisualizer.ts` | Canvas-based audio visualizer using `AnalyserNode` — frequency bars (gold/teal) when music plays, ambient wave when idle. Used on home page below the Deluge grid |
 | `homeAudio.ts` | Singleton `homeAudio` — the site-wide `<audio>` player + Web Audio FX chain (filter, reverb, delay, analyser), song list, MediaSession wiring. Shared by the home page, the mini-player in `BaseLayout`, and `/songs/[slug]`. Also emits the song analytics events |
-| `screenGuard.ts` | `shouldSyncScreen()` — decides whether the DelugeUI screen shows song info or a held knob value |
+| `screenGuard.ts` | `shouldSyncScreen(state)` — decides whether the DelugeUI screen may revert to song info, or is currently claimed by a held knob value or a hovered pad |
 | `analytics.ts` | Vercel Web Analytics wrapper. `track()` (never throws), `trackToolVisit()`, `trackToolAction()`, plus pure `crossedMarks()`/`percentPlayed()` for listen milestones |
 
 ## Key Design Decisions
