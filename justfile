@@ -19,9 +19,9 @@ install:
 test:
   uv run pytest tests/ -v
 
-# Run tests with coverage
+# Run tests with coverage (terminal + lcov for unified report)
 test-cov:
-  uv run pytest tests/ -v --cov=deluge_tools --cov-report=term-missing
+  uv run pytest tests/ -v --cov=deluge_tools --cov-report=term-missing --cov-report=lcov:coverage/python.lcov
 
 # Lint with ruff
 lint:
@@ -75,6 +75,10 @@ web-typecheck:
 web-test:
   cd web && npm test
 
+# Run web frontend tests with coverage (lcov for unified report)
+web-test-cov:
+  cd web && npx vitest run --coverage
+
 # Rebuild Python wheel for Pyodide
 web-rebuild-wheel:
   cd web && bash build-wheel.sh
@@ -123,6 +127,17 @@ check: lint typecheck test web-lint web-typecheck web-test
 
 # Build everything (Python + web)
 build: web-rebuild-wheel web-build
+
+# Run all tests with coverage, merge into one local HTML report
+coverage: test-cov web-test-cov
+  #!/bin/bash
+  set -e
+  command -v lcov >/dev/null || { echo "Missing 'lcov'. Install with: sudo apt-get install -y lcov"; exit 1; }
+  mkdir -p coverage
+  sed 's|^SF:|SF:web/|' web/coverage/lcov.info > coverage/web.lcov
+  lcov --add-tracefile coverage/python.lcov --add-tracefile coverage/web.lcov --output-file coverage/merged.lcov
+  genhtml coverage/merged.lcov --output-directory coverage/html
+  echo "Combined coverage report: coverage/html/index.html"
 
 # Full dev setup + start web server
 dev: setup web-dev

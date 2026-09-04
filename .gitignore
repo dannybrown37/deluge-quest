@@ -8,6 +8,8 @@ __pycache__/
 .venv/
 build/
 dist/
+coverage/
+.coverage
 
 # Editors / OS
 .DS_Store

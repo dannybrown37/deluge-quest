@@ -31,6 +31,7 @@ just setup          # uv venv + pip install -e ".[dev]" + npm install
 just check          # ruff check + pytest
 just web-dev        # Astro dev server at localhost:4321
 just build          # rebuild wheel, then static build
+just coverage       # pytest + vitest coverage, merged into one local HTML report
 ```
 
 `justfile` is the task runner of record — prefer it over remembering raw commands. Raw
@@ -156,8 +157,10 @@ per audio file for shareable song links.
 - ~~**`arrangementOnlyTracks` ignored**~~ **FIXED** — clips dropped straight into the arranger (no session-view slot) live in a separate top-level `<arrangementOnlyTracks>` block; `clip_index` values with bit 31 set reference it. Previously unparsed → those clips (and any instrument's notes routed through them) showed as 0.
 - ~~**Filter cutoff default not maxed**~~ **FIXED (×3)** — `homeAudio.initAudio()` creates a `BiquadFilterNode` whose default frequency is 350Hz, not 20kHz. Without an explicit `filterNode.frequency.value = 22050`, songs sound muffled. Regresses whenever `initAudio()` is rewritten — the fix is one line (`filterNode.frequency.value = 22050`) right after creating the node. Pages without knob UI (like `/songs/[slug]`) never called `updateFilter`, so the default stuck.
 - ~~**System play/pause buttons broken**~~ **FIXED (×2)** — `initMediaSession()` registers `MediaSession` handlers for hardware play/pause/next/prev, but was only called from `reassertMediaSession()` which nothing invoked. Fix: call `this.initMediaSession()` inside `togglePlay()` on play start. Regresses whenever `togglePlay()` is rewritten — look for the `initMediaSession()` call.
-- **No tests for `web/`** — ~9,000 lines of Svelte and ~1,700 lines of TS, including all the
-  file-mutating card code, have no automated coverage. `just check` only covers Python.
+- **Thin `web/` test coverage** — vitest is wired up (`web/src/lib/*.test.ts`, `just web-test`,
+  `just check`), but only `analytics.ts`, `screenGuard.ts`, `homeAudio.ts` have tests. ~9,000
+  lines of Svelte and most of `src/lib/` (including all the file-mutating card code) still have
+  no automated coverage.
 - **Only 2 scales** — major and minor. Should support all 14 firmware presets + USER_SCALE label.
 - **`midiChannel`/`cv` instruments** parse correctly now but still render nothing in MusicXML/score output (`converter.py` skips them) — preview/inspector paths (`pyodide.ts`) are fine.
 - **Kit drums at C4** — no General MIDI mapping; all drums render as x-noteheads with lyric labels.

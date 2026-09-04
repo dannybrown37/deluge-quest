@@ -28,7 +28,7 @@ I have been writing scripts to help me manage my Deluge files for years. This we
 
 You are right to be skeptical! I've made great attempts to make them as safe to use as possible: soft deletions, confirmation prompts, and no server-side code.
 
-That said! I personally always run these tools on a backup of my SD card, not on the real thing. (Or sometimes on the real thing if I have a really recent backup.) I recommend you do the same. I cannot be responsible for any data loss, so please use these tools at your own risk.
+That said! I personally always run these tools on a backup of my SD card, not on the real thing. (Or sometimes on the real thing if I have a really recent backup.) I recommend you do the same. I cannot be responsible for any data loss, so please follow precautions and use these tools at your own risk.
 
 ## Are these tools secure? What are you tracking?
 
