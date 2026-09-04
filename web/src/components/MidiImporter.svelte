@@ -1,5 +1,6 @@
 <script lang="ts">
   import { loadPyodide, convertMidiToDelugeXml } from "../lib/pyodide";
+  import { trackToolAction } from "../lib/analytics";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -33,9 +34,11 @@
       state = "done";
       progress = "Done";
       progressPct = 100;
+      trackToolAction("import", "convert");
     } catch (e: any) {
       state = "error";
       errorMsg = e.message || "Conversion failed";
+      trackToolAction("import", "convert_error");
     }
   }
 
@@ -77,6 +80,7 @@
     a.href = url;
     a.download = fileName.replace(/\.midi?$/i, "") + ".XML";
     a.click();
+    trackToolAction("import", "download");
     URL.revokeObjectURL(url);
   }
 

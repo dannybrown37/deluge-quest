@@ -1,3 +1,5 @@
+import { track, crossedMarks, percentPlayed } from './analytics';
+
 interface Song {
   file: string;
   name: string;
@@ -34,6 +36,13 @@ class HomeAudioPlayer {
 
   private listeners: Set<Listener> = new Set();
   private timerRaf = 0;
+
+  private trackedPercent = 0;
+  private listenSeconds = 0;
+  private lastTickAt = 0;
+  private reportedSeconds = 0;
+  private playReported = false;
+  private unloadFlushInstalled = false;
 
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
@@ -165,8 +174,13 @@ class HomeAudioPlayer {
       this.mediaElement.pause();
       this.isPlaying = false;
     }
+    this.flushListenTime();
     this.newMediaChain();
     this.currentSongIndex = idx;
+    this.trackedPercent = 0;
+    this.listenSeconds = 0;
+    this.reportedSeconds = 0;
+    this.playReported = false;
     const song = this.songs[idx];
 
     return new Promise<boolean>((resolve) => {
@@ -248,6 +262,7 @@ class HomeAudioPlayer {
       this.isPlaying = false;
       this.setMediaState('paused');
       cancelAnimationFrame(this.timerRaf);
+      this.flushListenTime();
       this.notify();
       return;
     }
@@ -259,6 +274,11 @@ class HomeAudioPlayer {
     this.updateMediaMetadata();
     this.setMediaState('playing');
     this.initMediaSession();
+    if (!this.playReported) {
+      this.playReported = true;
+      track('song_play', { song: this.songLabel });
+    }
+    this.installUnloadFlush();
     this.startTimer();
     this.notify();
   }
@@ -266,10 +286,59 @@ class HomeAudioPlayer {
   private startTimer() {
     const tick = () => {
       if (!this.isPlaying) return;
+      this.accrueListenTime();
+      this.trackProgress();
       this.notify();
       this.timerRaf = requestAnimationFrame(tick);
     };
+    this.lastTickAt = performance.now();
     this.timerRaf = requestAnimationFrame(tick);
+  }
+
+  private get songLabel(): string {
+    const song = this.currentSong;
+    return song?.slug ?? song?.name ?? 'unknown';
+  }
+
+  private accrueListenTime() {
+    // 0 means "clock stopped" (paused or backgrounded) — restart it, don't bill the gap.
+    if (this.lastTickAt === 0) {
+      this.lastTickAt = performance.now();
+      return;
+    }
+    const now = performance.now();
+    const delta = (now - this.lastTickAt) / 1000;
+    this.lastTickAt = now;
+    if (delta > 0 && delta < 5) this.listenSeconds += delta;
+  }
+
+  private trackProgress() {
+    const pct = percentPlayed(this.elapsed, this.duration);
+    const marks = crossedMarks(this.trackedPercent, pct);
+    this.trackedPercent = Math.max(this.trackedPercent, pct);
+    for (const mark of marks) {
+      track('song_progress', { song: this.songLabel, percent: mark });
+    }
+  }
+
+  // pagehide is the only unload event mobile Safari reliably fires.
+  private installUnloadFlush() {
+    if (this.unloadFlushInstalled || typeof window === 'undefined') return;
+    this.unloadFlushInstalled = true;
+    window.addEventListener('pagehide', () => this.flushListenTime());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this.flushListenTime();
+    });
+  }
+
+  // Called on pause, track change, and page unload so partial listens still count.
+  flushListenTime() {
+    this.accrueListenTime();
+    this.lastTickAt = 0;
+    const unreported = Math.round(this.listenSeconds - this.reportedSeconds);
+    if (unreported < 1) return;
+    this.reportedSeconds = this.listenSeconds;
+    track('song_listen', { song: this.songLabel, seconds: unreported });
   }
 
   updateVolume(value: number) {

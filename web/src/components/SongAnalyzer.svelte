@@ -2,6 +2,7 @@
   import { loadPyodide, analyzeStats, convertToMusicXML, type SongStats } from "../lib/pyodide";
   import { moveToTrash } from "../lib/softDelete";
   import { cardStore, basename, topDir } from "../lib/cardStore";
+  import { trackToolAction } from "../lib/analytics";
 
   interface DroppedFile {
     file: File;
@@ -272,6 +273,7 @@
   }
 
   function exportCsv() {
+    trackToolAction("stats", "export_csv");
     const headers = ["Song", "BPM", "Key", "Duration", "Type", "Instruments", "Synths", "Kits", "Clips", "Notes", "Arrangement", "Modified"];
     const rows = sorted.map(s => [
       s.filename.replace(/\.XML$/i, ""),
@@ -402,9 +404,11 @@
       state = "done";
       progressPct = 100;
       saveToSession();
+      trackToolAction("stats", "analyze_card");
     } catch (e: any) {
       state = "error";
       errorMsg = e.message || "Analysis failed";
+      trackToolAction("stats", "analyze_error");
     }
   }
 
@@ -420,6 +424,7 @@
 
     try {
       await moveToTrash(rootHandle, path);
+      trackToolAction("stats", "delete_song");
       results = results.filter(s => s.filename !== filename);
       const contents = new Map(fileContents);
       contents.delete(filename);
@@ -471,6 +476,7 @@
       state = "done";
       progressPct = 100;
       saveToSession();
+      trackToolAction("stats", "analyze_drop");
       await cardStore.saveSongCache(
         "your dropped folder",
         entries.map(e => ({ path: e.path, xml: fileContents.get(e.file.name) ?? "" })),
@@ -600,6 +606,7 @@
       const pyodide = await loadPyodide();
       const musicxml = await convertToMusicXML(content, pyodide);
       convertedFiles = new Map(convertedFiles).set(filename, musicxml);
+      trackToolAction("stats", "convert_score");
       downloadMusicXml(filename);
     } catch (e: any) {
       errorMsg = `Score conversion failed for ${filename}: ${e.message}`;
@@ -623,6 +630,7 @@
   function openInPreview(filename: string) {
     const content = fileContents.get(filename);
     if (!content) return;
+    trackToolAction("stats", "open_in_preview");
     sessionStorage.setItem("deluge-preview-file", JSON.stringify({ name: filename, content }));
     window.location.href = "/preview";
   }

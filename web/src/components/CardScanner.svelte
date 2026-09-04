@@ -1,6 +1,7 @@
 <script lang="ts">
   import { TRASH_DIR, MOVE_BACKUP_DIR, getOrCreateDir, moveToTrash, moveFile, updateXmlReferences } from "../lib/softDelete";
   import { cardStore, walkHandle } from "../lib/cardStore";
+  import { trackToolAction } from "../lib/analytics";
 
   type State = "idle" | "indexing" | "processing" | "done" | "error";
 
@@ -515,6 +516,7 @@
     };
     state = "done";
     saveToSession();
+    trackToolAction("manage", "scan", { samples: report.totalSamples, unused: report.unusedSamples.length });
   }
 
   async function moveSample(samplePath: string) {
@@ -530,6 +532,7 @@
       const moved = new Set(movedFiles);
       moved.add(samplePath);
       movedFiles = moved;
+      trackToolAction("manage", "delete_sample");
     } catch (e: any) {
       console.error(`Failed to move ${samplePath}:`, e);
     } finally {
@@ -627,6 +630,7 @@
     for (const { path, category } of all) {
       if (!movedSongs.has(path)) await moveSongToCategory(path, category);
     }
+    trackToolAction("manage", "sort_songs", { songs: all.length });
   }
 
   async function moveSampleTo(oldPath: string, newPath: string) {
@@ -821,6 +825,7 @@
     }
     fixAllResult = { fixed, skipped, errors, details };
     fixAllRunning = false;
+    trackToolAction("manage", "fix_all_refs", { fixed, skipped, errors });
   }
 
   function handleDragStart(e: DragEvent, path: string, isFolder = false) {
@@ -997,6 +1002,7 @@
     for (const { path, autoFixable } of report.invalidXml) {
       if (autoFixable && !fixedXmlFiles.has(path)) await fixXmlFile(path);
     }
+    trackToolAction("manage", "fix_all_xml");
   }
 
   function allCardFiles(): { path: string; size: number; lastModified: number }[] {
@@ -1134,6 +1140,7 @@
 
       backupComplete = true;
       backupProgress = "";
+      trackToolAction("manage", "backup", { files: total });
     } catch (e: any) {
       backupError = e.message || "Backup failed";
     } finally {
@@ -1214,6 +1221,7 @@
 
   function exportJson() {
     if (!report) return;
+    trackToolAction("manage", "export_json");
     const data = {
       total_samples: report.totalSamples,
       total_samples_bytes: report.totalSamplesBytes,
@@ -1502,6 +1510,7 @@
     }
     batchMoveResult = { moved, errors, details };
     batchMoveRunning = false;
+    trackToolAction("manage", "batch_move", { moved, errors });
     clearSelection();
     showMovePicker = false;
   }
@@ -1536,6 +1545,7 @@
     }
     batchDeleteResult = { deleted, errors, details };
     batchDeleteRunning = false;
+    trackToolAction("manage", "batch_delete", { deleted, errors });
     clearSelection();
     showDeleteConfirm = false;
   }

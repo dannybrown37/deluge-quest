@@ -2,6 +2,7 @@
   import { loadPyodide, inspectSong, type PreviewData, type PreviewTrack } from "../lib/pyodide";
   import { SongPlayer, type EQBand } from "../lib/songAudio";
   import { cardStore } from "../lib/cardStore";
+  import { trackToolAction } from "../lib/analytics";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -293,9 +294,11 @@
       trackMuted = result.tracks.map(() => false);
       state = "done";
       progressPct = 100;
+      trackToolAction("preview", "inspect");
     } catch (e: any) {
       state = "error";
       errorMsg = e.message || "Failed to parse song";
+      trackToolAction("preview", "inspect_error");
     }
   }
 
@@ -425,6 +428,7 @@
       }
       player?.play();
       playState = 'playing';
+      trackToolAction("preview", "play");
     }
   }
 

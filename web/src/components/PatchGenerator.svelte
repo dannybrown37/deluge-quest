@@ -1,5 +1,6 @@
 <script lang="ts">
   import { playPreview, stopPreview, isPlaying, type AudioPatch } from '../lib/patchAudio';
+  import { trackToolAction } from '../lib/analytics';
 
   type Category = 'pad' | 'lead' | 'bass' | 'keys' | 'fx';
   type SynthMode = 'subtractive' | 'fm';
@@ -336,6 +337,7 @@
     }
     patch = p;
     history = [p, ...history.slice(0, 19)];
+    trackToolAction('patch', 'generate');
   }
 
   function toXML(p: Patch): string {
@@ -435,6 +437,7 @@ ${cables}
     a.href = url;
     a.download = `${patch.name.replace(/\s+/g, '_')}.XML`;
     a.click();
+    trackToolAction('patch', 'download');
     URL.revokeObjectURL(url);
   }
 
@@ -512,6 +515,7 @@ ${cables}
     a.href = url;
     a.download = `deluge_${selectedCategory}_patches.zip`;
     a.click();
+    trackToolAction('patch', 'bulk_download');
     URL.revokeObjectURL(url);
   }
 
@@ -580,6 +584,7 @@ ${cables}
       playing = false;
     } else if (patch) {
       playing = true;
+      trackToolAction('patch', 'preview');
       playPreview(patch as unknown as AudioPatch, () => { playing = false; });
     }
   }

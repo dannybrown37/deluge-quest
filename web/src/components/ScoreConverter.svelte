@@ -1,6 +1,7 @@
 <script lang="ts">
   import { loadPyodide, convertToMusicXML } from "../lib/pyodide";
   import { cardStore, songHasArrangement } from "../lib/cardStore";
+  import { trackToolAction } from "../lib/analytics";
 
   type State = "idle" | "loading" | "processing" | "done" | "error";
 
@@ -55,9 +56,11 @@
       state = "done";
       progress = "Done";
       progressPct = 100;
+      trackToolAction("score", "convert");
     } catch (e: any) {
       state = "error";
       errorMsg = e.message || "Conversion failed";
+      trackToolAction("score", "convert_error");
     }
   }
 
@@ -116,6 +119,7 @@
     a.href = url;
     a.download = fileName.replace(/\.XML$/i, ".musicxml");
     a.click();
+    trackToolAction("score", "download");
     URL.revokeObjectURL(url);
   }
 

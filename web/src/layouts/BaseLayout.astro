@@ -1,5 +1,6 @@
 ---
 import { ClientRouter } from 'astro:transitions';
+import Analytics from '@vercel/analytics/astro';
 
 interface Props {
   title: string;
@@ -23,6 +24,7 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     <title>{title} — deluge.quest</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <ClientRouter />
+    <Analytics />
   </head>
   <body>
     <a href="#main-content" class="skip-link">Skip to content</a>
@@ -96,6 +98,12 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
         });
       }
       document.addEventListener('astro:page-load', initNavToggle);
+    </script>
+
+    <script>
+      import { trackToolVisit } from '../lib/analytics';
+      // astro:page-load fires on the initial load too, so no separate first call.
+      document.addEventListener('astro:page-load', () => trackToolVisit(window.location.pathname));
     </script>
 
     <script>

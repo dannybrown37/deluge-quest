@@ -109,6 +109,9 @@ per audio file for shareable song links.
 | `kitXml.ts` | `Kit`/`KitRow` model and Deluge kit XML serialization for `/kits` |
 | `padSounds.ts` | 8 Web Audio synth percussion sounds (kick, snare, hat, clap, tom, zap, blip, sweep) for the DelugeUI pad grid on `/songs/[slug]` pages. Velocity-to-glow mapping |
 | `audioVisualizer.ts` | Canvas-based audio visualizer using `AnalyserNode` — frequency bars (gold/teal) when music plays, ambient wave when idle. Used on home page below the Deluge grid |
+| `homeAudio.ts` | Singleton `homeAudio` — the site-wide `<audio>` player + Web Audio FX chain (filter, reverb, delay, analyser), song list, MediaSession wiring. Shared by the home page, the mini-player in `BaseLayout`, and `/songs/[slug]`. Also emits the song analytics events |
+| `screenGuard.ts` | `shouldSyncScreen()` — decides whether the DelugeUI screen shows song info or a held knob value |
+| `analytics.ts` | Vercel Web Analytics wrapper. `track()` (never throws), `trackToolVisit()`, `trackToolAction()`, plus pure `crossedMarks()`/`percentPlayed()` for listen milestones |
 
 ## Key Design Decisions
 
@@ -193,6 +196,38 @@ the browser — including `npm run dev` — until you run `bash build-wheel.sh` 
 modified; commit it alongside the source change. Symptom of forgetting: preview/converter
 behaves as if the old bug is still there even though `pytest` passes and the fix is correct —
 always rebuild the wheel before trusting a browser repro of a `deluge_tools` change.
+
+### Analytics
+
+Vercel Web Analytics (`@vercel/analytics`), mounted once as `<Analytics />` in `BaseLayout.astro`.
+Cookieless, so no consent banner. Custom events (free tier caps at ~50k/month):
+
+| Event | Props | Fired from |
+|---|---|---|
+| `tool_visit` | `tool` | `BaseLayout` on `astro:page-load`, for the 7 tool routes only |
+| `tool_action` | `tool`, `action`, + optional counts | `trackToolAction()`, called by every tool component at the points where real work completes |
+| `song_play` | `song` | `homeAudio.togglePlay()`, once per loaded song (resume does not re-fire) |
+| `song_progress` | `song`, `percent` | `homeAudio` raf tick at the 25/50/75/100 marks |
+| `song_listen` | `song`, `seconds` | flushed on pause, track change, `pagehide`, and tab hide |
+
+`song_listen` reports *unreported* seconds each flush, so summing gives real listen time.
+Backward seeks never re-fire a milestone; `trackedPercent` is monotonic.
+
+`tool_action` actions per tool:
+
+| Tool | Actions |
+|---|---|
+| `manage` | `scan` (+samples/unused), `delete_sample`, `batch_move` (+moved/errors), `batch_delete` (+deleted/errors), `sort_songs` (+songs), `fix_all_refs` (+fixed/skipped/errors), `fix_all_xml`, `backup` (+files), `export_json` |
+| `stats` | `analyze_card`, `analyze_drop`, `analyze_error`, `export_csv`, `delete_song`, `convert_score`, `open_in_preview` |
+| `preview` | `inspect`, `inspect_error`, `play` |
+| `kits` | `open_samples`, `load_kit`, `export` (+rows) |
+| `patch` | `generate`, `preview`, `download`, `bulk_download` |
+| `score` | `convert`, `convert_error`, `download` |
+| `import` | `convert`, `convert_error`, `download` |
+
+Deliberately **not** tracked: per-row edits (adding one kit row, dragging one sample). They fire
+dozens of times per session and would burn the free-tier event quota without telling you more
+than the completion event already does.
 
 ### Design System
 - **Typography:** DM Mono (headers, code, labels) + DM Sans (body, UI)

@@ -8,6 +8,7 @@
     generateKitXml,
   } from "../lib/kitXml";
   import { cardStore } from "../lib/cardStore";
+  import { trackToolAction } from "../lib/analytics";
   import { tick } from "svelte";
 
   type Pane = "browser" | "kit";
@@ -141,6 +142,7 @@
     rebuildFlat();
     browseIndex = 0;
     activePane = "browser";
+    trackToolAction("kits", "open_samples");
   }
 
   /** Loads the SAMPLES/ dir from an already-picked SD card root (from /stats or /manage) instead of prompting again. */
@@ -335,6 +337,7 @@
     a.click();
     URL.revokeObjectURL(url);
     hasUnsavedChanges = false;
+    trackToolAction("kits", "export", { rows: kit.rows.length });
   }
 
   async function loadKitFile(file: File) {
@@ -343,6 +346,7 @@
       kit = parseKitXml(text);
       kit.name = file.name.replace(/\.xml$/i, "");
       loadedFileName = file.name;
+      trackToolAction("kits", "load_kit");
       hasUnsavedChanges = false;
       saveKitToCache();
     } catch (err: any) {
