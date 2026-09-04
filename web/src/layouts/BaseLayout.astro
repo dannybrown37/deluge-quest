@@ -48,10 +48,15 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
           <a href="/kits" class="nav-link">Kits</a>
           <a href="/patch" class="nav-link">Patch</a>
           <a href="/import" class="nav-link">Import</a>
-          <span class="nav-section-label">The Site</span>
-          <a href="https://github.com/dannybrown37/deluge-quest" class="nav-link nav-about-link" target="_blank" rel="noopener">GitHub</a>
-          <a href="/faq" class="nav-link nav-about-link">FAQ</a>
-          <a href="/songs" class="nav-link nav-about-link">Songs By Me</a>
+          <div class="nav-site-group">
+            <span class="nav-section-label">The Site</span>
+            <button class="nav-site-toggle" aria-label="Site menu" aria-haspopup="true" aria-expanded="false">⋯</button>
+            <div class="nav-site-dropdown">
+              <a href="/faq" class="nav-link">FAQ</a>
+              <a href="/songs" class="nav-link">Songs By Me</a>
+              <a href="https://github.com/dannybrown37/deluge-quest" class="nav-link" target="_blank" rel="noopener">GitHub</a>
+            </div>
+          </div>
         </div>
       </div>
     </nav>
@@ -98,6 +103,38 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
         });
       }
       document.addEventListener('astro:page-load', initNavToggle);
+
+      function initSiteMenu() {
+        const btn = document.querySelector('.nav-site-toggle');
+        const dropdown = document.querySelector('.nav-site-dropdown');
+        if (!btn || !dropdown) return;
+
+        const close = () => {
+          dropdown.classList.remove('nav-site-open');
+          btn.setAttribute('aria-expanded', 'false');
+        };
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const open = dropdown.classList.toggle('nav-site-open');
+          btn.setAttribute('aria-expanded', String(open));
+        });
+
+        document.addEventListener('click', (e) => {
+          if (!dropdown.classList.contains('nav-site-open')) return;
+          if (e.target === btn || dropdown.contains(e.target as Node)) return;
+          close();
+        });
+
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') close();
+        });
+
+        dropdown.querySelectorAll('.nav-link').forEach(a => {
+          a.addEventListener('click', close);
+        });
+      }
+      document.addEventListener('astro:page-load', initSiteMenu);
     </script>
 
     <script>
@@ -235,8 +272,58 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
-  .nav-link.nav-about-link {
+  /* Site menu (GitHub/FAQ/Songs) — icon + dropdown, stays collapsed at all widths */
+  .nav-site-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .nav-site-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .nav-site-toggle:hover {
+    color: var(--text);
+  }
+  .nav-site-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .nav-site-dropdown {
     display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    flex-direction: column;
+    min-width: 160px;
+    padding: 0.4rem;
+    background: var(--ground);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    z-index: 10;
+  }
+  .nav-site-dropdown.nav-site-open {
+    display: flex;
+  }
+  .nav-site-dropdown .nav-link {
+    padding: 0.5rem 0.6rem;
+    margin: 0;
+    border-radius: 4px;
+  }
+  .nav-site-dropdown .nav-link:hover {
+    background: var(--border);
   }
 
   /* Hamburger toggle */
@@ -317,8 +404,18 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     .nav-section-label:first-child {
       padding-top: 0.25rem;
     }
-    .nav-link.nav-about-link {
-      display: block;
+    .nav-site-toggle {
+      display: none;
+    }
+    .nav-site-dropdown {
+      display: flex;
+      position: static;
+      flex-direction: column;
+      min-width: 0;
+      padding: 0;
+      background: none;
+      border: none;
+      box-shadow: none;
     }
   }
 
