@@ -38,7 +38,7 @@ test:
 
 # Run tests with coverage (terminal + lcov for unified report)
 test-cov:
-  uv run pytest tests/ -v --cov=deluge_tools --cov-report=term-missing --cov-report=lcov:coverage/python.lcov
+  uv run pytest tests/ -v --cov=deluge_tools --cov-branch --cov-report=term-missing --cov-report=lcov:coverage/python.lcov
 
 # Lint with ruff
 lint:
@@ -208,8 +208,26 @@ coverage open="":
 
   sed 's|^SF:|SF:web/|' web/coverage/lcov.info > coverage/web.lcov
   sed 's|^SF:|SF:web/|' web/coverage-integration/lcov.info > coverage/pyodide.lcov
-  lcov --add-tracefile coverage/python.lcov --add-tracefile coverage/web.lcov --add-tracefile coverage/pyodide.lcov --output-file coverage/merged.lcov > coverage/lcov-merge.log 2>&1
-  genhtml coverage/merged.lcov --output-directory coverage/html > coverage/genhtml.log 2>&1
+
+  # coverage.py writes BRDA branch-IDs as text ("jump to line 29") instead of lcov's
+  # expected small integers. lcov's tracefile merge keys branches by (line, block, branch-id)
+  # and silently miscounts when that key isn't numeric — renumber per (line, block) first.
+  awk '
+    BEGIN { FS = OFS = "," }
+    /^BRDA:/ {
+      line = $1; sub(/^BRDA:/, "", line)
+      block = $2
+      key = line SUBSEP block
+      idx = (key in seen) ? ++seen[key] : (seen[key] = 0)
+      print "BRDA:" line "," block "," idx "," $NF
+      next
+    }
+    { print }
+  ' coverage/python.lcov > coverage/python_fixed.lcov
+
+  # lcov/genhtml don't report branches at all unless explicitly told to.
+  lcov --rc lcov_branch_coverage=1 --add-tracefile coverage/python_fixed.lcov --add-tracefile coverage/web.lcov --add-tracefile coverage/pyodide.lcov --output-file coverage/merged.lcov > coverage/lcov-merge.log 2>&1
+  genhtml --rc genhtml_branch_coverage=1 coverage/merged.lcov --output-directory coverage/html > coverage/genhtml.log 2>&1
 
   printf "\n\033[1m=== Combined coverage ===\033[0m\n"
   grep -A3 "^Summary coverage rate" coverage/lcov-merge.log | colorize_pct
