@@ -164,7 +164,21 @@ per audio file for shareable song links.
   Pyodide/WASM + the real wheel, no DOM mocks) — run directly with `just web-test-pyodide`,
   or as part of `just coverage` (not part of `just check`, since it's the one recipe with
   out-of-repo network I/O on a cold cache). `loadPyodide()` itself (the browser CDN
-  loader/wiring) is still untested. ~9,000 lines of Svelte still have no automated coverage.
+  loader/wiring) is still untested. `web/src/components/*.svelte` (~9,000 lines) is now
+  testable — see below — but only `SongPlayer.svelte` has a test so far; the other 9 components
+  are still uncovered.
+- **Svelte component testing** — `@testing-library/svelte` + `@sveltejs/vite-plugin-svelte`
+  (already a transitive dep via `@astrojs/svelte`) are wired into `web/vitest.config.ts`.
+  Two non-obvious pieces were required to make `.svelte` files importable in tests at all:
+  1. `plugins: [svelte()]` in `vitest.config.ts` — without it, `.svelte` imports fail to compile.
+  2. `resolve: { conditions: ['browser'] }` — without it, Vite resolves Svelte's **server**
+     build (`svelte/src/index-server.js`), which throws `lifecycle_function_unavailable` on
+     `onMount`/`onDestroy` since those don't exist server-side.
+  Pattern demonstrated in `web/src/components/SongPlayer.test.ts`: mock singleton modules
+  (`homeAudio`, `cardStore`, etc.) with `vi.mock(...)`, mutate the mocked object's fields
+  between assertions to simulate state changes, use `@testing-library/svelte`'s
+  `render`/`fireEvent`/`screen`, and drive `requestAnimationFrame`-based loops by capturing
+  and manually invoking the callback passed to a mocked `requestAnimationFrame`.
 - ~~**`micropip.install()` pulled `music21`/`matplotlib`/`numpy`/`pillow` on every page
   load**~~ **FIXED** — found via the new `pyodide.integration.test.ts`. `pyproject.toml` lists
   `music21` and `mido` as unconditional top-level `dependencies`, so the wheel's METADATA

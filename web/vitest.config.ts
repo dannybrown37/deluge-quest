@@ -1,6 +1,11 @@
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig, configDefaults } from 'vitest/config';
 
 export default defineConfig({
+  plugins: [svelte()],
+  resolve: {
+    conditions: ['browser'],
+  },
   test: {
     environment: 'happy-dom',
     // real-Pyodide integration test: separate config (vitest.integration.config.ts),
@@ -10,6 +15,8 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       reportsDirectory: 'coverage',
+      all: true,
+      include: ['src/lib/**/*.ts', 'src/components/**/*.svelte'],
     },
   },
 });

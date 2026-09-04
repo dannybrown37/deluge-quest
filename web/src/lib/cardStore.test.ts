@@ -224,7 +224,7 @@ describe('walkHandle', () => {
       'SONGS/one.xml': 'a',
       'SAMPLES/DRUMS/kick.wav': 'b',
     });
-    const out: { path: string; handle: unknown }[] = [];
+    const out: { path: string; handle: FileSystemFileHandle }[] = [];
     await walkHandle(root as unknown as FileSystemDirectoryHandle, '', out);
     const paths = out.map((o) => o.path).sort();
     expect(paths).toEqual(['SAMPLES/DRUMS/kick.wav', 'SONGS/one.xml']);
@@ -237,7 +237,7 @@ describe('walkHandle', () => {
       'MOVE_BACKUP/x.xml': 'c',
       'REPAIR_BACKUP/y.xml': 'd',
     });
-    const out: { path: string; handle: unknown }[] = [];
+    const out: { path: string; handle: FileSystemFileHandle }[] = [];
     await walkHandle(root as unknown as FileSystemDirectoryHandle, '', out);
     expect(out.map((o) => o.path)).toEqual(['SONGS/one.xml']);
   });

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -193,8 +195,8 @@ class TestAnalyzeFile:
         assert "bad song" in err
 
 
-def _make_stats(**overrides) -> SongStats:
-    defaults = dict(
+def _make_stats(**overrides: Any) -> SongStats:
+    base = SongStats(
         filename="song.XML",
         bpm=120.0,
         key="C major",
@@ -205,8 +207,7 @@ def _make_stats(**overrides) -> SongStats:
         arrangement_length_ticks=1000,
         duration_str="0:10",
     )
-    defaults.update(overrides)
-    return SongStats(**defaults)
+    return replace(base, **overrides)
 
 
 class TestPrintTable:
