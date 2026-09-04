@@ -36,6 +36,8 @@ That said! I personally always run these tools on a backup of my SD card, not on
 
 ## Is this secure? What are you tracking? Are you uploading my files?
 
+Yes, it's secure!
+
 The site is tracking song plays and tool usage counts, basic analytics to understand how people use the site.
 
 No data you load onto the site is sent to a server. All of the tools run directly in the browser, so your files never leave your machine. No server, no account, no upload.

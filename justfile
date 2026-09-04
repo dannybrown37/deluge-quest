@@ -145,22 +145,75 @@ check: lint typecheck test web-lint web-typecheck web-test
 # Build everything (Python + web)
 build: web-rebuild-wheel web-build
 
-# Run all tests with coverage, merge into one local HTML report
-coverage:
+# Run all tests with coverage, merge into one local HTML report. Pass --open to open it in the browser.
+coverage open="":
   #!/bin/bash
   set -e
   command -v lcov >/dev/null || { echo "Missing 'lcov'. Install with: sudo apt-get install -y lcov"; exit 1; }
-  just test-cov &
-  py_pid=$!
-  just web-test-cov &
-  web_pid=$!
-  wait "$py_pid"
-  wait "$web_pid"
   mkdir -p coverage
+
+  # coverage.py's term-missing report has no ANSI color of its own, unlike vitest's
+  # v8 reporter (which colors by threshold automatically under FORCE_COLOR) — so we
+  # add the same red/yellow/green threshold coloring by hand for the pytest table.
+  colorize_pct() {
+    awk '{
+      line = $0
+      out = ""
+      while (match(line, /[0-9]+(\.[0-9]+)?%/)) {
+        pct = substr(line, RSTART, RLENGTH - 1) + 0
+        color = (pct >= 90) ? "32" : (pct >= 70) ? "33" : "31"
+        out = out substr(line, 1, RSTART - 1) "\033[" color "m" substr(line, RSTART, RLENGTH) "\033[0m"
+        line = substr(line, RSTART + RLENGTH)
+      }
+      print out line
+    }'
+  }
+
+  just test-cov > coverage/python.log 2>&1 &
+  py_pid=$!
+  FORCE_COLOR=1 just web-test-cov > coverage/web.log 2>&1 &
+  web_pid=$!
+
+  py_status=0
+  web_status=0
+  wait "$py_pid" || py_status=$?
+  wait "$web_pid" || web_status=$?
+
+  printf "\n\033[1m=== Python coverage (pytest) ===\033[0m\n"
+  sed -n '/^Name /,/^TOTAL/p' coverage/python.log | colorize_pct
+  grep -E "passed|failed|error" coverage/python.log | tail -1
+
+  printf "\n\033[1m=== Web coverage (vitest) ===\033[0m\n"
+  sed -n '/^File /,$p' coverage/web.log
+  grep -E "Test Files|Tests " coverage/web.log
+
+  if [ "$py_status" -ne 0 ] || [ "$web_status" -ne 0 ]; then
+    printf "\nTests failed — full logs: coverage/python.log, coverage/web.log\n" >&2
+    exit 1
+  fi
+
   sed 's|^SF:|SF:web/|' web/coverage/lcov.info > coverage/web.lcov
-  lcov --add-tracefile coverage/python.lcov --add-tracefile coverage/web.lcov --output-file coverage/merged.lcov
-  genhtml coverage/merged.lcov --output-directory coverage/html
-  echo "Combined coverage report: coverage/html/index.html"
+  lcov --add-tracefile coverage/python.lcov --add-tracefile coverage/web.lcov --output-file coverage/merged.lcov > coverage/lcov-merge.log 2>&1
+  genhtml coverage/merged.lcov --output-directory coverage/html > coverage/genhtml.log 2>&1
+
+  printf "\n\033[1m=== Combined coverage ===\033[0m\n"
+  grep -A3 "^Summary coverage rate" coverage/lcov-merge.log | colorize_pct
+
+  printf "\nFull report: coverage/html/index.html\n"
+
+  if [ -n "{{open}}" ]; then
+    if command -v wslview >/dev/null 2>&1; then
+      wslview coverage/html/index.html
+    elif grep -qi microsoft /proc/version 2>/dev/null && command -v explorer.exe >/dev/null 2>&1; then
+      explorer.exe "$(wslpath -w coverage/html/index.html)" || true
+    elif command -v xdg-open >/dev/null 2>&1; then
+      xdg-open coverage/html/index.html >/dev/null 2>&1 &
+    elif command -v open >/dev/null 2>&1; then
+      open coverage/html/index.html
+    else
+      echo "Could not detect a way to open a browser; open coverage/html/index.html manually" >&2
+    fi
+  fi
 
 # Full dev setup + start web server
 dev: setup web-dev
