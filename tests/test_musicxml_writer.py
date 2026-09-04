@@ -23,6 +23,13 @@ from deluge_tools.parser import Clip, ClipInstance, Instrument, Note, NoteRow, S
 SAMPLE_SONG = Path(__file__).parent / "fixtures" / "square_spelunking.XML"
 
 
+def _findtext(elem: ET.Element, path: str) -> str:
+    found = elem.find(path)
+    assert found is not None, f"no element matched {path!r}"
+    assert found.text is not None
+    return found.text
+
+
 def _make_song(
     clips: list[Clip],
     instruments: list[Instrument],
@@ -215,9 +222,9 @@ def test_to_xml_percussion_part_has_unpitched_channel():
     xml = writer.to_xml()
 
     root = ET.fromstring(xml)
-    assert root.find(".//midi-unpitched").text == "36"
-    assert root.find(".//midi-channel").text == "10"
-    assert root.find(".//clef/sign").text == "percussion"
+    assert _findtext(root, ".//midi-unpitched") == "36"
+    assert _findtext(root, ".//midi-channel") == "10"
+    assert _findtext(root, ".//clef/sign") == "percussion"
 
 
 def test_to_xml_key_signature_written_for_melodic_part():
@@ -228,8 +235,8 @@ def test_to_xml_key_signature_written_for_melodic_part():
     xml = writer.to_xml()
 
     root = ET.fromstring(xml)
-    assert root.find(".//key/fifths").text == "2"
-    assert root.find(".//key/mode").text == "major"
+    assert _findtext(root, ".//key/fifths") == "2"
+    assert _findtext(root, ".//key/mode") == "major"
 
 
 # ---- song_to_musicxml integration ----
@@ -272,9 +279,9 @@ def test_song_to_musicxml_kit_part_uses_percussion_clef():
     song = _make_song([clip], [inst], in_arrangement_view=False)
     xml = song_to_musicxml(song)
     root = ET.fromstring(xml)
-    assert root.find(".//clef/sign").text == "percussion"
-    assert root.find(".//note/notehead").text == "x"
-    assert root.find(".//note/lyric/text").text == "Kick"
+    assert _findtext(root, ".//clef/sign") == "percussion"
+    assert _findtext(root, ".//note/notehead") == "x"
+    assert _findtext(root, ".//note/lyric/text") == "Kick"
 
 
 def test_song_to_musicxml_triplet_notes_get_time_modification():
@@ -307,11 +314,12 @@ def test_song_to_musicxml_triplet_notes_get_time_modification():
     time_mods = root.findall(".//note/time-modification")
     assert len(time_mods) == 3
     for tm in time_mods:
-        assert tm.find("actual-notes").text == "3"
-        assert tm.find("normal-notes").text == "2"
+        assert _findtext(tm, "actual-notes") == "3"
+        assert _findtext(tm, "normal-notes") == "2"
 
     tuplets = root.findall(".//notations/tuplet")
-    types = sorted(t.get("type") for t in tuplets)
+    tuplet_types = [t.get("type") for t in tuplets]
+    types = sorted(t for t in tuplet_types if t is not None)
     assert types == ["start", "stop"]
 
 
