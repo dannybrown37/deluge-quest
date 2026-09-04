@@ -36,7 +36,7 @@ describe('toolForPath', () => {
     { path: '/kits/', expected: 'kits' },
     { path: '/manage', expected: 'manage' },
     { path: '/', expected: null },
-    { path: '/about', expected: null },
+    { path: '/faq', expected: null },
     { path: '/songs/some-song', expected: null },
   ])('$path → $expected', ({ path, expected }) => {
     expect(toolForPath(path)).toBe(expected);

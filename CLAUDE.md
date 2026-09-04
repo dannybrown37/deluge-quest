@@ -66,7 +66,7 @@ web/                    — Astro + Svelte, static, deployed to Vercel
   src/pages/            — one .astro shell per tool, each mounting one Svelte island
   src/components/       — the actual product (see table below)
   src/lib/              — shared TS (see table below)
-  src/layouts/          — BaseLayout.astro (nav, footer, theme)
+  src/layouts/          — BaseLayout.astro (nav, footer, theme), ProseLayout.astro (Markdown pages)
   src/styles/           — design tokens
   public/py/            — checked-in wheel loaded by Pyodide
   public/audio/         — .mp3 demo tracks served by the home page player
@@ -77,7 +77,8 @@ docs/handoffs/          — session handoff notes
 
 ### Pages → components
 
-Every page is a thin `.astro` shell wrapping `BaseLayout` plus a single Svelte island.
+Every tool page is a thin `.astro` shell wrapping `BaseLayout` plus a single Svelte island.
+Prose-only pages are Markdown instead (see `/faq`).
 
 | Page | Component | What it does |
 |---|---|---|
@@ -91,7 +92,15 @@ Every page is a thin `.astro` shell wrapping `BaseLayout` plus a single Svelte i
 | `/import` | `MidiImporter.svelte` | MIDI → Deluge song XML |
 | `/songs` | — | Song index: list of all tracks with links to individual pages |
 | `/songs/[slug]` | `SongPlayer.svelte` | Shareable per-song page with mobile-friendly audio player, OG tags |
-| `/about` | — | Static |
+| `/faq` | — | Hand-written prose. It is `src/pages/faq.md` (Markdown), rendered through `ProseLayout.astro` — edit the Markdown, not HTML |
+
+**Prose pages are Markdown.** Drop a `.md` file in `src/pages/` with
+`layout: ../layouts/ProseLayout.astro` plus `title` and `description` frontmatter — the title
+becomes the `<h1>`, the nav/footer/theme come from `BaseLayout`, and all the prose styling is in
+`ProseLayout`. No HTML to hand-write. Markdown has no link-target syntax, so a small inline
+rehype plugin in `astro.config.mjs` adds `target="_blank" rel="noopener"` to any `http(s)://`
+link at build time; that plugin is why `@astrojs/markdown-remark` is a dependency (Astro 7's
+default Sätteri processor does not run rehype plugins).
 
 `src/pages/audio/songs.json.ts` is an Astro endpoint that enumerates `public/audio/*.mp3` at
 build time for the home-page player. `src/pages/songs/[slug].astro` generates one static page

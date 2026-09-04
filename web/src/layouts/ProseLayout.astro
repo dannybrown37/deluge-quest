@@ -1,0 +1,56 @@
+---
+import BaseLayout from './BaseLayout.astro';
+
+interface Props {
+  frontmatter: { title: string; description?: string };
+}
+
+const { title, description } = Astro.props.frontmatter;
+---
+
+<BaseLayout title={title} description={description}>
+  <section class="prose">
+    <h1 class="prose-title">{title}</h1>
+    <slot />
+  </section>
+</BaseLayout>
+
+<style is:global>
+  .prose {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 5rem;
+  }
+  .prose-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+  }
+  .prose h2 {
+    font-family: 'DM Mono', monospace;
+    font-size: 1rem;
+    font-weight: 500;
+    margin-top: 2rem;
+    margin-bottom: 0.5rem;
+  }
+  .prose p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 0.75rem;
+  }
+  .prose ul {
+    list-style: none;
+    padding: 0;
+  }
+  .prose li {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    padding: 0.25rem 0;
+  }
+  .prose li::before {
+    content: "→ ";
+    color: var(--accent);
+  }
+</style>
