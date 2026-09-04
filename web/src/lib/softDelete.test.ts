@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   TRASH_DIR,
   MOVE_BACKUP_DIR,
+  HISTORY_BACKUP_DIR,
+  restoreFile,
   getOrCreateDir,
   moveToTrash,
   moveFile,
@@ -291,5 +293,79 @@ describe('updateXmlReferences', () => {
     expect(result.updated).toEqual([]);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].path).toBe('missing.xml');
+  });
+});
+
+describe('restoreFile', () => {
+  it('writes the old version over the file on the card', async () => {
+    const root = makeRoot();
+    await seedFile(root, 'SONGS/A.XML', '<song>new</song>');
+    await restoreFile(root as unknown as FileSystemDirectoryHandle, 'SONGS/A.XML', '<song>old</song>');
+    expect(await readFile(root, 'SONGS/A.XML')).toBe('<song>old</song>');
+  });
+
+  it('backs the current version up first, so nothing is destroyed', async () => {
+    const root = makeRoot();
+    await seedFile(root, 'SONGS/A.XML', '<song>new</song>');
+    await restoreFile(root as unknown as FileSystemDirectoryHandle, 'SONGS/A.XML', '<song>old</song>');
+    expect(await readFile(root, `${HISTORY_BACKUP_DIR}/SONGS/A.XML`)).toBe('<song>new</song>');
+  });
+
+  it('says whether it made a backup', async () => {
+    const root = makeRoot();
+    await seedFile(root, 'SONGS/A.XML', '<song>new</song>');
+    const result = await restoreFile(
+      root as unknown as FileSystemDirectoryHandle,
+      'SONGS/A.XML',
+      '<song>old</song>',
+    );
+    expect(result).toEqual({ backedUp: true, created: false });
+  });
+
+  it('recreates a file that is no longer on the card', async () => {
+    const root = makeRoot();
+    const result = await restoreFile(
+      root as unknown as FileSystemDirectoryHandle,
+      'SONGS/GONE.XML',
+      '<song>old</song>',
+    );
+    expect(await readFile(root, 'SONGS/GONE.XML')).toBe('<song>old</song>');
+    expect(result).toEqual({ backedUp: false, created: true });
+  });
+
+  it('makes no backup when there was nothing to overwrite', async () => {
+    const root = makeRoot();
+    await restoreFile(root as unknown as FileSystemDirectoryHandle, 'SONGS/GONE.XML', '<song/>');
+    expect(await fileExists(root, `${HISTORY_BACKUP_DIR}/SONGS/GONE.XML`)).toBe(false);
+  });
+
+  it('keeps a second restore of the same file from losing the first backup', async () => {
+    const root = makeRoot();
+    await seedFile(root, 'SONGS/A.XML', 'v2');
+    const handle = root as unknown as FileSystemDirectoryHandle;
+    await restoreFile(handle, 'SONGS/A.XML', 'v1');
+    await restoreFile(handle, 'SONGS/A.XML', 'v0');
+    expect(await readFile(root, 'SONGS/A.XML')).toBe('v0');
+    expect(await readFile(root, `${HISTORY_BACKUP_DIR}/SONGS/A.XML`)).toBe('v2');
+    expect(await readFile(root, `${HISTORY_BACKUP_DIR}/SONGS/A.XML.1`)).toBe('v1');
+  });
+
+  it.each([
+    [`${HISTORY_BACKUP_DIR}/SONGS/A.XML`],
+    ['SOFT_DELETE/SONGS/A.XML'],
+    ['MOVE_BACKUP/SONGS/A.XML'],
+    ['REPAIR_BACKUP/SONGS/A.XML'],
+  ])('refuses to write into our own backup folder %s', async (path) => {
+    const root = makeRoot();
+    await expect(
+      restoreFile(root as unknown as FileSystemDirectoryHandle, path, '<song/>'),
+    ).rejects.toThrow(/app-managed/i);
+  });
+
+  it.each([[''], ['   '], ['A.XML']])('refuses the unusable path %s', async (path) => {
+    const root = makeRoot();
+    await expect(
+      restoreFile(root as unknown as FileSystemDirectoryHandle, path, '<song/>'),
+    ).rejects.toThrow();
   });
 });

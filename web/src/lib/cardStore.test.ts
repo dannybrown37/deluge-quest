@@ -236,6 +236,7 @@ describe('walkHandle', () => {
       'SOFT_DELETE/deleted.xml': 'b',
       'MOVE_BACKUP/x.xml': 'c',
       'REPAIR_BACKUP/y.xml': 'd',
+      'HISTORY_BACKUP/SONGS/old.xml': 'e',
     });
     const out: { path: string; handle: FileSystemFileHandle }[] = [];
     await walkHandle(root as unknown as FileSystemDirectoryHandle, '', out);
