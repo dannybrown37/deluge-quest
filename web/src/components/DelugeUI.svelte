@@ -822,14 +822,14 @@
     {/if}
 
     <div class="grid-labels">
-      <div class="grid-label-group grid-label-group--sound0"><span class="grid-label-text">Kick</span></div>
-      <div class="grid-label-group grid-label-group--sound1"><span class="grid-label-text">Snare</span></div>
-      <div class="grid-label-group grid-label-group--sound2"><span class="grid-label-text">Hat</span></div>
-      <div class="grid-label-group grid-label-group--sound3"><span class="grid-label-text">Clap</span></div>
-      <div class="grid-label-group grid-label-group--sound4"><span class="grid-label-text">Tom</span></div>
-      <div class="grid-label-group grid-label-group--sound5"><span class="grid-label-text">Zap</span></div>
-      <div class="grid-label-group grid-label-group--sound6"><span class="grid-label-text">Blip</span></div>
-      <div class="grid-label-group grid-label-group--sound7"><span class="grid-label-text">Sweep</span></div>
+      <div class="grid-label-group grid-label-group--sound0"><span class="grid-label-text">Kick ↑</span></div>
+      <div class="grid-label-group grid-label-group--sound1"><span class="grid-label-text">Tom ↓</span></div>
+      <div class="grid-label-group grid-label-group--sound2"><span class="grid-label-text">Snare ↑</span></div>
+      <div class="grid-label-group grid-label-group--sound3"><span class="grid-label-text">Zap ↓</span></div>
+      <div class="grid-label-group grid-label-group--sound4"><span class="grid-label-text">Hat ↑</span></div>
+      <div class="grid-label-group grid-label-group--sound5"><span class="grid-label-text">Blip ↓</span></div>
+      <div class="grid-label-group grid-label-group--sound6"><span class="grid-label-text">Clap ↑</span></div>
+      <div class="grid-label-group grid-label-group--sound7"><span class="grid-label-text">Sweep ↓</span></div>
       <div class="grid-labels-gap"></div>
       <div class="grid-label-group grid-label-group--sidebar-left"><span class="grid-label-text">FAQ</span></div>
       <div class="grid-label-group grid-label-group--sidebar-right"><span class="grid-label-text">Tools</span></div>
