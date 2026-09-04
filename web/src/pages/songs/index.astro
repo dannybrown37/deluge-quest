@@ -60,14 +60,17 @@ const byYear = [...songs].sort((a, b) => {
 
 <BaseLayout title="Songs" description="Tracks made on the Synthstrom Deluge">
   <div class="songs-page">
-    <h1 class="page-title">Songs</h1>
-    <div class="page-sub-row">
-      <p class="page-sub">Tracks made on the Synthstrom Deluge</p>
-      <div class="sort-btns">
+    <div class="page-title-row">
+      <h1 class="page-title">Songs</h1>
+      <span class="sort-btns">
         <button class="sort-btn sort-btn--active" data-sort="year">Year</button>
         <button class="sort-btn" data-sort="title">Title</button>
         <button class="sort-btn" data-sort="genre">Genre</button>
-      </div>
+      </span>
+    </div>
+    <div class="page-sub-row">
+      <p class="page-sub">Tracks I've made on the Synthstrom Deluge, recorded on the Deluge itself and compressed from WAV to MP3 with no post-processing.</p>
+
     </div>
     <ul class="song-list" id="song-list">
       {byYear.map(song => (
@@ -127,12 +130,21 @@ const byYear = [...songs].sort((a, b) => {
     padding: 2rem 1.5rem;
   }
 
+  .page-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.25rem;
+  }
+
   .page-title {
     font-family: 'DM Mono', monospace;
     font-size: 1.4rem;
     font-weight: 500;
     color: var(--text);
-    margin-bottom: 0.25rem;
+    margin: 0;
   }
 
   .page-sub-row {
