@@ -11,7 +11,7 @@ interface Song {
 
 type Listener = () => void;
 
-class HomeAudioPlayer {
+export class HomeAudioPlayer {
   audioCtx: AudioContext | null = null;
   mediaElement: HTMLAudioElement | null = null;
   private mediaSource: MediaElementAudioSourceNode | null = null;

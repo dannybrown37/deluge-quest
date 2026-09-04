@@ -13,17 +13,24 @@ def main(argv: list[str] | None = None) -> None:
         description="Convert a MIDI file to Deluge XML song format",
     )
     parser.add_argument(
-        "--version", action="version",
+        "--version",
+        action="version",
         version=f"%(prog)s {version('deluge-tools')}",
     )
     parser.add_argument("input", nargs="?", type=Path, help="MIDI file (.mid)")
     parser.add_argument(
-        "-o", "--output", type=Path, default=None,
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
         help="Output Deluge XML path (default: <input>.XML)",
     )
-    parser.add_argument("--root-note", type=int, default=0, help="Root note offset (default: 0 = C)")
     parser.add_argument(
-        "--scale", default="major",
+        "--root-note", type=int, default=0, help="Root note offset (default: 0 = C)"
+    )
+    parser.add_argument(
+        "--scale",
+        default="major",
         choices=["major", "minor"],
         help="Scale mode (default: major)",
     )

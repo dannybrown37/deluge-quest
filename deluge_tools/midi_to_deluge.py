@@ -8,8 +8,6 @@ from pathlib import Path
 import mido
 
 from deluge_tools.parser import (
-    CLIP_INSTANCE_SIZE,
-    NOTE_RECORD_SIZE,
     TICKS_PER_QUARTER,
     ClipInstance,
     Note,
@@ -25,8 +23,7 @@ def encode_note_data(notes: list[Note]) -> str:
     chunks = []
     for n in notes:
         chunks.append(
-            struct.pack(">II", n.position, n.length)
-            + bytes([n.velocity, n.lift_velocity])
+            struct.pack(">II", n.position, n.length) + bytes([n.velocity, n.lift_velocity])
         )
     return "0x" + b"".join(chunks).hex().upper()
 
@@ -160,7 +157,8 @@ def _build_sound_params_element(tag: str = "soundParams") -> ET.Element:
 
 
 def _build_instrument_element(
-    slot: int, clip_instances_hex: str,
+    slot: int,
+    clip_instances_hex: str,
 ) -> ET.Element:
     sound = ET.Element("sound")
     sound.set("presetSlot", str(slot))
@@ -178,8 +176,8 @@ def _build_instrument_element(
     ET.SubElement(sound, "delay", pingPong="1", analog="0", syncLevel="7")
     ET.SubElement(sound, "compressor", syncLevel="6", attack="327244", release="936")
 
-    osc1 = ET.SubElement(sound, "osc1", type="square")
-    osc2 = ET.SubElement(sound, "osc2", type="square", transpose="0")
+    ET.SubElement(sound, "osc1", type="square")
+    ET.SubElement(sound, "osc2", type="square", transpose="0")
     ET.SubElement(sound, "lfo1", type="triangle", syncLevel="0")
     ET.SubElement(sound, "lfo2", type="triangle")
     ET.SubElement(sound, "unison", num="1", detune="8")
@@ -189,7 +187,9 @@ def _build_instrument_element(
 
 
 def _build_clip_element(
-    slot: int, clip_length: int, notes_by_pitch: dict[int, list[Note]],
+    slot: int,
+    clip_length: int,
+    notes_by_pitch: dict[int, list[Note]],
 ) -> ET.Element:
     clip = ET.Element("instrumentClip")
     clip.set("instrumentPresetSlot", str(slot))
@@ -252,8 +252,11 @@ def midi_to_deluge_xml(
                 max_end = max(max_end, n.position + n.length)
         clip_length = _ceil_to_bar(max_end)
 
-        ci = ClipInstance(position=0 if clip_idx == 0 else clip_idx * clip_length,
-                          length=clip_length, clip_index=clip_idx)
+        ci = ClipInstance(
+            position=0 if clip_idx == 0 else clip_idx * clip_length,
+            length=clip_length,
+            clip_index=clip_idx,
+        )
         ci_hex = encode_clip_instances([ci])
 
         slot = clip_idx

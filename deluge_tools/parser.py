@@ -195,10 +195,12 @@ def _parse_clip_note_rows(
     rows = []
     for nr in clip.findall("noteRows/noteRow"):
         row = NoteRow()
-        if nr.get("y") is not None:
-            row.y = int(nr.get("y"))
-        if nr.get("drumIndex") is not None:
-            row.drum_index = int(nr.get("drumIndex"))
+        y = nr.get("y")
+        if y is not None:
+            row.y = int(y)
+        drum_index = nr.get("drumIndex")
+        if drum_index is not None:
+            row.drum_index = int(drum_index)
             if drum_names and 0 <= row.drum_index < len(drum_names):
                 row.drum_name = drum_names[row.drum_index]
             if drum_sample_paths and 0 <= row.drum_index < len(drum_sample_paths):
@@ -230,7 +232,10 @@ def _parse_sound_patch(sound_el: ET.Element) -> SoundPatch:
     mod1_el = sound_el.find("modulator1")
     mod2_el = sound_el.find("modulator2")
     modulator1 = (
-        ModulatorPatch(transpose=int(mod1_el.get("transpose", "0")), cents=int(mod1_el.get("cents", "0")))
+        ModulatorPatch(
+            transpose=int(mod1_el.get("transpose", "0")),
+            cents=int(mod1_el.get("cents", "0")),
+        )
         if mod1_el is not None
         else None
     )
@@ -310,13 +315,17 @@ def parse_song(path: Path | str) -> Song:
     song = Song()
     song.firmware_version = root.get("firmwareVersion", "")
     song.root_note = int(root.get("rootNote", "0"))
-    song.mode_notes = [
-        int(mn.text) for mn in root.findall("modeNotes/modeNote") if mn.text
-    ]
+    song.mode_notes = [int(mn.text) for mn in root.findall("modeNotes/modeNote") if mn.text]
     song.bpm = _parse_bpm(root)
     song.in_arrangement_view = root.get("inArrangementView", "0") == "1"
 
-    _TAG_TO_TYPE = {"sound": "synth", "kit": "kit", "midiChannel": "midi", "cv": "cv", "audioOutput": "audio"}
+    _TAG_TO_TYPE = {
+        "sound": "synth",
+        "kit": "kit",
+        "midiChannel": "midi",
+        "cv": "cv",
+        "audioOutput": "audio",
+    }
 
     instrument_map: dict[tuple, Instrument] = {}
     audio_output_count = 0
@@ -374,11 +383,13 @@ def parse_song(path: Path | str) -> Song:
     all_session_clips = list(session_clips_el) if session_clips_el is not None else []
     for global_idx, el in enumerate(all_session_clips):
         if el.tag == "audioClip":
-            song.audio_clips.append(AudioClip(
-                index=global_idx,
-                file_path=el.get("filePath", ""),
-                length=int(el.get("length", "0")),
-            ))
+            song.audio_clips.append(
+                AudioClip(
+                    index=global_idx,
+                    file_path=el.get("filePath", ""),
+                    length=int(el.get("length", "0")),
+                )
+            )
 
     session_instrument_clips = root.findall("sessionClips/instrumentClip")
     for clip_idx, clip_el in enumerate(session_instrument_clips):

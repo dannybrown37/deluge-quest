@@ -4,8 +4,6 @@ import pytest
 
 from deluge_tools.analyzer import (
     NOTE_NAMES,
-    PRESET_SCALES,
-    SongStats,
     analyze_song,
     detect_scale_name,
     ticks_to_duration_str,
@@ -95,26 +93,58 @@ class TestTicksToDuration:
 class TestAnalyzeSong:
     def test_basic_stats(self):
         instruments = [
-            Instrument(name="Synth 0", slot=0, sub_slot=-1, clip_instances=[
-                ClipInstance(position=0, length=192 * 4, clip_index=0),
-                ClipInstance(position=192 * 4, length=192 * 4, clip_index=0),
-            ]),
-            Instrument(name="Kit", is_kit=True, instrument_type="kit", slot=1, sub_slot=-1, clip_instances=[
-                ClipInstance(position=0, length=192 * 8, clip_index=1),
-            ]),
+            Instrument(
+                name="Synth 0",
+                slot=0,
+                sub_slot=-1,
+                clip_instances=[
+                    ClipInstance(position=0, length=192 * 4, clip_index=0),
+                    ClipInstance(position=192 * 4, length=192 * 4, clip_index=0),
+                ],
+            ),
+            Instrument(
+                name="Kit",
+                is_kit=True,
+                instrument_type="kit",
+                slot=1,
+                sub_slot=-1,
+                clip_instances=[
+                    ClipInstance(position=0, length=192 * 8, clip_index=1),
+                ],
+            ),
         ]
         clips = [
-            Clip(index=0, instrument_slot=0, instrument_sub_slot=-1, length=192 * 4, rows=[
-                NoteRow(y=60, notes=[
-                    Note(position=0, length=48, velocity=100, lift_velocity=20),
-                    Note(position=48, length=48, velocity=80, lift_velocity=20),
-                ]),
-            ]),
-            Clip(index=1, instrument_slot=1, instrument_sub_slot=-1, is_kit=True, length=192 * 8, rows=[
-                NoteRow(drum_index=0, drum_name="Kick", notes=[
-                    Note(position=0, length=24, velocity=127, lift_velocity=20),
-                ]),
-            ]),
+            Clip(
+                index=0,
+                instrument_slot=0,
+                instrument_sub_slot=-1,
+                length=192 * 4,
+                rows=[
+                    NoteRow(
+                        y=60,
+                        notes=[
+                            Note(position=0, length=48, velocity=100, lift_velocity=20),
+                            Note(position=48, length=48, velocity=80, lift_velocity=20),
+                        ],
+                    ),
+                ],
+            ),
+            Clip(
+                index=1,
+                instrument_slot=1,
+                instrument_sub_slot=-1,
+                is_kit=True,
+                length=192 * 8,
+                rows=[
+                    NoteRow(
+                        drum_index=0,
+                        drum_name="Kick",
+                        notes=[
+                            Note(position=0, length=24, velocity=127, lift_velocity=20),
+                        ],
+                    ),
+                ],
+            ),
         ]
         song = _make_song(
             bpm=140.0,
@@ -137,9 +167,12 @@ class TestAnalyzeSong:
         assert stats.arrangement_length_ticks == 192 * 8
 
     def test_no_arrangement(self):
-        song = _make_song(in_arrangement=False, instruments=[
-            Instrument(name="Synth 0", clip_instances=[]),
-        ])
+        song = _make_song(
+            in_arrangement=False,
+            instruments=[
+                Instrument(name="Synth 0", clip_instances=[]),
+            ],
+        )
         stats = analyze_song(song)
         assert stats.has_arrangement is False
         assert stats.arrangement_length_ticks == 0

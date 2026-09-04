@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import struct
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -42,7 +41,7 @@ class TestEncodeNoteData:
         encoded = encode_note_data(notes)
         decoded = parse_note_data(encoded)
         assert len(decoded) == len(notes)
-        for orig, dec in zip(notes, decoded):
+        for orig, dec in zip(notes, decoded, strict=True):
             assert dec.position == orig.position
             assert dec.length == orig.length
             assert dec.velocity == orig.velocity
@@ -66,7 +65,7 @@ class TestEncodeClipInstances:
         encoded = encode_clip_instances(instances)
         decoded = parse_clip_instances(encoded)
         assert len(decoded) == len(instances)
-        for orig, dec in zip(instances, decoded):
+        for orig, dec in zip(instances, decoded, strict=True):
             assert dec.position == orig.position
             assert dec.length == orig.length
             assert dec.clip_index == orig.clip_index
@@ -123,6 +122,7 @@ class TestMidiToDelugeXml:
         out = tmp_path / "output.XML"
         midi_to_deluge_xml(midi_path, out)
         from deluge_tools.parser import parse_song
+
         song = parse_song(out)
         assert abs(song.bpm - 140.0) < 0.1
 
@@ -131,6 +131,7 @@ class TestMidiToDelugeXml:
         out = tmp_path / "output.XML"
         midi_to_deluge_xml(midi_path, out)
         from deluge_tools.parser import parse_song
+
         song = parse_song(out)
         assert len(song.clips) >= 1
         clip = song.clips[0]
@@ -144,6 +145,7 @@ class TestMidiToDelugeXml:
         out = tmp_path / "output.XML"
         midi_to_deluge_xml(midi_path, out)
         from deluge_tools.parser import parse_song
+
         song = parse_song(out)
         assert song.in_arrangement_view
         assert any(inst.clip_instances for inst in song.instruments)
@@ -164,6 +166,7 @@ class TestMidiToDelugeXml:
         out = tmp_path / "output.XML"
         midi_to_deluge_xml(path, out)
         from deluge_tools.parser import parse_song
+
         song = parse_song(out)
         assert len(song.clips) == 2
         assert len(song.instruments) == 2
@@ -174,6 +177,7 @@ class TestMidiToDelugeXml:
         out = tmp_path / "output.XML"
         midi_to_deluge_xml(midi_path, out)
         from deluge_tools.parser import parse_song
+
         song = parse_song(out)
         clip = song.clips[0]
         row_c = next(r for r in clip.rows if r.y == 60)
@@ -186,6 +190,7 @@ class TestCliImport:
         midi_path = _make_midi(tmp_path)
         out = tmp_path / "out.XML"
         from deluge_tools.cli_import import main
+
         main([str(midi_path), "-o", str(out)])
         assert out.exists()
         tree = ET.parse(out)
@@ -194,6 +199,7 @@ class TestCliImport:
     def test_cli_default_output_name(self, tmp_path: Path) -> None:
         midi_path = _make_midi(tmp_path)
         from deluge_tools.cli_import import main
+
         main([str(midi_path)])
         expected = midi_path.with_suffix(".XML")
         assert expected.exists()

@@ -6,8 +6,10 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
+from collections.abc import Callable
 from importlib.metadata import version
 from pathlib import Path
+from typing import Any
 
 from deluge_tools.analyzer import SongStats, analyze_song
 from deluge_tools.parser import parse_song
@@ -23,7 +25,8 @@ def _browse_for_folder() -> Path | None:
         )
         result = subprocess.run(
             ["powershell.exe", "-NoProfile", "-Command", ps_cmd],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if result.returncode != 0:
             return None
@@ -32,7 +35,8 @@ def _browse_for_folder() -> Path | None:
             return None
         wsl_result = subprocess.run(
             ["wslpath", "-u", win_path],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if wsl_result.returncode != 0:
             return None
@@ -43,8 +47,7 @@ def _browse_for_folder() -> Path | None:
 def _prompt_for_path() -> Path:
     if not sys.stdin.isatty():
         print(
-            "error: no paths given and stdin is not a TTY\n"
-            "usage: deluge-stats <path> [<path> ...]",
+            "error: no paths given and stdin is not a TTY\nusage: deluge-stats <path> [<path> ...]",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -107,7 +110,7 @@ def _analyze_file(path: Path) -> SongStats | None:
 
 
 def _print_table(all_stats: list[SongStats], sort_by: str) -> None:
-    sort_keys: dict[str, callable] = {
+    sort_keys: dict[str, Callable[[SongStats], Any]] = {
         "name": lambda s: s.filename.lower(),
         "bpm": lambda s: s.bpm,
         "key": lambda s: s.key,
@@ -122,16 +125,18 @@ def _print_table(all_stats: list[SongStats], sort_by: str) -> None:
     rows: list[list[str]] = []
     for s in all_stats:
         name = s.filename.removesuffix(".XML").removesuffix(".xml")
-        rows.append([
-            name,
-            f"{s.bpm:.0f}",
-            s.key,
-            "Y" if s.has_arrangement else "",
-            s.duration_str if s.has_arrangement else "-",
-            str(s.instrument_count),
-            str(s.clip_count),
-            str(s.total_notes),
-        ])
+        rows.append(
+            [
+                name,
+                f"{s.bpm:.0f}",
+                s.key,
+                "Y" if s.has_arrangement else "",
+                s.duration_str if s.has_arrangement else "-",
+                str(s.instrument_count),
+                str(s.clip_count),
+                str(s.total_notes),
+            ]
+        )
 
     widths = [len(h) for h in headers]
     for row in rows:
@@ -158,7 +163,7 @@ def _print_summary(all_stats: list[SongStats]) -> None:
     print(f"\n--- Summary ({total} songs) ---")
     print(f"With arrangement: {arr_count}/{total}")
     if bpms:
-        print(f"BPM range: {min(bpms):.0f}–{max(bpms):.0f} (avg {sum(bpms)/len(bpms):.0f})")
+        print(f"BPM range: {min(bpms):.0f}–{max(bpms):.0f} (avg {sum(bpms) / len(bpms):.0f})")
     print(f"Total notes: {total_notes:,}")
     if top_keys:
         keys_str = ", ".join(f"{k} ({n})" for k, n in top_keys)
@@ -170,20 +175,25 @@ def main(argv: list[str] | None = None) -> None:
         description="Analyze Deluge song files — tempo, key, duration, and more",
     )
     parser.add_argument(
-        "--version", action="version",
+        "--version",
+        action="version",
         version=f"%(prog)s {version('deluge-tools')}",
     )
     parser.add_argument(
-        "paths", nargs="*", type=Path,
+        "paths",
+        nargs="*",
+        type=Path,
         help="Deluge .XML files or directories to scan",
     )
     parser.add_argument(
-        "--sort", default="name",
+        "--sort",
+        default="name",
         choices=["name", "bpm", "key", "duration", "notes", "instruments"],
         help="Sort by field (default: name)",
     )
     parser.add_argument(
-        "--no-summary", action="store_true",
+        "--no-summary",
+        action="store_true",
         help="Skip the summary section",
     )
 

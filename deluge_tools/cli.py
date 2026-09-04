@@ -41,20 +41,22 @@ def _open_in_musescore(file_path: Path) -> bool:
         shutil.copy2(abs_path, win_copy)
         win_path = subprocess.run(
             ["wslpath", "-w", str(win_copy)],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip()
         subprocess.Popen(
             ["powershell.exe", "-NoProfile", "-Command", f'Start-Process "{win_path}"'],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
     else:
         subprocess.Popen(
             [ms, str(abs_path)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
     return True
-
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -62,21 +64,28 @@ def main(argv: list[str] | None = None) -> None:
         description="Convert Deluge XML songs to sheet music",
     )
     parser.add_argument(
-        "--version", action="version",
+        "--version",
+        action="version",
         version=f"%(prog)s {version('deluge-tools')}",
     )
     parser.add_argument("input", nargs="?", type=Path, help="Deluge .XML song file")
     parser.add_argument(
-        "-o", "--output", type=Path, default=None,
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
         help="Output file path (.musicxml, .xml, .mid, .ly)",
     )
     parser.add_argument(
-        "-f", "--format", default=None,
+        "-f",
+        "--format",
+        default=None,
         choices=["musicxml", "midi", "lilypond", "text"],
         help="Output format (default: inferred from --output, or musicxml)",
     )
     parser.add_argument(
-        "--no-open", action="store_true",
+        "--no-open",
+        action="store_true",
         help="Don't open the output in MuseScore",
     )
 
@@ -92,9 +101,11 @@ def main(argv: list[str] | None = None) -> None:
 
     song = parse_song(args.input)
     view = "arrangement" if song.in_arrangement_view else "session"
-    print(f"Parsed: {song.bpm:.0f} BPM, {len(song.instruments)} instruments, "
-          f"{len(song.clips)} clips, view={view}, "
-          f"root={song.root_note}, mode={song.mode_notes}")
+    print(
+        f"Parsed: {song.bpm:.0f} BPM, {len(song.instruments)} instruments, "
+        f"{len(song.clips)} clips, view={view}, "
+        f"root={song.root_note}, mode={song.mode_notes}"
+    )
 
     fmt = args.format
     if fmt is None and args.output:
@@ -140,7 +151,7 @@ def main(argv: list[str] | None = None) -> None:
 
     if not args.no_open and fmt in ("musicxml", "midi"):
         if _open_in_musescore(output_path):
-            print(f"Opening in MuseScore...")
+            print("Opening in MuseScore...")
         else:
             print("MuseScore not found — use --no-open to suppress this message", file=sys.stderr)
 

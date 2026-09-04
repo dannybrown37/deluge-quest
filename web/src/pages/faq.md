@@ -24,23 +24,23 @@ I'm Danny, a software engineer and musician. I love the Deluge! I have owned doz
 
 I have been writing scripts to help me manage my Deluge files for years. This website represents a more ambitious quest to share tools, music, and a really cool website with the Deluge community.
 
-## Why should I trust these tools?
+## Are these tools safe to use on my files?
 
 You are right to be skeptical! I've made great attempts to make them as safe to use as possible: soft deletions, confirmation prompts, and no server-side code.
 
 That said! I personally always run these tools on a backup of my SD card, not on the real thing. (Or sometimes on the real thing if I have a really recent backup.) I recommend you do the same. I cannot be responsible for any data loss, so please use these tools at your own risk.
 
-## What gets tracked here?
+## Are these tools secure? What are you tracking?
 
-The site is tracking song plays and tool usage counts, basic analytics only.
+The site is tracking song plays and tool usage counts, basic analytics to understand how people use the site.
 
 No data you load onto the site is sent to a server. All of the tools run directly in the browser, so your files never leave your machine. No server, no account, no upload.
 
-I jokingly toyed with the idea of a "donate patches and samples to the site author" button, but the [Card Management](/manage) tool has revealed the sheer number of unused patches and samples I already have. I can't manage even more of them! (Unless you've got really good ones, in which case, please reach out to me.)
+I jokingly toyed with the idea of a "donate patches to the site author" button, but the [Card Management](/manage) tool has revealed the sheer number of unused patches and samples I already have. I can't manage even more of them! (Unless you've got really good ones, in which case, please [reach out](mailto:danny@deluge.quest) to me.)
 
 ## What is the tech stack?
 
 - [Astro](https://astro.build) + [Svelte](https://svelte.dev)
 - [Pyodide](https://pyodide.org) (Python in WebAssembly)
 - Hosted on [Vercel](https://vercel.com)
-- The code is on GitHub.
+- The code is on GitHub

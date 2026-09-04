@@ -141,7 +141,7 @@ export function stopPreview() {
     stopTimer = null;
   }
   if (activeCtx) {
-    try { activeCtx.close(); } catch {}
+    try { activeCtx.close(); } catch { /* already closed */ }
     activeCtx = null;
   }
 }
@@ -161,16 +161,12 @@ export function playPreview(patch: AudioPatch, onStop?: () => void) {
   lpf.frequency.value = Math.min(20000, lpfFreqHz(patch.params.lpfFrequency));
   lpf.Q.value = lpfResQ(patch.params.lpfResonance);
 
-  let outputChain: AudioNode = masterGain;
-
   const delayFb = hexToNorm(patch.params.delayFeedback);
-  let delayNode: DelayNode | null = null;
-  let delayGain: GainNode | null = null;
   if (delayFb > 0.05) {
     const delayTime = patch.delaySyncLevel === 6 ? 0.3 : 0.15;
-    delayNode = ctx.createDelay(2);
+    const delayNode = ctx.createDelay(2);
     delayNode.delayTime.value = delayTime;
-    delayGain = ctx.createGain();
+    const delayGain = ctx.createGain();
     delayGain.gain.value = Math.min(0.85, delayFb);
     const delayDry = ctx.createGain();
     delayDry.gain.value = 1;

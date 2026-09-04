@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import os
-import sys
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 AUDIO_EXTENSIONS = {".wav", ".aif", ".aiff"}
 XML_DIRS = ("SONGS", "KITS", "SYNTHS")
@@ -41,7 +40,7 @@ def _walk_files(root_dir: str, ext_filter: set[str] | None = None) -> list[tuple
 def _extract_file_refs_streaming(xml_path: str) -> set[str]:
     refs: set[str] = set()
     try:
-        for event, elem in ET.iterparse(xml_path, events=("start",)):
+        for _event, elem in ET.iterparse(xml_path, events=("start",)):
             for attr in FILE_ATTRS:
                 val = elem.get(attr)
                 if val:
@@ -55,7 +54,7 @@ def _extract_file_refs_streaming(xml_path: str) -> set[str]:
 def _extract_preset_refs_streaming(xml_path: str) -> set[str]:
     names: set[str] = set()
     try:
-        for event, elem in ET.iterparse(xml_path, events=("start",)):
+        for _event, elem in ET.iterparse(xml_path, events=("start",)):
             pname = elem.get("presetName")
             if pname:
                 names.add(pname.strip())
@@ -102,9 +101,7 @@ def scan_card(
 ) -> CardReport:
     samples_dir = os.path.join(str(card_root), "SAMPLES")
     if not os.path.isdir(samples_dir):
-        raise ValueError(
-            f"Not a Deluge SD card: missing SAMPLES directory in {card_root}"
-        )
+        raise ValueError(f"Not a Deluge SD card: missing SAMPLES directory in {card_root}")
 
     def progress(msg: str) -> None:
         if on_progress:

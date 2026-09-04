@@ -117,8 +117,9 @@ export async function updateXmlReferences(
 
       xmlTexts.set(xmlPath, newText);
       result.updated.push(xmlPath);
-    } catch (e: any) {
-      result.errors.push({ path: xmlPath, message: e.message || "Update failed" });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Update failed";
+      result.errors.push({ path: xmlPath, message });
     }
   }
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { HomeAudioPlayer } from './homeAudio';
 
 function createMockBiquadFilter() {
   return {
@@ -18,27 +19,30 @@ function createMockGain() {
 }
 
 function createMockAudioElement() {
-  const el: Record<string, any> = {
+  const el: Record<string, unknown> = {
     src: '',
     crossOrigin: null,
     currentTime: 0,
     duration: 10,
     playbackRate: 1,
     paused: true,
-    _listeners: {} as Record<string, Function[]>,
-    addEventListener: vi.fn((event: string, handler: Function, _opts?: any) => {
-      if (!el._listeners[event]) el._listeners[event] = [];
-      el._listeners[event].push(handler);
+    _listeners: {} as Record<string, ((...args: unknown[]) => void)[]>,
+    addEventListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      const listeners = el._listeners as Record<string, ((...args: unknown[]) => void)[]>;
+      if (!listeners[event]) listeners[event] = [];
+      listeners[event].push(handler);
     }),
-    removeEventListener: vi.fn((event: string, handler: Function) => {
-      if (el._listeners[event]) {
-        el._listeners[event] = el._listeners[event].filter((h: Function) => h !== handler);
+    removeEventListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      const listeners = el._listeners as Record<string, ((...args: unknown[]) => void)[]>;
+      if (listeners[event]) {
+        listeners[event] = listeners[event].filter((h) => h !== handler);
       }
     }),
     play: vi.fn(() => Promise.resolve()),
     pause: vi.fn(),
     load: vi.fn(() => {
-      const handlers = el._listeners['canplaythrough'] || [];
+      const listeners = el._listeners as Record<string, ((...args: unknown[]) => void)[]>;
+      const handlers = listeners['canplaythrough'] || [];
       for (const h of handlers) h();
     }),
   };
@@ -73,7 +77,7 @@ function createMockAudioContext() {
 }
 
 describe('HomeAudioPlayer', () => {
-  let homeAudio: any;
+  let homeAudio: HomeAudioPlayer;
   let mockCtx: ReturnType<typeof createMockAudioContext>;
   let filters: ReturnType<typeof createMockBiquadFilter>[];
   let mockAudioEl: ReturnType<typeof createMockAudioElement>;
@@ -100,19 +104,19 @@ describe('HomeAudioPlayer', () => {
 
   it('sets filter cutoff to max (22050) on initAudio', async () => {
     await homeAudio.initAudio();
-    const filter = filters.find((f: any) => f.type === 'lowpass');
+    const filter = filters.find((f) => f.type === 'lowpass');
     expect(filter).toBeDefined();
     expect(filter!.frequency.value).toBe(22050);
   });
 
   it('registers mediaSession handlers on togglePlay', async () => {
-    const handlers: Record<string, any> = {};
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
     vi.stubGlobal('navigator', {
       ...globalThis.navigator,
       mediaSession: {
         metadata: null,
         playbackState: 'none',
-        setActionHandler: vi.fn((action: string, handler: any) => {
+        setActionHandler: vi.fn((action: string, handler: (...args: unknown[]) => void) => {
           handlers[action] = handler;
         }),
       },
@@ -134,7 +138,7 @@ describe('HomeAudioPlayer', () => {
     await homeAudio.initAudio();
     expect(homeAudio.mediaElement).toBeDefined();
     expect(mockCtx.createMediaElementSource).toHaveBeenCalled();
-    expect((homeAudio as any).keeper).toBeUndefined();
+    expect((homeAudio as unknown as { keeper?: unknown }).keeper).toBeUndefined();
   });
 
   it('plays and pauses via the media element', async () => {

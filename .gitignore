@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+build/
+dist/
+
+# Editors / OS
+.DS_Store
+.idea/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+credentials*

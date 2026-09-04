@@ -17,23 +17,31 @@ install:
 
 # Run tests
 test:
-  pytest tests/ -v
+  uv run pytest tests/ -v
 
 # Run tests with coverage
 test-cov:
-  pytest tests/ -v --cov=deluge_tools --cov-report=term-missing
+  uv run pytest tests/ -v --cov=deluge_tools --cov-report=term-missing
 
 # Lint with ruff
 lint:
-  ruff check deluge_tools/ tests/
+  uv run ruff check deluge_tools/ tests/
 
 # Format code with ruff
 fmt:
-  ruff format deluge_tools/ tests/
+  uv run ruff format deluge_tools/ tests/
 
-# Type-check with pyright (if installed)
+# Type-check with pyright
 typecheck:
-  pyright deluge_tools/ tests/ || echo "pyright not installed"
+  uv run pyright
+
+# Install pre-commit hooks
+pre-commit-install:
+  prek install || pre-commit install
+
+# Run pre-commit hooks against all files
+pre-commit:
+  prek run --all-files || pre-commit run --all-files
 
 # Clean Python build artifacts
 clean-py:
@@ -54,6 +62,18 @@ web-dev:
 # Build static site
 web-build:
   cd web && npm run build
+
+# Lint the web frontend
+web-lint:
+  cd web && npm run lint
+
+# Type-check the web frontend
+web-typecheck:
+  cd web && npx tsc --noEmit
+
+# Run web frontend tests
+web-test:
+  cd web && npm test
 
 # Rebuild Python wheel for Pyodide
 web-rebuild-wheel:
@@ -99,7 +119,7 @@ audio-list:
 setup: install web-install
 
 # Run full test suite
-check: lint test
+check: lint typecheck test web-lint web-typecheck web-test
 
 # Build everything (Python + web)
 build: web-rebuild-wheel web-build

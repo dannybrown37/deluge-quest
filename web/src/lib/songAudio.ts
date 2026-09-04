@@ -285,13 +285,13 @@ export class SongPlayer {
     this._isPlaying = false;
     this._isPaused = false;
     for (const s of this.scheduled) {
-      try { s.source.stop(); } catch {}
-      try { s.source.disconnect(); } catch {}
-      try { s.gain.disconnect(); } catch {}
+      try { s.source.stop(); } catch { /* already stopped */ }
+      try { s.source.disconnect(); } catch { /* already disconnected */ }
+      try { s.gain.disconnect(); } catch { /* already disconnected */ }
     }
     this.scheduled = [];
     if (this.ctx) {
-      try { this.ctx.close(); } catch {}
+      try { this.ctx.close(); } catch { /* already closed */ }
       this.ctx = null;
     }
     this.masterGain = null;

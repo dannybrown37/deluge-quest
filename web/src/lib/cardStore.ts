@@ -91,7 +91,9 @@ class CardStoreImpl {
         tx.onerror = () => reject(tx.error);
       });
       db.close();
-    } catch {}
+    } catch {
+      /* IndexedDB unavailable/blocked; state stays in-memory for this session */
+    }
   }
 
   private async loadHandle(): Promise<FileSystemDirectoryHandle | null> {
@@ -134,7 +136,9 @@ class CardStoreImpl {
         tx.onerror = () => reject(tx.error);
       });
       db.close();
-    } catch {}
+    } catch {
+      /* IndexedDB unavailable/blocked; state stays in-memory for this session */
+    }
   }
 
   /** Songs saved by the most recent scan on this browser. Needs no card handle or permission. */
@@ -164,7 +168,9 @@ class CardStoreImpl {
         tx.onerror = () => reject(tx.error);
       });
       db.close();
-    } catch {}
+    } catch {
+      /* IndexedDB unavailable/blocked; state stays in-memory for this session */
+    }
   }
 
   /**
@@ -175,8 +181,8 @@ class CardStoreImpl {
     const handle = await this.loadHandle();
     if (!handle) return null;
     const perm = requestPermission
-      ? await (handle as any).requestPermission({ mode: "readwrite" })
-      : await (handle as any).queryPermission?.({ mode: "readwrite" });
+      ? await handle.requestPermission({ mode: "readwrite" })
+      : await handle.queryPermission?.({ mode: "readwrite" });
     if (perm !== "granted") return null;
     this.rootHandle = handle;
     return handle;
@@ -184,7 +190,7 @@ class CardStoreImpl {
 
   /** Opens the native directory picker, walks the card, and persists the handle for future reconnects. */
   async pickDirectory(onProgress?: ProgressCallback): Promise<void> {
-    const handle = await (window as any).showDirectoryPicker({ mode: "readwrite" });
+    const handle = await window.showDirectoryPicker({ mode: "readwrite" });
     await this.adoptHandle(handle, onProgress);
   }
 
@@ -198,7 +204,7 @@ class CardStoreImpl {
   async reconnect(onProgress?: ProgressCallback): Promise<boolean> {
     const handle = await this.loadHandle();
     if (!handle) return false;
-    const perm = await (handle as any).queryPermission?.({ mode: "readwrite" });
+    const perm = await handle.queryPermission?.({ mode: "readwrite" });
     if (perm !== "granted") return false;
     await this.loadFromHandle(handle, onProgress);
     return true;
@@ -208,7 +214,7 @@ class CardStoreImpl {
   async requestReconnect(onProgress?: ProgressCallback): Promise<boolean> {
     const handle = await this.loadHandle();
     if (!handle) return false;
-    const perm = await (handle as any).requestPermission({ mode: "readwrite" });
+    const perm = await handle.requestPermission({ mode: "readwrite" });
     if (perm !== "granted") return false;
     await this.loadFromHandle(handle, onProgress);
     return true;
@@ -259,7 +265,7 @@ class CardStoreImpl {
     path: string,
     out: { path: string; handle: FileSystemFileHandle }[],
   ) {
-    for await (const entry of (dirHandle as any).values()) {
+    for await (const entry of dirHandle.values()) {
       if (entry.kind === "directory" && APP_MANAGED_DIRS.has(entry.name)) continue;
       const entryPath = path ? `${path}/${entry.name}` : entry.name;
       if (entry.kind === "file") {
@@ -329,7 +335,7 @@ export async function walkHandle(
   path: string,
   out: { path: string; handle: FileSystemFileHandle }[],
 ): Promise<void> {
-  for await (const entry of (dirHandle as any).values()) {
+  for await (const entry of dirHandle.values()) {
     if (entry.kind === "directory" && APP_MANAGED_DIRS.has(entry.name)) continue;
     const entryPath = path ? `${path}/${entry.name}` : entry.name;
     if (entry.kind === "file") {

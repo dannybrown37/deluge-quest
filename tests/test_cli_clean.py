@@ -25,9 +25,12 @@ def _write_xml(path: Path, content: str) -> None:
 def _setup_card_with_unused(card_root: Path) -> None:
     (card_root / "SAMPLES" / "RECORD" / "USED.WAV").write_bytes(b"\x00" * 100)
     (card_root / "SAMPLES" / "RECORD" / "UNUSED.WAV").write_bytes(b"\x00" * 200)
-    _write_xml(card_root / "SONGS" / "S.XML", """
+    _write_xml(
+        card_root / "SONGS" / "S.XML",
+        """
         <song><osc fileName="SAMPLES/RECORD/USED.WAV" /></song>
-    """)
+    """,
+    )
 
 
 class TestCliClean:
@@ -49,9 +52,12 @@ class TestCliClean:
 
     def test_summary_clean_card(self, card_root: Path, capsys):
         (card_root / "SAMPLES" / "RECORD" / "A.WAV").touch()
-        _write_xml(card_root / "SONGS" / "S.XML", """
+        _write_xml(
+            card_root / "SONGS" / "S.XML",
+            """
             <song><osc fileName="SAMPLES/RECORD/A.WAV" /></song>
-        """)
+        """,
+        )
         main([str(card_root)])
         out = capsys.readouterr().out
         assert "Unused            0 files" in out
@@ -64,9 +70,12 @@ class TestCliClean:
 
     def test_list_samples_only(self, card_root: Path, capsys):
         _setup_card_with_unused(card_root)
-        _write_xml(card_root / "KITS" / "ORPHAN.XML", """
+        _write_xml(
+            card_root / "KITS" / "ORPHAN.XML",
+            """
             <kit><osc fileName="SAMPLES/y.wav" /></kit>
-        """)
+        """,
+        )
         main([str(card_root), "--list", "samples"])
         out = capsys.readouterr().out
         assert "UNUSED.WAV" in out

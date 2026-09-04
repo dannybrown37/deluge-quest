@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from pathlib import Path
 
 from deluge_tools.musicxml_writer import MusicXMLWriter, PartData, snap_duration
 from deluge_tools.parser import Clip, ClipInstance, Instrument, Song
@@ -10,9 +9,10 @@ from deluge_tools.parser import Clip, ClipInstance, Instrument, Song
 class NoArrangementError(Exception):
     pass
 
+
 TICKS_PER_QUARTER = 48
 
-MODE_TO_KEY_MODE = {
+MODE_TO_KEY_MODE: dict[tuple[int, ...], tuple[str, int]] = {
     (0, 2, 4, 5, 7, 9, 11): ("major", 0),
     (0, 2, 3, 5, 7, 8, 10): ("minor", 0),
 }
@@ -20,8 +20,19 @@ MODE_TO_KEY_MODE = {
 MIDI_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 KEY_FIFTHS = {
-    "C": 0, "G": 1, "D": 2, "A": 3, "E": 4, "B": 5, "F#": 6,
-    "F": -1, "Bb": -2, "Eb": -3, "Ab": -4, "Db": -5, "Gb": -6,
+    "C": 0,
+    "G": 1,
+    "D": 2,
+    "A": 3,
+    "E": 4,
+    "B": 5,
+    "F#": 6,
+    "F": -1,
+    "Bb": -2,
+    "Eb": -3,
+    "Ab": -4,
+    "Db": -5,
+    "Gb": -6,
 }
 
 
@@ -35,7 +46,8 @@ def _synthetic_instance(clip: Clip) -> ClipInstance:
 
 
 def _iter_clip_notes(
-    clip: Clip, ci: ClipInstance,
+    clip: Clip,
+    ci: ClipInstance,
 ) -> list[tuple[int, int, int, int | None, str | None]]:
     raw_entries: list[tuple[int, int, int, int | None, str | None]] = []
     loops = (ci.length + clip.length - 1) // clip.length if clip.length > 0 else 1
@@ -48,18 +60,23 @@ def _iter_clip_notes(
                 pos_in_instance = loop_offset + n.position
                 if pos_in_instance >= ci.length:
                     continue
-                raw_entries.append((
-                    ci.position + pos_in_instance,
-                    n.length,
-                    n.velocity,
-                    row.y,
-                    row.drum_name or (f"Drum {row.drum_index}" if row.drum_index is not None else None),
-                ))
+                raw_entries.append(
+                    (
+                        ci.position + pos_in_instance,
+                        n.length,
+                        n.velocity,
+                        row.y,
+                        row.drum_name
+                        or (f"Drum {row.drum_index}" if row.drum_index is not None else None),
+                    )
+                )
     return raw_entries
 
 
 def _build_synth_part(
-    inst: Instrument, clips_by_index: dict[int, Clip], song: Song,
+    inst: Instrument,
+    clips_by_index: dict[int, Clip],
+    song: Song,
 ) -> PartData | None:
     pitch_name = _root_note_to_pitch_name(song.root_note)
     mode_tuple = tuple(song.mode_notes)
@@ -110,7 +127,9 @@ def _build_synth_part(
 
 
 def _build_drum_part(
-    inst: Instrument, clips_by_index: dict[int, Clip], song: Song,
+    inst: Instrument,
+    clips_by_index: dict[int, Clip],
+    song: Song,
 ) -> PartData | None:
     part = PartData(
         name=inst.name or "Kit",
@@ -134,7 +153,9 @@ def _build_drum_part(
     for pos in sorted(by_pos):
         name, vel, dur = by_pos[pos]
         part.add_event(
-            pos, dur, [60],
+            pos,
+            dur,
+            [60],
             velocity=vel,
             notehead="x",
             lyric=name or "Drum",
@@ -145,10 +166,12 @@ def _build_drum_part(
 
 
 def _clips_for_instrument(
-    inst: Instrument, clips: list[Clip],
+    inst: Instrument,
+    clips: list[Clip],
 ) -> list[Clip]:
     return [
-        c for c in clips
+        c
+        for c in clips
         if c.instrument_slot == inst.slot and c.instrument_sub_slot == inst.sub_slot
     ]
 
@@ -232,7 +255,6 @@ def song_to_score(song: Song):
 
     parts = []
     for inst, cb in iter_items:
-
         part = stream.Part()
         part.partName = inst.name or f"Instrument {inst.slot}"
 

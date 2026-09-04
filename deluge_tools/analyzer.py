@@ -72,15 +72,9 @@ def analyze_song(song: Song) -> SongStats:
     cv_count = sum(1 for i in song.instruments if i.instrument_type == "cv")
     audio_count = sum(1 for i in song.instruments if i.instrument_type == "audio")
 
-    total_notes = sum(
-        len(row.notes)
-        for clip in song.clips
-        for row in clip.rows
-    )
+    total_notes = sum(len(row.notes) for clip in song.clips for row in clip.rows)
 
-    has_arrangement = any(
-        len(i.clip_instances) > 0 for i in song.instruments
-    )
+    has_arrangement = any(len(i.clip_instances) > 0 for i in song.instruments)
 
     arr_end = 0
     for inst in song.instruments:

@@ -154,11 +154,16 @@ def _build_note_seq(m_events: list, measure_ticks: int = MEASURE_TICKS) -> list[
             continue
         event_dur = min(dur_ticks, measure_ticks - offset_in_measure)
         event_dur = snap_duration(event_dur)
-        seq.append({
-            "dur": event_dur, "pitches": pitches,
-            "velocity": velocity, "notehead": notehead,
-            "lyric": lyric, "stem": stem,
-        })
+        seq.append(
+            {
+                "dur": event_dur,
+                "pitches": pitches,
+                "velocity": velocity,
+                "notehead": notehead,
+                "lyric": lyric,
+                "stem": stem,
+            }
+        )
         cursor = offset_in_measure + event_dur
     if cursor < measure_ticks:
         seq.append({"forward": measure_ticks - cursor})
@@ -204,7 +209,7 @@ def _pad_triplet_groups(seq: list[dict]) -> None:
         if added < total_pad and run_start > 0 and seq[run_start - 1].get("forward"):
             take = min(seq[run_start - 1]["forward"], total_pad - added)
             n_rests = take // pad_each
-            for k in range(n_rests):
+            for _k in range(n_rests):
                 seq.insert(run_start, {"dur": pad_each, "rest": True})
                 added += pad_each
                 run_start += 1
@@ -249,9 +254,7 @@ def _merge_triplet_islands(seq: list[dict]) -> None:
                 if prev.get("forward") and prev["forward"] % 4 == 0:
                     parts = _split_rests(prev["forward"], triplet=True)
                     if sum(parts) == prev["forward"]:
-                        seq[start - 1 : start] = [
-                            {"dur": d, "rest": True} for d in parts
-                        ]
+                        seq[start - 1 : start] = [{"dur": d, "rest": True} for d in parts]
                         merged = True
                 elif not prev.get("forward") and not prev.get("rest"):
                     _, _, pt = _dur_info(prev["dur"])
@@ -278,9 +281,7 @@ def _merge_triplet_islands(seq: list[dict]) -> None:
                 if nxt.get("forward") and nxt["forward"] % 4 == 0:
                     parts = _split_rests(nxt["forward"], triplet=True)
                     if sum(parts) == nxt["forward"]:
-                        seq[i : i + 1] = [
-                            {"dur": d, "rest": True} for d in parts
-                        ]
+                        seq[i : i + 1] = [{"dur": d, "rest": True} for d in parts]
                         merged = True
                 elif not nxt.get("forward") and not nxt.get("rest"):
                     _, _, nt = _dur_info(nxt["dur"])
@@ -368,9 +369,7 @@ class MusicXMLWriter:
             for evt in part.events:
                 m_idx = evt[0] // MEASURE_TICKS
                 offset_in_measure = evt[0] % MEASURE_TICKS
-                events_by_measure.setdefault(m_idx, []).append(
-                    (offset_in_measure, evt)
-                )
+                events_by_measure.setdefault(m_idx, []).append((offset_in_measure, evt))
 
             for m_idx in range(n_measures):
                 measure = ET.SubElement(part_el, "measure", number=str(m_idx + 1))
@@ -415,13 +414,17 @@ class MusicXMLWriter:
                     t_stop = item.get("tie_stop", False)
                     if item.get("rest"):
                         _add_note_element(
-                            measure, item["dur"], is_rest=True,
-                            tuplet_start=ts, tuplet_stop=te,
+                            measure,
+                            item["dur"],
+                            is_rest=True,
+                            tuplet_start=ts,
+                            tuplet_stop=te,
                         )
                     else:
                         for j, p in enumerate(item["pitches"]):
                             _add_note_element(
-                                measure, item["dur"],
+                                measure,
+                                item["dur"],
                                 pitch_midi=p,
                                 is_chord=(j > 0),
                                 velocity=item["velocity"],

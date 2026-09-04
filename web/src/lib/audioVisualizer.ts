@@ -15,7 +15,7 @@ export class AudioVisualizer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private analyser: AnalyserNode | null = null;
-  private freqData: Uint8Array | null = null;
+  private freqData: Uint8Array<ArrayBuffer> | null = null;
   private raf = 0;
   private running = false;
   private idlePhase = 0;

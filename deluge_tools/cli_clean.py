@@ -60,13 +60,15 @@ def _print_summary(report: CardReport, card_root: Path) -> None:
         print("  Unused            0 files")
 
     if report.missing_references:
-        print(f"  Broken refs   {len(report.missing_references):>5,} files   (referenced but missing)")
+        print(
+            f"  Broken refs   {len(report.missing_references):>5,} files   (referenced but missing)"
+        )
 
     if report.unused_presets:
         print(f"  Orphan presets {len(report.unused_presets):>4,} files   (not used by any song)")
 
     if report.unused_samples:
-        print(f"\nRun with --move to relocate unused samples to SAMPLES/_UNUSED/")
+        print("\nRun with --move to relocate unused samples to SAMPLES/_UNUSED/")
     print("Run with --list for full file listing")
 
 
@@ -114,25 +116,33 @@ def main(argv: list[str] | None = None) -> None:
         description="Find unused samples and presets on a Deluge SD card",
     )
     parser.add_argument(
-        "--version", action="version",
+        "--version",
+        action="version",
         version=f"%(prog)s {version('deluge-tools')}",
     )
     parser.add_argument(
-        "card_root", nargs="?", type=Path,
+        "card_root",
+        nargs="?",
+        type=Path,
         help="Path to Deluge SD card root directory",
     )
     parser.add_argument(
-        "--move", action="store_true",
+        "--move",
+        action="store_true",
         help="Move unused samples to SAMPLES/_UNUSED/ (default: report only)",
     )
     parser.add_argument(
-        "--list", nargs="?", const="all", default=None,
+        "--list",
+        nargs="?",
+        const="all",
+        default=None,
         choices=["all", "samples", "missing", "presets"],
         metavar="CATEGORY",
         help="List files (all, samples, missing, presets)",
     )
     parser.add_argument(
-        "--json", action="store_true",
+        "--json",
+        action="store_true",
         help="Output as JSON",
     )
 
@@ -153,15 +163,21 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.json:
         import json
-        print(json.dumps({
-            "total_samples": report.total_samples,
-            "total_samples_bytes": report.total_samples_bytes,
-            "total_references": report.total_references,
-            "unused_samples": sorted(report.unused_samples),
-            "missing_references": sorted(report.missing_references),
-            "unused_presets": sorted(report.unused_presets),
-            "reclaimable_bytes": report.reclaimable_bytes,
-        }, indent=2))
+
+        print(
+            json.dumps(
+                {
+                    "total_samples": report.total_samples,
+                    "total_samples_bytes": report.total_samples_bytes,
+                    "total_references": report.total_references,
+                    "unused_samples": sorted(report.unused_samples),
+                    "missing_references": sorted(report.missing_references),
+                    "unused_presets": sorted(report.unused_presets),
+                    "reclaimable_bytes": report.reclaimable_bytes,
+                },
+                indent=2,
+            )
+        )
     elif args.list is not None:
         category = None if args.list == "all" else args.list
         _print_list(report, category)
@@ -170,7 +186,9 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.move and report.unused_samples:
         if sys.stdin.isatty() and not args.json:
-            confirm = input(f"\nMove {len(report.unused_samples)} unused samples to SAMPLES/_UNUSED/? [y/N] ")
+            confirm = input(
+                f"\nMove {len(report.unused_samples)} unused samples to SAMPLES/_UNUSED/? [y/N] "
+            )
             if confirm.lower() != "y":
                 print("Aborted.")
                 return

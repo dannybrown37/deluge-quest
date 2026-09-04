@@ -10,7 +10,7 @@ from deluge_tools.parser import (
     parse_song,
 )
 
-SAMPLE_SONG = Path(__file__).parent.parent / "Square Spelunking.XML"
+SAMPLE_SONG = Path(__file__).parent / "fixtures" / "square_spelunking.XML"
 
 
 class TestParseNoteData:
@@ -124,12 +124,7 @@ class TestParseSong:
         assert len(synth_clips) == 3
 
     def test_note_data_decoded(self, song):
-        all_notes = [
-            note
-            for clip in song.clips
-            for row in clip.rows
-            for note in row.notes
-        ]
+        all_notes = [note for clip in song.clips for row in clip.rows for note in row.notes]
         assert len(all_notes) > 0
         for note in all_notes:
             assert note.position >= 0
