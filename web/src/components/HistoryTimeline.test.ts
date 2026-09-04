@@ -23,6 +23,18 @@ vi.mock('../lib/historyStore', () => ({
     deleteSavePoint: vi.fn().mockResolvedValue(undefined),
     exportSavePoint: vi.fn(),
     estimateUsage: vi.fn().mockResolvedValue(null),
+    browserSavePointCount: vi.fn().mockResolvedValue(0),
+    migrateToVault: vi.fn().mockResolvedValue({ moved: 0, skipped: 0 }),
+  },
+}));
+
+vi.mock('../lib/historyVault', () => ({
+  historyVault: {
+    name: '',
+    isConnected: false,
+    reconnect: vi.fn().mockResolvedValue(false),
+    pick: vi.fn().mockResolvedValue(true),
+    forget: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -36,6 +48,15 @@ import { cardStore } from '../lib/cardStore';
 import { historyStore } from '../lib/historyStore';
 import { restoreFile } from '../lib/softDelete';
 import { trackToolAction } from '../lib/analytics';
+import { historyVault } from '../lib/historyVault';
+
+const vault = historyVault as unknown as {
+  name: string;
+  isConnected: boolean;
+  reconnect: ReturnType<typeof vi.fn>;
+  pick: ReturnType<typeof vi.fn>;
+  forget: ReturnType<typeof vi.fn>;
+};
 
 const store = historyStore as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const card = cardStore as unknown as {
@@ -78,6 +99,16 @@ beforeEach(() => {
   card.rootHandle = { name: 'DELUGE' };
   store.listSavePoints.mockResolvedValue([]);
   store.estimateUsage.mockResolvedValue(null);
+  store.browserSavePointCount.mockResolvedValue(0);
+  store.migrateToVault.mockResolvedValue({ moved: 0, skipped: 0 });
+  vault.name = '';
+  vault.isConnected = false;
+  vault.reconnect.mockResolvedValue(false);
+  vault.pick.mockImplementation(async () => {
+    vault.name = 'MY-HISTORY';
+    vault.isConnected = true;
+    return true;
+  });
   store.getXml.mockImplementation(async (hash: string) =>
     hash === 'oldhash' ? SONG_OLD : hash === 'newhash' ? SONG_NEW : '<song/>',
   );
@@ -541,5 +572,115 @@ describe('resetting the card', () => {
     render(HistoryTimeline);
     await screen.findByText('sp-1 → sp-2');
     expect(screen.queryByText(/different cards/)).toBeNull();
+  });
+});
+
+describe('where save points are kept', () => {
+  it('warns that browser-only save points are lost with site data', async () => {
+    render(HistoryTimeline);
+    expect(await screen.findByText(/clearing site data loses them/)).toBeTruthy();
+  });
+
+  it('offers to choose a folder', async () => {
+    render(HistoryTimeline);
+    expect(await screen.findByText('Choose a folder')).toBeTruthy();
+  });
+
+  it('names the folder once one is chosen', async () => {
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('Choose a folder'));
+    await waitFor(() => expect(vault.pick).toHaveBeenCalled());
+    expect(await screen.findByText('MY-HISTORY')).toBeTruthy();
+  });
+
+  it('reconnects a folder chosen in an earlier visit', async () => {
+    vault.reconnect.mockImplementation(async () => {
+      vault.name = 'REMEMBERED';
+      vault.isConnected = true;
+      return true;
+    });
+    render(HistoryTimeline);
+    expect(await screen.findByText('REMEMBERED')).toBeTruthy();
+  });
+
+  it('says why a folder could not be opened', async () => {
+    vault.pick.mockRejectedValueOnce(new Error('The user aborted a request.'));
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('Choose a folder'));
+    expect(await screen.findByRole('alert')).toHaveProperty(
+      'textContent',
+      'The user aborted a request.',
+    );
+  });
+
+  it('can go back to browser storage', async () => {
+    vault.reconnect.mockImplementation(async () => {
+      vault.name = 'MY-HISTORY';
+      vault.isConnected = true;
+      return true;
+    });
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('use browser storage'));
+    await waitFor(() => expect(vault.forget).toHaveBeenCalled());
+    expect(await screen.findByText('Choose a folder')).toBeTruthy();
+  });
+
+  it('carries on when the remembered folder cannot be reopened', async () => {
+    vault.reconnect.mockRejectedValue(new Error('permission lost'));
+    render(HistoryTimeline);
+    expect(await screen.findByText('Choose a folder')).toBeTruthy();
+  });
+});
+
+describe('moving existing save points into a folder', () => {
+  beforeEach(() => {
+    store.browserSavePointCount.mockResolvedValue(3);
+  });
+
+  it('offers to copy browser save points across after a folder is chosen', async () => {
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('Choose a folder'));
+    expect(await screen.findByText(/You have 3 save points in browser storage/)).toBeTruthy();
+  });
+
+  it('does not offer when there is nothing in browser storage', async () => {
+    store.browserSavePointCount.mockResolvedValue(0);
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('Choose a folder'));
+    await waitFor(() => expect(store.browserSavePointCount).toHaveBeenCalled());
+    expect(screen.queryByText(/save points in browser storage/)).toBeNull();
+  });
+
+  it('copies them and says the browser copies are kept', async () => {
+    store.migrateToVault.mockResolvedValue({ moved: 3, skipped: 0 });
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('Choose a folder'));
+    await fireEvent.click(await screen.findByText('copy them across'));
+    const notice = await screen.findByText(/Copied 3 save points/);
+    expect(notice.textContent).toContain('browser copies are left as they were');
+  });
+
+  it('says how many could not be copied', async () => {
+    store.migrateToVault.mockResolvedValue({ moved: 2, skipped: 1 });
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('Choose a folder'));
+    await fireEvent.click(await screen.findByText('copy them across'));
+    expect(await screen.findByText(/1 could not be copied/)).toBeTruthy();
+  });
+
+  it('can be declined, and stops asking', async () => {
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('Choose a folder'));
+    await fireEvent.click(await screen.findByText('leave them'));
+    await waitFor(() => expect(screen.queryByText('copy them across')).toBeNull());
+    expect(store.migrateToVault).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a failed copy', async () => {
+    store.migrateToVault.mockRejectedValue(new Error('folder went away'));
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('Choose a folder'));
+    await fireEvent.click(await screen.findByText('copy them across'));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'folder went away');
   });
 });

@@ -378,3 +378,45 @@ describe('deleting', () => {
     expect(root.children.has(SAVE_POINTS_DIR)).toBe(true);
   });
 });
+
+describe('the remembered-folder database', () => {
+  it('creates its store on first open, against a real IndexedDB', async () => {
+    const { indexedDB: realFake } = await import('fake-indexeddb');
+    vi.stubGlobal('indexedDB', realFake);
+    // Exercises open + onupgradeneeded. Nothing is stored yet, so nothing is remembered.
+    expect(await historyVault.hasRemembered()).toBe(false);
+  });
+
+  it('treats a permission check that throws as not connected', async () => {
+    const picked = new FakeDirHandle('PICKED');
+    picked.queryPermission = async () => {
+      throw new Error('SecurityError');
+    };
+    vi.stubGlobal('window', { showDirectoryPicker: vi.fn().mockResolvedValue(picked) });
+    await historyVault.pick();
+    historyVault.handle = null;
+    expect(await historyVault.reconnect()).toBe(false);
+  });
+});
+
+describe('when browser storage is blocked', () => {
+  beforeEach(() => {
+    vi.stubGlobal('indexedDB', undefined);
+  });
+
+  it('reports nothing remembered rather than throwing', async () => {
+    expect(await historyVault.hasRemembered()).toBe(false);
+    expect(await historyVault.reconnect()).toBe(false);
+  });
+
+  it('still uses a folder picked this session, it just will not be remembered', async () => {
+    const picked = new FakeDirHandle('PICKED');
+    vi.stubGlobal('window', { showDirectoryPicker: vi.fn().mockResolvedValue(picked) });
+    expect(await historyVault.pick()).toBe(true);
+    expect(historyVault.name).toBe('PICKED');
+  });
+
+  it('forgets without complaint', async () => {
+    await expect(historyVault.forget()).resolves.toBeUndefined();
+  });
+});

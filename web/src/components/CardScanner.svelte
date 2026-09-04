@@ -2371,6 +2371,10 @@
 
       {:else if listCategory === "backup"}
         <div class="list-group">
+          <p class="list-note">
+            Backup copies real files off the card. To see <em>what changed</em> between two
+            sessions, and put one old file back, use <a href="/history">History</a>.
+          </p>
           {#if !hasFileSystemAccess}
             <p class="list-empty">Backup requires a Chromium-based browser with File System Access API.</p>
           {:else if !canWrite}
@@ -2980,6 +2984,17 @@
     text-align: center;
     font-size: 0.85rem;
     color: var(--text-secondary);
+  }
+
+  .list-note {
+    padding: 0.75rem 1rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+  .list-note a {
+    color: var(--accent);
   }
 
   .error-card { border-color: #c47a7a; }

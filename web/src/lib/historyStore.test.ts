@@ -459,3 +459,69 @@ describe('moving browser save points into a folder', () => {
     expect(await historyStore.migrateToVault()).toEqual({ moved: 0, skipped: 0 });
   });
 });
+
+describe('migration when stored files have gone', () => {
+  afterEach(() => {
+    historyVault.handle = null;
+  });
+
+  it('skips a save point whose blobs were already collected, and says how many', async () => {
+    const sp = await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }), 'orphan');
+    // Drop the blob but keep the save point, the state a half-cleared database leaves behind.
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open('deluge-history');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction('blobs', 'readwrite');
+      tx.objectStore('blobs').delete(sp.entries[0].hash);
+      tx.oncomplete = () => resolve();
+    });
+    db.close();
+
+    class Dir {
+      kind = 'directory' as const;
+      children = new Map<string, unknown>();
+      constructor(public name = 'V') {}
+      async getDirectoryHandle(n: string) {
+        let c = this.children.get(n);
+        if (!c) {
+          c = new Dir(n);
+          this.children.set(n, c);
+        }
+        return c as unknown as FileSystemDirectoryHandle;
+      }
+      async getFileHandle(n: string) {
+        let c = this.children.get(n) as { content: string };
+        if (!c) {
+          c = { content: '' };
+          this.children.set(n, c);
+        }
+        return {
+          getFile: async () => ({ text: async () => c.content }),
+          createWritable: async () => {
+            let p = '';
+            return {
+              write: async (d: string) => {
+                p = d;
+              },
+              close: async () => {
+                c.content = p;
+              },
+            };
+          },
+        } as unknown as FileSystemFileHandle;
+      }
+      async removeEntry(n: string) {
+        this.children.delete(n);
+      }
+      async *values() {
+        for (const c of this.children.values()) yield c as { name: string };
+      }
+    }
+
+    historyVault.handle = new Dir() as unknown as FileSystemDirectoryHandle;
+    expect(await historyStore.migrateToVault()).toEqual({ moved: 0, skipped: 1 });
+  });
+});

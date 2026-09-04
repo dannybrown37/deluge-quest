@@ -91,6 +91,7 @@ Prose-only pages are Markdown instead (see `/faq`).
 | `/patch` | `PatchGenerator.svelte` | Generate synth presets with live Web Audio preview |
 | `/score` | `ScoreConverter.svelte` | Song XML → MusicXML download |
 | `/import` | `MidiImporter.svelte` | MIDI → Deluge song XML |
+| `/history` | `HistoryTimeline.svelte` | Save points of every song/kit/patch (never samples), plain-words diff between any two, per-file restore. Stored in a folder on disk when one is picked, browser storage otherwise |
 | `/songs` | — | Song index: list of all tracks with links to individual pages |
 | `/songs/[slug]` | `SongPlayer.svelte` | Shareable per-song page with mobile-friendly audio player, OG tags |
 | `/faq` | — | Hand-written prose. It is `src/pages/faq.md` (Markdown), rendered through `ProseLayout.astro` — edit the Markdown, not HTML |
@@ -113,7 +114,7 @@ per audio file for shareable song links.
 |---|---|
 | `pyodide.ts` | The Python↔JS seam. Lazy singleton loader + 4 bridges: `analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML`. Bridges covered by a real-Pyodide integration test, see Known Issues |
 | `cardStore.ts` | Singleton `cardStore` — the SD card handle, sample index, and song cache, shared across `/manage`, `/stats`, `/kits`, `/preview`. Persists the `FileSystemDirectoryHandle` and a song-XML cache in IndexedDB (`deluge-card-store`, v2). Also exports `walkHandle()` for walking arbitrary directory handles (used by backup) and `APP_MANAGED_DIRS` |
-| `softDelete.ts` | `moveToTrash(root, path)`, `moveFile(root, from, to)`, `updateXmlReferences(root, xmlPaths, xmlTexts, moves)` — file moves with XML ref updating. Backups to `MOVE_BACKUP/` |
+| `softDelete.ts` | `moveToTrash(root, path)`, `moveFile(root, from, to)`, `updateXmlReferences(root, xmlPaths, xmlTexts, moves)`, `restoreFile(root, path, xml)` — file moves with XML ref updating, and putting an old version back. Backups to `MOVE_BACKUP/` and `HISTORY_BACKUP/` |
 | `patchAudio.ts` | Web Audio synth engine (subtractive + FM voices, envelopes) for `/patch` |
 | `songAudio.ts` | Song-level scheduler over `patchAudio` voices + card samples for `/preview` |
 | `kitXml.ts` | `Kit`/`KitRow` model and Deluge kit XML serialization for `/kits` |
@@ -121,6 +122,9 @@ per audio file for shareable song links.
 | `audioVisualizer.ts` | Canvas-based audio visualizer using `AnalyserNode` — frequency bars (gold/teal) when music plays, ambient wave when idle. Used on home page below the Deluge grid |
 | `homeAudio.ts` | Singleton `homeAudio` — the site-wide `<audio>` player + Web Audio FX chain (filter, reverb, delay, analyser), song list, MediaSession wiring. Shared by the home page, the mini-player in `BaseLayout`, and `/songs/[slug]`. Also emits the song analytics events |
 | `screenGuard.ts` | `shouldSyncScreen(state)` — decides whether the DelugeUI screen may revert to song info, or is currently claimed by a held knob value or a hovered pad |
+| `historyStore.ts` | Singleton `historyStore` — save points, content-addressed. Writes to `historyVault` when a folder is connected, else IndexedDB (`deluge-history` v1, stores `blobs` + `savePoints`, 50-save-point cap + blob GC). `hashXml()`, `classifyPath()`, `migrateToVault()` |
+| `historyVault.ts` | Singleton `historyVault` — the save-point folder on disk. `<vault>/blobs/<hash>.xml` + `<vault>/save-points/0007.json` + `meta.json` (id counter). Handle persisted in IndexedDB `deluge-history-vault`. Chromium only |
+| `xmlDiff.ts` | `diffXml()` (plain-words changes between two XMLs), `musicalChanges()`, `compareSavePoints()`, `readBpm()`, `countNotes()`. Pure TS, no Pyodide |
 | `analytics.ts` | Vercel Web Analytics wrapper. `track()` (never throws), `trackToolVisit()`, `trackToolAction()`, plus pure `crossedMarks()`/`percentPlayed()` for listen milestones |
 
 ## Key Design Decisions
@@ -132,9 +136,11 @@ per audio file for shareable song links.
   other pages can pre-filter without invoking Python.
 - **Clips are first-class objects.** `Song.clips` indexed by position in `sessionClips`;
   `Instrument.clip_instances` references clips by index. Matches Deluge's own model.
-- **Nothing is destroyed.** Card operations move files into `SOFT_DELETE/`, `REPAIR_BACKUP/`, or
-  `MOVE_BACKUP/` (all in `APP_MANAGED_DIRS`, never re-scanned). Sample moves back up affected
-  XMLs to `MOVE_BACKUP/` before rewriting references.
+- **Nothing is destroyed.** Card operations move files into `SOFT_DELETE/`, `REPAIR_BACKUP/`,
+  `MOVE_BACKUP/`, or `HISTORY_BACKUP/` (all in `APP_MANAGED_DIRS`, never re-scanned).
+  Sample moves back up affected XMLs to `MOVE_BACKUP/` before rewriting references.
+  `restoreFile()` never overwrites an existing backup — a second restore of the same file lands
+  at `NAME.XML.1`, or restoring twice would destroy the version the user started from.
 - **Python↔JS is an untyped string seam.** `pyodide.ts` embeds Python in template literals and
   marshals via `JSON.stringify` + `pyodide.globals.set`. TS interfaces (`SongStats`, `PreviewTrack`)
   are hand-maintained mirrors of the Python dataclasses — change one, change the other, no
@@ -194,6 +200,12 @@ per audio file for shareable song links.
   at its default of `True` with no error. Must use
   `micropip.install.callKwargs(path, {deps: false})`. Same trap applies to any other
   Pyodide/micropip call taking Python kwargs from JS.
+- **Save points are per-file-name, not per-identity** — `/history` matches files across save
+  points by path. A song renamed between two save points reads as one removed plus one added,
+  not as a rename. The UI says so when the two sides came from different cards.
+- **Note counts only** — `xmlDiff` reports how many notes a clip gained or lost, read off the
+  `noteData` hex length. Notes *moved* without a count change report nothing; catching that
+  needs real note decoding.
 - **Only 2 scales** — major and minor. Should support all 14 firmware presets + USER_SCALE label.
 - **`midiChannel`/`cv` instruments** parse correctly now but still render nothing in MusicXML/score output (`converter.py` skips them) — preview/inspector paths (`pyodide.ts`) are fine.
 - **Kit drums at C4** — no General MIDI mapping; all drums render as x-noteheads with lyric labels.
@@ -250,7 +262,7 @@ Cookieless, so no consent banner. Custom events (free tier caps at ~50k/month):
 
 | Event | Props | Fired from |
 |---|---|---|
-| `tool_visit` | `tool` | `BaseLayout` on `astro:page-load`, for the 7 tool routes only |
+| `tool_visit` | `tool` | `BaseLayout` on `astro:page-load`, for the 8 tool routes only |
 | `tool_action` | `tool`, `action`, + optional counts | `trackToolAction()`, called by every tool component at the points where real work completes |
 | `song_play` | `song` | `homeAudio.togglePlay()`, once per loaded song (resume does not re-fire) |
 | `song_progress` | `song`, `percent` | `homeAudio` raf tick at the 25/50/75/100 marks |
@@ -270,6 +282,7 @@ Backward seeks never re-fire a milestone; `trackedPercent` is monotonic.
 | `patch` | `generate`, `preview`, `download`, `bulk_download` |
 | `score` | `convert`, `convert_error`, `download` |
 | `import` | `convert`, `convert_error`, `download` |
+| `history` | `save_point` (+files/changed), `diff`, `restore`, `prune`, `export_save_point`, `migrate` (+moved/skipped) |
 
 Deliberately **not** tracked: per-row edits (adding one kit row, dragging one sample). They fire
 dozens of times per session and would burn the free-tier event quota without telling you more

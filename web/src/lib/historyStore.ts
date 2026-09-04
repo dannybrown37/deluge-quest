@@ -297,8 +297,16 @@ class HistoryStoreImpl {
         skipped++;
         continue;
       }
-      const { id: _ignored, ...draft } = savePoint;
-      await historyVault.writeSavePoint(draft, blobs);
+      // The folder assigns its own id, so the browser one is deliberately left behind.
+      await historyVault.writeSavePoint(
+        {
+          cardName: savePoint.cardName,
+          takenAt: savePoint.takenAt,
+          label: savePoint.label,
+          entries: savePoint.entries,
+        },
+        blobs,
+      );
       moved++;
     }
     return { moved, skipped };
