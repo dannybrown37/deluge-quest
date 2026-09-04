@@ -36,16 +36,11 @@ The site is tracking song plays and tool usage counts, basic analytics only.
 
 No data you load onto the site is sent to a server. All of the tools run directly in the browser, so your files never leave your machine. No server, no account, no upload.
 
-## How it works
+I jokingly toyed with the idea of a "donate patches and samples to the site author" button, but the [Card Management](/manage) tool has revealed the sheer number of unused patches and samples I already have. I can't manage even more of them! (Unless you've got really good ones, in which case, please reach out to me.)
 
-Everything runs in your browser. The Python conversion library is compiled to WebAssembly via [Pyodide](https://pyodide.org), so your files never leave your machine. No server, no account, no upload.
-
-## Source
-
-The code is on GitHub. Contributions welcome — especially from the Deluge community.
-
-## Built with
+## What is the tech stack?
 
 - [Astro](https://astro.build) + [Svelte](https://svelte.dev)
 - [Pyodide](https://pyodide.org) (Python in WebAssembly)
 - Hosted on [Vercel](https://vercel.com)
+- The code is on GitHub.
