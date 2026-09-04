@@ -1132,6 +1132,7 @@
     color: #888;
     letter-spacing: 0.16em;
     text-transform: lowercase;
+    transform: translateX(-14px);
   }
   .oled-screen {
     position: relative;
