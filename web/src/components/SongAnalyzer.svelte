@@ -42,11 +42,18 @@
 
   const ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
+  function durationStrToSeconds(s: string): number {
+    if (s === "-") return -1;
+    if (s.endsWith("s")) return parseInt(s, 10);
+    const [minutes, secs] = s.split(":").map(Number);
+    return minutes * 60 + secs;
+  }
+
   const sortFns: Record<string, (a: SongStats, b: SongStats) => number> = {
     name: (a, b) => a.filename.localeCompare(b.filename),
     bpm: (a, b) => a.bpm - b.bpm,
     key: (a, b) => a.key.localeCompare(b.key),
-    duration: (a, b) => a.durationStr.localeCompare(b.durationStr),
+    duration: (a, b) => durationStrToSeconds(a.durationStr) - durationStrToSeconds(b.durationStr),
     notes: (a, b) => a.totalNotes - b.totalNotes,
     instruments: (a, b) => a.instrumentCount - b.instrumentCount,
     clips: (a, b) => a.clipCount - b.clipCount,
