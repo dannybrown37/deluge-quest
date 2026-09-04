@@ -860,7 +860,6 @@
   .deluge-housing {
     display: flex;
     width: 900px;
-    margin: 0 auto;
     user-select: none;
     filter: drop-shadow(0 12px 40px rgba(0,0,0,0.5));
   }
@@ -1330,12 +1329,7 @@
   .grid-label-group--sound6 { grid-column: 13 / 15; }
   .grid-label-group--sound7 { grid-column: 15 / 17; }
   .grid-label-group--sidebar-left { grid-column: 18; }
-  .grid-label-group--sidebar-right {
-    grid-column: 19;
-    font-size: 0.36rem;
-    letter-spacing: 0.04em;
-    color: rgba(255,255,255,0.25);
-  }
+  .grid-label-group--sidebar-right { grid-column: 19; }
 
   .viz-container {
     position: relative;
