@@ -100,10 +100,6 @@ class HomeAudioPlayer {
     }
     this.audioCtx = new AudioContext();
 
-    this.mediaElement = new Audio();
-    this.mediaElement.crossOrigin = 'anonymous';
-    this.mediaSource = this.audioCtx.createMediaElementSource(this.mediaElement);
-
     this.filterNode = this.audioCtx.createBiquadFilter();
     this.filterNode.type = 'lowpass';
     this.filterNode.frequency.value = 22050;
@@ -118,8 +114,6 @@ class HomeAudioPlayer {
     this.delayFeedback.gain.value = 0.35;
     this.delayWet = this.audioCtx.createGain();
     this.delayWet.gain.value = 0.4;
-
-    this.mediaSource.connect(this.filterNode);
 
     this.filterNode.connect(this.dryGain);
     this.filterNode.connect(this.reverbNode);
@@ -136,9 +130,29 @@ class HomeAudioPlayer {
     this.gainNode.connect(this.analyserNode);
     this.analyserNode.connect(this.audioCtx.destination);
 
-    this.mediaElement.addEventListener('ended', () => {
-      this.stepSong(1);
+    this.newMediaChain();
+  }
+
+  // A MediaElementAudioSourceNode stops passing audio to the graph once its
+  // element's src is swapped, so each song gets a fresh element and tap.
+  private newMediaChain() {
+    if (!this.audioCtx || !this.filterNode) return;
+
+    this.mediaSource?.disconnect();
+    this.mediaElement?.pause();
+
+    const el = new Audio();
+    el.crossOrigin = 'anonymous';
+    el.preload = 'auto';
+    el.addEventListener('ended', () => {
+      this.isPlaying = false;
+      this.stepSong(1, true);
     });
+
+    this.mediaElement = el;
+    this.mediaSource = this.audioCtx.createMediaElementSource(el);
+    this.mediaSource.connect(this.filterNode);
+    console.log('[audio] new media chain, ctx:', this.audioCtx.state);
   }
 
   private songUrl(file: string): string {
@@ -151,6 +165,7 @@ class HomeAudioPlayer {
       this.mediaElement.pause();
       this.isPlaying = false;
     }
+    this.newMediaChain();
     this.currentSongIndex = idx;
     const song = this.songs[idx];
 
@@ -178,8 +193,8 @@ class HomeAudioPlayer {
     });
   }
 
-  async stepSong(delta: number): Promise<void> {
-    const wasPlaying = this.isPlaying;
+  async stepSong(delta: number, forcePlay = false): Promise<void> {
+    const wasPlaying = forcePlay || this.isPlaying;
     const idx = (this.currentSongIndex + delta + this.songs.length) % this.songs.length;
     await this.initAudio();
     await this.loadSong(idx);
@@ -240,6 +255,7 @@ class HomeAudioPlayer {
     this.mediaElement.playbackRate = playbackRate;
     await this.mediaElement.play();
     this.isPlaying = true;
+    console.log('[audio] playing:', this.currentSong?.file, 'ctx:', this.audioCtx?.state, 'gain:', this.gainNode.gain.value, 'src?', !!this.mediaSource);
     this.updateMediaMetadata();
     this.setMediaState('playing');
     this.initMediaSession();

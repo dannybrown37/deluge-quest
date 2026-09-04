@@ -92,6 +92,7 @@
   }
 
   function syncFromAudio() {
+    connectVisualizerToAudio();
     isPlaying = homeAudio.isPlaying;
     songLoaded = homeAudio.songLoaded;
     currentSongIndex = homeAudio.currentSongIndex;
@@ -347,7 +348,7 @@
   }
 
   function connectVisualizerToAudio() {
-    if (!visualizer || !homeAudio.analyserNode) return;
+    if (!visualizer || visualizer.connected || !homeAudio.analyserNode) return;
     visualizer.connect(homeAudio.analyserNode);
   }
 
@@ -507,11 +508,15 @@
 
   onMount(() => {
     mounted = true;
+    // A /songs/[slug] visit leaves its navigate-on-advance hook on the shared
+    // player; the home page advances in place instead.
+    homeAudio.onNavigate = null;
     initPads();
     fetchSongList();
 
     requestAnimationFrame(() => { measureAvailable(); measureViz(); });
     initVisualizer();
+    connectVisualizerToAudio();
     function onResize() {
       measureAvailable();
       measureViz();

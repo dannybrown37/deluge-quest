@@ -20,6 +20,7 @@ export class AudioVisualizer {
   private running = false;
   private idlePhase = 0;
   private lastTime = 0;
+  private lastSignal = false;
   private dpr = 1;
   private _mode: VisualizerMode = 'bars';
 
@@ -40,6 +41,10 @@ export class AudioVisualizer {
     this._mode = m;
     this.nodeEnergy.fill(0);
     this.connectionStrength.fill(0);
+  }
+
+  get connected(): boolean {
+    return this.analyser !== null;
   }
 
   connect(analyser: AnalyserNode) {
@@ -68,6 +73,15 @@ export class AudioVisualizer {
 
   private tick = () => {
     if (!this.running) return;
+    try {
+      this.draw();
+    } catch (err) {
+      console.error('[visualizer] draw failed', err);
+    }
+    this.raf = requestAnimationFrame(this.tick);
+  };
+
+  private draw() {
     const now = performance.now();
     const dt = now - this.lastTime;
     this.lastTime = now;
@@ -75,10 +89,7 @@ export class AudioVisualizer {
     const w = this.canvas.width / this.dpr;
     const h = this.canvas.height / this.dpr;
 
-    if (w === 0 || h === 0) {
-      this.raf = requestAnimationFrame(this.tick);
-      return;
-    }
+    if (w === 0 || h === 0) return;
 
     this.ctx.clearRect(0, 0, w, h);
 
@@ -88,6 +99,11 @@ export class AudioVisualizer {
       let sum = 0;
       for (let i = 0; i < this.freqData.length; i++) sum += this.freqData[i];
       hasSignal = sum > 200;
+    }
+
+    if (hasSignal !== this.lastSignal) {
+      this.lastSignal = hasSignal;
+      console.log('[viz] signal:', hasSignal, 'analyser:', !!this.analyser, 'ctxState:', this.analyser?.context.state);
     }
 
     if (this._mode === 'bars') {
@@ -105,9 +121,7 @@ export class AudioVisualizer {
         this.drawCircuitIdle(w, h, dt);
       }
     }
-
-    this.raf = requestAnimationFrame(this.tick);
-  };
+  }
 
   private drawBars(w: number, h: number) {
     if (!this.freqData) return;
