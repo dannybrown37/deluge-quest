@@ -231,6 +231,14 @@ coverage open="" verbose="":
       print "BRDA:" line "," block "," idx "," $NF
       next
     }
+    # coverage.py writes "FN:<start>,<end>,<name>"; lcov 1.x reads only "FN:<line>,<name>"
+    # and takes the end-line as the function name, inventing a never-hit twin per function
+    # (every file lands on exactly 50% functions). Drop the end-line field.
+    /^FN:/ && NF == 3 {
+      line = $1; sub(/^FN:/, "", line)
+      print "FN:" line "," $3
+      next
+    }
     { print }
   ' coverage/python.lcov > coverage/python_fixed.lcov
 

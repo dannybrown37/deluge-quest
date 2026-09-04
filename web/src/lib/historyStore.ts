@@ -1,3 +1,5 @@
+import { historyVault } from "./historyVault";
+
 export type SaveKind = "song" | "kit" | "patch";
 
 export interface SaveEntry {
@@ -113,6 +115,11 @@ interface BlobRecord {
 }
 
 class HistoryStoreImpl {
+  /** Where save points are being kept right now. */
+  get backend(): "vault" | "browser" {
+    return historyVault.isConnected ? "vault" : "browser";
+  }
+
   /**
    * Snapshots every song, kit and patch the card scan loaded. Always the complete set, so any
    * save point can be read back as a whole card state; unchanged files cost no extra storage
@@ -136,6 +143,16 @@ class HistoryStoreImpl {
       if (!blobs.has(hash)) blobs.set(hash, { xml, size: xml.length });
     }
 
+    const takenAt = Date.now();
+    const draft = {
+      cardName: src.cardName,
+      takenAt,
+      label: label || defaultLabel(takenAt),
+      entries,
+    };
+
+    if (historyVault.isConnected) return historyVault.writeSavePoint(draft, blobs);
+
     const db = await openIdb();
     try {
       const tx = db.transaction([STORE_BLOBS, STORE_SAVE_POINTS], "readwrite");
@@ -145,13 +162,6 @@ class HistoryStoreImpl {
         if (!existing) blobStore.put(record, hash);
       }
       const savePointStore = tx.objectStore(STORE_SAVE_POINTS);
-      const takenAt = Date.now();
-      const draft = {
-        cardName: src.cardName,
-        takenAt,
-        label: label || defaultLabel(takenAt),
-        entries,
-      };
       const id = (await request(savePointStore.add(draft))) as number;
       const saved: SavePoint = { ...draft, id };
       await done(tx);
@@ -164,6 +174,7 @@ class HistoryStoreImpl {
 
   /** Every save point, newest first. */
   async listSavePoints(): Promise<SavePoint[]> {
+    if (historyVault.isConnected) return historyVault.listSavePoints();
     return this.read(async (db) => {
       const tx = db.transaction(STORE_SAVE_POINTS, "readonly");
       const all = await request(tx.objectStore(STORE_SAVE_POINTS).getAll());
@@ -173,6 +184,7 @@ class HistoryStoreImpl {
 
   /** The XML behind a content hash, or null if it has been collected. */
   async getXml(hash: string): Promise<string | null> {
+    if (historyVault.isConnected) return historyVault.readBlob(hash);
     return this.read(async (db) => {
       const tx = db.transaction(STORE_BLOBS, "readonly");
       const record = (await request(tx.objectStore(STORE_BLOBS).get(hash))) as
@@ -183,6 +195,7 @@ class HistoryStoreImpl {
   }
 
   async blobCount(): Promise<number> {
+    if (historyVault.isConnected) return historyVault.blobCount();
     return this.read(async (db) => {
       const tx = db.transaction(STORE_BLOBS, "readonly");
       return await request(tx.objectStore(STORE_BLOBS).count());
@@ -190,6 +203,7 @@ class HistoryStoreImpl {
   }
 
   async deleteSavePoint(id: number): Promise<void> {
+    if (historyVault.isConnected) return historyVault.deleteSavePoint(id);
     await this.read(async (db) => {
       const tx = db.transaction(STORE_SAVE_POINTS, "readwrite");
       tx.objectStore(STORE_SAVE_POINTS).delete(id);
@@ -201,6 +215,16 @@ class HistoryStoreImpl {
 
   /** A save point plus the full text of every file in it, for taking history out of the browser. */
   async exportSavePoint(id: number): Promise<string | null> {
+    if (historyVault.isConnected) {
+      const savePoint = (await historyVault.listSavePoints()).find((s) => s.id === id);
+      if (!savePoint) return null;
+      const files: Record<string, string> = {};
+      for (const entry of savePoint.entries) {
+        const xml = await historyVault.readBlob(entry.hash);
+        if (xml !== null) files[entry.path] = xml;
+      }
+      return JSON.stringify({ ...savePoint, files }, null, 2);
+    }
     return this.read(async (db) => {
       const tx = db.transaction([STORE_SAVE_POINTS, STORE_BLOBS], "readonly");
       const savePoint = (await request(tx.objectStore(STORE_SAVE_POINTS).get(id))) as
@@ -219,6 +243,8 @@ class HistoryStoreImpl {
 
   /** How much of the browser's storage allowance is used, or null if it cannot be measured. */
   async estimateUsage(): Promise<StorageUsage | null> {
+    // A folder on disk has no browser quota to run out of.
+    if (historyVault.isConnected) return null;
     const estimate = navigator?.storage?.estimate;
     if (!estimate) return null;
     try {
@@ -231,6 +257,7 @@ class HistoryStoreImpl {
   }
 
   async clear(): Promise<void> {
+    if (historyVault.isConnected) return historyVault.clear();
     await this.read(async (db) => {
       const tx = db.transaction([STORE_SAVE_POINTS, STORE_BLOBS], "readwrite");
       tx.objectStore(STORE_SAVE_POINTS).clear();
@@ -238,6 +265,62 @@ class HistoryStoreImpl {
       await done(tx);
       return undefined;
     }, undefined);
+  }
+
+  /**
+   * Copies every browser-held save point into the connected folder, so picking a folder after
+   * building up history does not strand it. Blobs are re-read from browser storage; any whose
+   * content has already been collected is skipped rather than written empty.
+   */
+  async migrateToVault(): Promise<{ moved: number; skipped: number }> {
+    if (!historyVault.isConnected) throw new Error("No save point folder is connected");
+    const existing = await this.read(async (db) => {
+      const tx = db.transaction(STORE_SAVE_POINTS, "readonly");
+      return (await request(tx.objectStore(STORE_SAVE_POINTS).getAll())) as SavePoint[];
+    }, [] as SavePoint[]);
+    existing.sort((a, b) => a.takenAt - b.takenAt || a.id - b.id);
+
+    let moved = 0;
+    let skipped = 0;
+    for (const savePoint of existing) {
+      const blobs = new Map<string, BlobRecord>();
+      let complete = true;
+      for (const entry of savePoint.entries) {
+        const xml = await this.readBrowserBlob(entry.hash);
+        if (xml === null) {
+          complete = false;
+          break;
+        }
+        blobs.set(entry.hash, { xml, size: xml.length });
+      }
+      if (!complete) {
+        skipped++;
+        continue;
+      }
+      const { id: _ignored, ...draft } = savePoint;
+      await historyVault.writeSavePoint(draft, blobs);
+      moved++;
+    }
+    return { moved, skipped };
+  }
+
+  /** Reads a blob from browser storage specifically, bypassing the backend switch. */
+  private async readBrowserBlob(hash: string): Promise<string | null> {
+    return this.read(async (db) => {
+      const tx = db.transaction(STORE_BLOBS, "readonly");
+      const record = (await request(tx.objectStore(STORE_BLOBS).get(hash))) as
+        | BlobRecord
+        | undefined;
+      return record?.xml ?? null;
+    }, null);
+  }
+
+  /** How many save points are sitting in browser storage, whatever the current backend is. */
+  async browserSavePointCount(): Promise<number> {
+    return this.read(async (db) => {
+      const tx = db.transaction(STORE_SAVE_POINTS, "readonly");
+      return await request(tx.objectStore(STORE_SAVE_POINTS).count());
+    }, 0);
   }
 
   private async pruneWith(db: IDBDatabase): Promise<void> {

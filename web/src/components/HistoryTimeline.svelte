@@ -3,6 +3,7 @@
   import { cardStore } from "../lib/cardStore";
   import { historyStore, type SavePoint, type SaveKind, type StorageUsage } from "../lib/historyStore";
   import { compareSavePoints, diffXml, musicalChanges, type FieldChange, type FileChange } from "../lib/xmlDiff";
+  import { historyVault } from "../lib/historyVault";
   import { restoreFile } from "../lib/softDelete";
   import { trackToolAction } from "../lib/analytics";
 
@@ -21,10 +22,19 @@
   let notice = $state("");
   let errorMsg = $state("");
   let newLabel = $state("");
+  let vaultName = $state("");
+  let vaultConnected = $state(false);
+  let offerMigrate = $state(0);
 
   const KIND_NAMES: Record<SaveKind, string> = { song: "Songs", kit: "Kits", patch: "Patches" };
 
   onMount(async () => {
+    try {
+      vaultConnected = await historyVault.reconnect();
+      vaultName = historyVault.name;
+    } catch {
+      vaultConnected = false;
+    }
     await refresh();
     try {
       cardConnected = cardStore.isLoaded || (await cardStore.reconnect());
@@ -33,6 +43,52 @@
       cardConnected = false;
     }
   });
+
+  async function chooseVault() {
+    errorMsg = "";
+    notice = "";
+    try {
+      await historyVault.pick();
+      vaultConnected = true;
+      vaultName = historyVault.name;
+      selectedId = null;
+      compareId = null;
+      expanded = {};
+      await refresh();
+      offerMigrate = await historyStore.browserSavePointCount();
+    } catch (e) {
+      errorMsg = e instanceof Error ? e.message : "Could not open that folder";
+    }
+  }
+
+  async function useBrowserStorage() {
+    await historyVault.forget();
+    vaultConnected = false;
+    vaultName = "";
+    offerMigrate = 0;
+    selectedId = null;
+    compareId = null;
+    expanded = {};
+    await refresh();
+  }
+
+  async function migrate() {
+    busy = "Copying save points into the folder";
+    try {
+      const { moved, skipped } = await historyStore.migrateToVault();
+      notice =
+        `Copied ${moved} save points into ${vaultName}.` +
+        (skipped ? ` ${skipped} could not be copied — their stored files were already gone.` : "") +
+        " The browser copies are left as they were.";
+      offerMigrate = 0;
+      await refresh();
+      trackToolAction("history", "migrate", { moved, skipped });
+    } catch (e) {
+      errorMsg = e instanceof Error ? e.message : "Could not copy the save points";
+    } finally {
+      busy = "";
+    }
+  }
 
   async function refresh() {
     savePoints = await historyStore.listSavePoints();
@@ -248,6 +304,27 @@
     </div>
   </header>
 
+  <div class="home">
+    {#if vaultConnected}
+      <span class="home-label">saved to folder: <strong>{vaultName}</strong></span>
+      <button class="tiny" onclick={chooseVault}>change folder</button>
+      <button class="tiny" onclick={useBrowserStorage}>use browser storage</button>
+    {:else}
+      <span class="home-label">
+        saved in this browser only — clearing site data loses them
+      </span>
+      <button class="tiny" onclick={chooseVault}>Choose a folder</button>
+    {/if}
+  </div>
+
+  {#if offerMigrate > 0}
+    <p class="notice">
+      You have {offerMigrate} save points in browser storage. Copy them into {vaultName}?
+      <button class="tiny" onclick={migrate} disabled={!!busy}>copy them across</button>
+      <button class="tiny" onclick={() => (offerMigrate = 0)}>leave them</button>
+    </p>
+  {/if}
+
   {#if usage && usage.percent > 70}
     <p class="warn">
       Browser storage is {Math.round(usage.percent)}% full ({formatBytes(usage.usage)} of
@@ -437,6 +514,19 @@
   .danger:hover {
     border-color: #c25b5b;
     color: #c25b5b;
+  }
+  .home {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+  }
+  .home-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
   }
   .card-name,
   .count {

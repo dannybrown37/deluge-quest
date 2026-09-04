@@ -5,6 +5,11 @@ export default defineConfig({
   plugins: [svelte()],
   resolve: {
     conditions: ['browser'],
+    alias: {
+      // Astro virtual module; only resolvable inside an Astro build.
+      'astro:transitions/client': new URL('./src/test/astro-transitions-client.ts', import.meta.url)
+        .pathname,
+    },
   },
   test: {
     environment: 'happy-dom',

@@ -7,6 +7,7 @@ import {
   MAX_SAVE_POINTS,
   type CardSource,
 } from './historyStore';
+import { historyVault } from './historyVault';
 
 function source(
   songs: Record<string, string> = {},
@@ -261,5 +262,200 @@ describe('when IndexedDB is unavailable', () => {
   it('throws on save, because a save that stored nothing must not look like success', async () => {
     vi.stubGlobal('indexedDB', undefined);
     await expect(historyStore.createSavePoint(source())).rejects.toThrow(/storage/i);
+  });
+});
+
+describe('with a save point folder connected', () => {
+  class FakeFileHandle {
+    kind = 'file' as const;
+    constructor(
+      public name: string,
+      public content = '',
+    ) {}
+    async getFile() {
+      return { text: async () => this.content } as unknown as File;
+    }
+    async createWritable() {
+      let pending = '';
+      return {
+        write: async (data: string) => {
+          pending = data;
+        },
+        close: async () => {
+          this.content = pending;
+        },
+      } as unknown as FileSystemWritableFileStream;
+    }
+  }
+
+  class FakeDirHandle {
+    kind = 'directory' as const;
+    children = new Map<string, FakeDirHandle | FakeFileHandle>();
+    constructor(public name = 'MY-HISTORY') {}
+    async getDirectoryHandle(name: string, opts?: { create?: boolean }) {
+      let child = this.children.get(name);
+      if (!child) {
+        if (!opts?.create) throw new Error('NotFoundError');
+        child = new FakeDirHandle(name);
+        this.children.set(name, child);
+      }
+      return child as unknown as FileSystemDirectoryHandle;
+    }
+    async getFileHandle(name: string, opts?: { create?: boolean }) {
+      let child = this.children.get(name);
+      if (!child) {
+        if (!opts?.create) throw new Error('NotFoundError');
+        child = new FakeFileHandle(name);
+        this.children.set(name, child);
+      }
+      return child as unknown as FileSystemFileHandle;
+    }
+    async removeEntry(name: string) {
+      if (!this.children.has(name)) throw new Error('NotFoundError');
+      this.children.delete(name);
+    }
+    async *values() {
+      for (const child of this.children.values()) yield child;
+    }
+  }
+
+  let vaultRoot: FakeDirHandle;
+
+  beforeEach(() => {
+    vaultRoot = new FakeDirHandle();
+    historyVault.handle = vaultRoot as unknown as FileSystemDirectoryHandle;
+  });
+
+  afterEach(() => {
+    historyVault.handle = null;
+  });
+
+  it('reports which home is in use', async () => {
+    expect(historyStore.backend).toBe('vault');
+    historyVault.handle = null;
+    expect(historyStore.backend).toBe('browser');
+  });
+
+  it('writes save points to the folder, not to browser storage', async () => {
+    await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }));
+    expect(await historyStore.listSavePoints()).toHaveLength(1);
+    expect(await historyStore.browserSavePointCount()).toBe(0);
+  });
+
+  it('reads blobs back out of the folder', async () => {
+    const sp = await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }));
+    expect(await historyStore.getXml(sp.entries[0].hash)).toBe(SONG_A);
+  });
+
+  it('still shares content between save points', async () => {
+    await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }));
+    await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }));
+    expect(await historyStore.blobCount()).toBe(1);
+  });
+
+  it('deletes from the folder', async () => {
+    const sp = await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }));
+    await historyStore.deleteSavePoint(sp.id);
+    expect(await historyStore.listSavePoints()).toEqual([]);
+  });
+
+  it('exports from the folder', async () => {
+    const sp = await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }), 'gig');
+    const json = JSON.parse((await historyStore.exportSavePoint(sp.id))!);
+    expect(json.files['SONGS/A.XML']).toBe(SONG_A);
+  });
+
+  it('returns null exporting a save point the folder does not hold', async () => {
+    expect(await historyStore.exportSavePoint(999)).toBeNull();
+  });
+
+  it('reports no quota, because a folder on disk has none', async () => {
+    expect(await historyStore.estimateUsage()).toBeNull();
+  });
+
+  it('clears the folder', async () => {
+    await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }));
+    await historyStore.clear();
+    expect(await historyStore.listSavePoints()).toEqual([]);
+  });
+});
+
+describe('moving browser save points into a folder', () => {
+  class FakeDir {
+    kind = 'directory' as const;
+    children = new Map<string, FakeDir | { name: string; content: string; kind: 'file' }>();
+    constructor(public name = 'MY-HISTORY') {}
+    async getDirectoryHandle(name: string, opts?: { create?: boolean }) {
+      let child = this.children.get(name);
+      if (!child) {
+        if (!opts?.create) throw new Error('NotFoundError');
+        child = new FakeDir(name);
+        this.children.set(name, child);
+      }
+      return child as unknown as FileSystemDirectoryHandle;
+    }
+    async getFileHandle(name: string, opts?: { create?: boolean }) {
+      let child = this.children.get(name) as { name: string; content: string; kind: 'file' };
+      if (!child) {
+        if (!opts?.create) throw new Error('NotFoundError');
+        child = { name, content: '', kind: 'file' };
+        this.children.set(name, child);
+      }
+      return {
+        getFile: async () => ({ text: async () => child.content }),
+        createWritable: async () => {
+          let pending = '';
+          return {
+            write: async (d: string) => {
+              pending = d;
+            },
+            close: async () => {
+              child.content = pending;
+            },
+          };
+        },
+      } as unknown as FileSystemFileHandle;
+    }
+    async removeEntry(name: string) {
+      this.children.delete(name);
+    }
+    async *values() {
+      for (const child of this.children.values()) yield child;
+    }
+  }
+
+  afterEach(() => {
+    historyVault.handle = null;
+  });
+
+  it('copies every browser save point across, oldest first', async () => {
+    vi.spyOn(Date, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(2000);
+    await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }), 'older');
+    await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_B }), 'newer');
+    vi.restoreAllMocks();
+
+    historyVault.handle = new FakeDir() as unknown as FileSystemDirectoryHandle;
+    expect(await historyStore.migrateToVault()).toEqual({ moved: 2, skipped: 0 });
+
+    const moved = await historyStore.listSavePoints();
+    expect(moved.map((s) => s.label)).toEqual(['newer', 'older']);
+    expect(await historyStore.getXml(moved[1].entries[0].hash)).toBe(SONG_A);
+  });
+
+  it('leaves the browser copies alone, so nothing is lost if the folder goes away', async () => {
+    await historyStore.createSavePoint(source({ 'SONGS/A.XML': SONG_A }));
+    historyVault.handle = new FakeDir() as unknown as FileSystemDirectoryHandle;
+    await historyStore.migrateToVault();
+    historyVault.handle = null;
+    expect(await historyStore.listSavePoints()).toHaveLength(1);
+  });
+
+  it('refuses when no folder is connected', async () => {
+    await expect(historyStore.migrateToVault()).rejects.toThrow(/No save point folder/);
+  });
+
+  it('does nothing when browser storage is empty', async () => {
+    historyVault.handle = new FakeDir() as unknown as FileSystemDirectoryHandle;
+    expect(await historyStore.migrateToVault()).toEqual({ moved: 0, skipped: 0 });
   });
 });
