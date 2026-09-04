@@ -155,6 +155,15 @@ describe('CardScanner', () => {
     expect(mockTrack).toHaveBeenCalledWith('manage', 'delete_sample');
   });
 
+  it('filters the sample list by search text without looping forever', async () => {
+    await scanAndWait();
+    const search = document.querySelector('.sample-search') as HTMLInputElement;
+    await fireEvent.input(search, { target: { value: 'kick' } });
+
+    await waitFor(() => expect(screen.getByText('1 / 4')).toBeTruthy());
+    expect(screen.getByText('kick.wav')).toBeTruthy();
+  });
+
   it('filters the sample list to unused only', async () => {
     await scanAndWait();
     await fireEvent.click(screen.getByText('Unused'));

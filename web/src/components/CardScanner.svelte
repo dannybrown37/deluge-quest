@@ -1622,7 +1622,8 @@
   $effect(() => {
     if (sampleSearch.trim() && filteredSamplePaths.length > 0 && filteredSamplePaths.length <= 500) {
       const allFolders = collectFolderPaths(sampleTree);
-      expandedDirs = new Set([...expandedDirs, ...allFolders]);
+      const next = new Set([...expandedDirs, ...allFolders]);
+      if (next.size !== expandedDirs.size) expandedDirs = next;
     }
   });
 
