@@ -1,6 +1,7 @@
 interface Song {
   file: string;
   name: string;
+  slug?: string;
   year?: string | number;
   genre?: string;
   duration?: string;
@@ -28,6 +29,8 @@ class HomeAudioPlayer {
 
   songs: Song[] = [];
   currentSongIndex = 0;
+
+  onNavigate: ((song: Song) => void) | null = null;
 
   private listeners: Set<Listener> = new Set();
   private timerRaf = 0;
@@ -58,15 +61,21 @@ class HomeAudioPlayer {
     return Number.isFinite(d) ? d : 0;
   }
 
+  private shuffle(arr: Song[]): Song[] {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
   async fetchSongList(): Promise<void> {
     if (this.songs.length > 0) return;
     try {
       const resp = await fetch('/audio/songs.json');
       if (resp.ok) {
-        this.songs = await resp.json();
-        if (this.songs.length > 0) {
-          this.currentSongIndex = Math.floor(Math.random() * this.songs.length);
-        }
+        this.songs = this.shuffle(await resp.json());
+        this.currentSongIndex = 0;
       }
     } catch { /* no songs available */ }
   }
@@ -128,10 +137,7 @@ class HomeAudioPlayer {
     this.analyserNode.connect(this.audioCtx.destination);
 
     this.mediaElement.addEventListener('ended', () => {
-      this.isPlaying = false;
-      this.setMediaState('none');
-      cancelAnimationFrame(this.timerRaf);
-      this.notify();
+      this.stepSong(1);
     });
   }
 
@@ -178,11 +184,18 @@ class HomeAudioPlayer {
     await this.initAudio();
     await this.loadSong(idx);
     if (wasPlaying) await this.togglePlay();
+    const song = this.songs[idx];
+    if (song && this.onNavigate) this.onNavigate(song);
   }
 
   private mediaSessionReady = false;
 
-  private initMediaSession() {
+  reassertMediaSession() {
+    this.initMediaSession();
+    if (this.songLoaded) this.updateMediaMetadata();
+  }
+
+  initMediaSession() {
     if (this.mediaSessionReady) return;
     if (!('mediaSession' in navigator)) return;
     this.mediaSessionReady = true;
@@ -202,7 +215,7 @@ class HomeAudioPlayer {
     if (!song) return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: song.name,
-      artist: 'DelugeKit',
+      artist: 'deluge.quest',
       album: 'Demo Tracks',
     });
   }

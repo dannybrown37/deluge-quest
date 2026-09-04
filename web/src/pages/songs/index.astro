@@ -61,10 +61,17 @@ const byYear = [...songs].sort((a, b) => {
 <BaseLayout title="Songs" description="Tracks made on the Synthstrom Deluge">
   <div class="songs-page">
     <h1 class="page-title">Songs</h1>
-    <p class="page-sub">Tracks made on the Synthstrom Deluge</p>
-    <ul class="song-list">
+    <div class="page-sub-row">
+      <p class="page-sub">Tracks made on the Synthstrom Deluge</p>
+      <div class="sort-btns">
+        <button class="sort-btn sort-btn--active" data-sort="year">Year</button>
+        <button class="sort-btn" data-sort="title">Title</button>
+        <button class="sort-btn" data-sort="genre">Genre</button>
+      </div>
+    </div>
+    <ul class="song-list" id="song-list">
       {byYear.map(song => (
-        <li>
+        <li data-year={song.year ?? '0'} data-genre={song.genre ?? ''} data-title={song.name}>
           <a href={`/songs/${song.slug}`} class="song-row">
             <span class="song-name">{song.name}</span>
             <span class="song-meta">
@@ -78,6 +85,40 @@ const byYear = [...songs].sort((a, b) => {
     </ul>
   </div>
 </BaseLayout>
+
+<script>
+  document.addEventListener('astro:page-load', () => {
+    const list = document.getElementById('song-list');
+    const btns = document.querySelectorAll<HTMLButtonElement>('.sort-btn');
+    if (!list || !btns.length) return;
+
+    function sortList(key: string) {
+      const items = [...list!.querySelectorAll<HTMLElement>('li')];
+      items.sort((a, b) => {
+        if (key === 'year') {
+          const ya = parseInt(a.dataset.year ?? '0');
+          const yb = parseInt(b.dataset.year ?? '0');
+          return yb - ya || (a.dataset.title ?? '').localeCompare(b.dataset.title ?? '');
+        }
+        if (key === 'genre') {
+          const ga = (a.dataset.genre ?? '').toLowerCase();
+          const gb = (b.dataset.genre ?? '').toLowerCase();
+          return ga.localeCompare(gb) || (a.dataset.title ?? '').localeCompare(b.dataset.title ?? '');
+        }
+        return (a.dataset.title ?? '').localeCompare(b.dataset.title ?? '');
+      });
+      for (const item of items) list!.appendChild(item);
+    }
+
+    btns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        btns.forEach(b => b.classList.remove('sort-btn--active'));
+        btn.classList.add('sort-btn--active');
+        sortList(btn.dataset.sort ?? 'year');
+      });
+    });
+  });
+</script>
 
 <style>
   .songs-page {
@@ -94,10 +135,43 @@ const byYear = [...songs].sort((a, b) => {
     margin-bottom: 0.25rem;
   }
 
+  .page-sub-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 2rem;
+    gap: 1rem;
+  }
+
   .page-sub {
     font-size: 0.85rem;
     color: var(--text-secondary);
-    margin-bottom: 2rem;
+    margin: 0;
+  }
+
+  .sort-btns {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .sort-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+    transition: color 0.1s, border-color 0.1s;
+  }
+  .sort-btn:hover {
+    color: var(--text);
+    border-color: var(--text-secondary);
+  }
+  .sort-btn--active {
+    color: var(--accent);
+    border-color: var(--accent);
   }
 
   .song-list {

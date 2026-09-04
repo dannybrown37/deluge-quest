@@ -41,7 +41,7 @@
 
   function share() {
     if (navigator.share) {
-      navigator.share({ title: `${name} — DelugeKit`, url: pageUrl });
+      navigator.share({ title: `${name} — deluge.quest`, url: pageUrl });
     } else {
       navigator.clipboard.writeText(pageUrl);
       copied = true;

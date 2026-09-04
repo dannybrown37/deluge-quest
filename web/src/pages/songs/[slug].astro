@@ -59,7 +59,7 @@ export async function getStaticPaths() {
 }
 
 const { song } = Astro.props as { song: SongInfo };
-const pageUrl = `https://delugekit.com/songs/${song.slug}`;
+const pageUrl = `https://deluge.quest/songs/${song.slug}`;
 const description = [song.genre, song.year, song.duration].filter(Boolean).join(' · ');
 ---
 
@@ -106,12 +106,29 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
 
 <script>
   import { homeAudio } from '../../lib/homeAudio';
+  import { navigate } from 'astro:transitions/client';
 
   document.addEventListener('astro:page-load', () => {
     const heroBtn = document.getElementById('hero-play');
     const playIcon = document.getElementById('hero-play-icon');
     const pauseIcon = document.getElementById('hero-pause-icon');
     const timeEl = document.getElementById('hero-play-time');
+
+    const slug = window.location.pathname.replace(/^\/songs\//, '').replace(/\/$/, '');
+
+    homeAudio.fetchSongList().then(() => {
+      const idx = homeAudio.songs.findIndex(s => s.slug === slug);
+      if (idx >= 0 && homeAudio.loadedSongIndex !== idx) {
+        homeAudio.currentSongIndex = idx;
+        homeAudio.loadSong(idx);
+      }
+    });
+
+    homeAudio.onNavigate = (song) => {
+      if (song.slug) {
+        navigate(`/songs/${song.slug}`);
+      }
+    };
 
     function syncHeroBtn() {
       if (!playIcon || !pauseIcon || !timeEl) return;
@@ -140,7 +157,7 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
     const name = btn.dataset.name!;
     btn.addEventListener('click', () => {
       if (navigator.share) {
-        navigator.share({ title: `${name} — DelugeKit`, url });
+        navigator.share({ title: `${name} — deluge.quest`, url });
       } else {
         navigator.clipboard.writeText(url);
         btn.textContent = 'Link copied';

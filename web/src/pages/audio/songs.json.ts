@@ -9,6 +9,10 @@ function fmtDuration(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function slugify(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
 export const GET: APIRoute = async () => {
   const audioDir = path.join(process.cwd(), 'public', 'audio');
   const files = fs.readdirSync(audioDir)
@@ -22,11 +26,13 @@ export const GET: APIRoute = async () => {
       const meta = await parseFile(path.join(audioDir, f));
       if (meta.format.duration) duration = fmtDuration(meta.format.duration);
     } catch { /* skip */ }
-    if (!m) return { file: f, name: base, duration };
+    if (!m) return { file: f, name: base, slug: slugify(base), duration };
+    const name = m[1].trim();
     const tags = m[2].split(',').map(s => s.trim()).filter(Boolean);
     return {
       file: f,
-      name: m[1],
+      name,
+      slug: slugify(name),
       year: tags.find(t => /^\d{4}$/.test(t)),
       genre: tags.find(t => !/^\d{4}$/.test(t)),
       duration,

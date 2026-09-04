@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { navigate } from 'astro:transitions/client';
   import { homeAudio } from '../lib/homeAudio';
+  import { shouldSyncScreen } from '../lib/screenGuard';
   import { PAD_SOUNDS, velocityForPosition, glowForVelocity, PadEffectsChain } from '../lib/padSounds';
   import { AudioVisualizer, type VisualizerMode } from '../lib/audioVisualizer';
 
@@ -46,7 +47,7 @@
     return knobMeta[i].hint;
   }
 
-  let screenText = 'DELUGEKIT';
+  let screenText = 'DELUGE.QUEST';
   let screenSubtext = 'drop a song to begin';
   let pads: Pad[][] = [];
   let sidebarPads: Pad[][] = [];
@@ -95,7 +96,7 @@
     songLoaded = homeAudio.songLoaded;
     currentSongIndex = homeAudio.currentSongIndex;
     songs = homeAudio.songs;
-    if (isPlaying && !knobDisplayTimer && draggingKnob === null) {
+    if (shouldSyncScreen(isPlaying, knobDisplayTimer, draggingKnob)) {
       screenText = idleText();
       screenSubtext = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
     }
@@ -125,7 +126,7 @@
   }
 
   function idleText(): string {
-    return songs[currentSongIndex]?.name.toUpperCase() ?? 'DELUGEKIT';
+    return songs[currentSongIndex]?.name.toUpperCase() ?? 'DELUGE.QUEST';
   }
 
   function idleSubtext(): string {
