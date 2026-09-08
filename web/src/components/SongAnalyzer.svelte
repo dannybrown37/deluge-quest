@@ -742,8 +742,8 @@
         </select>
         <select class="filter-select" bind:value={filterGear}>
           <option value="all">All gear</option>
-          <option value="deluge">Deluge-only</option>
-          <option value="external">Uses external gear</option>
+          <option value="deluge">No MIDI/CV</option>
+          <option value="external">Uses MIDI/CV</option>
         </select>
         <select class="filter-select" bind:value={filterKey}>
           <option value="">All keys</option>

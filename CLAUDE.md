@@ -275,7 +275,7 @@ Backward seeks never re-fire a milestone; `trackedPercent` is monotonic.
 
 | Tool | Actions |
 |---|---|
-| `manage` | `scan` (+samples/unused), `delete_sample`, `batch_move` (+moved/errors), `batch_delete` (+deleted/errors), `sort_songs` (+songs), `fix_all_refs` (+fixed/skipped/errors), `fix_all_xml`, `backup` (+files), `export_json` |
+| `manage` | `scan` (+samples/unused), `delete_sample`, `batch_move` (+moved/errors), `batch_delete` (+deleted/errors), `sort_songs` (+songs), `fix_all_xml`, `backup` (+files), `export_json` |
 | `stats` | `analyze_card`, `analyze_drop`, `analyze_error`, `export_csv`, `delete_song`, `convert_score`, `open_in_preview` |
 | `preview` | `inspect`, `inspect_error`, `play` |
 | `kits` | `open_samples`, `load_kit`, `export` (+rows) |
