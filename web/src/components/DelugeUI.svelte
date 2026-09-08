@@ -76,6 +76,7 @@
   let padEffects: PadEffectsChain | null = null;
 
   $: songs = homeAudio.songs;
+  $: browseSongs = songs.map((s, i) => ({ song: s, realIndex: i })).sort((a, b) => a.song.name.localeCompare(b.song.name));
   $: currentSongIndex = homeAudio.currentSongIndex;
   $: songLoaded = homeAudio.songLoaded;
   $: isPlaying = homeAudio.isPlaying;
@@ -393,7 +394,7 @@
     if (songs.length === 0) return;
     browsing = !browsing;
     if (browsing) {
-      browseIndex = currentSongIndex;
+      browseIndex = browseSongs.findIndex(b => b.realIndex === currentSongIndex);
       screenText = 'LOAD SONG';
       screenSubtext = `${songs.length} songs`;
     } else {
@@ -432,9 +433,9 @@
   function handleBrowseKeys(e: KeyboardEvent) {
     if (!browsing) return;
     if (e.key === 'Escape') { browsing = false; screenSubtext = idleSubtext(); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); browseIndex = (browseIndex + 1) % songs.length; }
-    if (e.key === 'ArrowUp') { e.preventDefault(); browseIndex = (browseIndex - 1 + songs.length) % songs.length; }
-    if (e.key === 'Enter') { e.preventDefault(); chooseSong(browseIndex); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); browseIndex = (browseIndex + 1) % browseSongs.length; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); browseIndex = (browseIndex - 1 + browseSongs.length) % browseSongs.length; }
+    if (e.key === 'Enter') { e.preventDefault(); chooseSong(browseSongs[browseIndex]?.realIndex ?? 0); }
   }
 
   function applyKnobs() {
@@ -680,14 +681,14 @@
               <div class="oled-subtext">{screenSubtext || ' '}</div>
               {#if browsing}
                 <div class="song-browser" role="listbox" aria-label="Song list" tabindex="-1">
-                  {#each songs as song, i}
+                  {#each browseSongs as { song, realIndex }, i}
                     <button
                       class="song-option"
-                      class:is-current={i === currentSongIndex}
+                      class:is-current={realIndex === currentSongIndex}
                       class:is-cursor={i === browseIndex}
                       role="option"
-                      aria-selected={i === currentSongIndex}
-                      on:click={() => chooseSong(i)}
+                      aria-selected={realIndex === currentSongIndex}
+                      on:click={() => chooseSong(realIndex)}
                       on:mouseenter={() => browseIndex = i}
                     >
                       <span class="song-name">{song.name}</span>
