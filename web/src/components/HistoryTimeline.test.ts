@@ -632,6 +632,168 @@ describe('where save points are kept', () => {
   });
 });
 
+function savePointDeep(id: number, files: Record<string, string>, label = `sp-${id}`): SavePoint {
+  return {
+    id,
+    cardName: 'DELUGE',
+    takenAt: id * 100000,
+    label,
+    entries: Object.entries(files).map(([path, hash]) => {
+      const kind = path.startsWith('KITS') ? ('kit' as const) :
+        path.startsWith('SYNTHS') ? ('patch' as const) : ('song' as const);
+      return { path, kind, hash, size: 100 };
+    }),
+  };
+}
+
+const MANY_FILES: Record<string, string> = {};
+for (let i = 0; i < 25; i++) {
+  MANY_FILES[`SONGS/Set${i}.XML`] = `song${i}`;
+}
+MANY_FILES['KITS/MyKit.XML'] = 'kit1';
+
+const MANY_FILES_BEFORE: Record<string, string> = {};
+for (let i = 0; i < 25; i++) {
+  MANY_FILES_BEFORE[`SONGS/Set${i}.XML`] = `song${i}old`;
+}
+MANY_FILES_BEFORE['KITS/MyKit.XML'] = 'kit1old';
+
+const NESTED_FILES_AFTER: Record<string, string> = {
+  'SONGS/A.XML': 'newhash',
+  'SONGS/DEMOS/B.XML': 'new2',
+  'KITS/sicca/Nord Drum/K1.XML': 'kit1new',
+  'SYNTHS/Bass/S1.XML': 'synth1new',
+};
+const NESTED_FILES_BEFORE: Record<string, string> = {
+  'SONGS/A.XML': 'oldhash',
+  'SONGS/DEMOS/B.XML': 'old2',
+  'KITS/sicca/Nord Drum/K1.XML': 'kit1old',
+  'SYNTHS/Bass/S1.XML': 'synth1old',
+};
+
+describe('collapsible folders', () => {
+  it('groups files into folder headers', async () => {
+    store.listSavePoints.mockResolvedValue([
+      savePointDeep(2, NESTED_FILES_AFTER),
+      savePointDeep(1, NESTED_FILES_BEFORE),
+    ]);
+    const { container } = render(HistoryTimeline);
+    await screen.findByText('sp-1 → sp-2');
+    const headers = container.querySelectorAll('.folder-header');
+    expect(headers.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('shows per-folder counts of changed/added/removed', async () => {
+    store.listSavePoints.mockResolvedValue([
+      savePointDeep(2, { 'SONGS/A.XML': 'new1', 'SONGS/B.XML': 'new2' }),
+      savePointDeep(1, { 'SONGS/A.XML': 'old1' }),
+    ]);
+    const { container } = render(HistoryTimeline);
+    await screen.findByText('sp-1 → sp-2');
+    const header = container.querySelector('.folder-header');
+    const text = header?.textContent?.replace(/\s+/g, ' ') ?? '';
+    expect(text).toContain('1 changed');
+    expect(text).toContain('1 added');
+  });
+
+  it('starts folders expanded when total files ≤ the threshold', async () => {
+    store.listSavePoints.mockResolvedValue([
+      savePointDeep(2, { 'SONGS/A.XML': 'newhash', 'KITS/K.XML': 'kit2' }),
+      savePointDeep(1, { 'SONGS/A.XML': 'oldhash', 'KITS/K.XML': 'kit1' }),
+    ]);
+    const { container } = render(HistoryTimeline);
+    await screen.findByText('sp-1 → sp-2');
+    const files = container.querySelectorAll('.file-row');
+    expect(files.length).toBe(2);
+  });
+
+  it('starts folders collapsed when total files exceed the threshold', async () => {
+    store.listSavePoints.mockResolvedValue([
+      savePointDeep(2, MANY_FILES),
+      savePointDeep(1, MANY_FILES_BEFORE),
+    ]);
+    const { container } = render(HistoryTimeline);
+    await screen.findByText('sp-1 → sp-2');
+    const files = container.querySelectorAll('.file-row');
+    expect(files.length).toBe(0);
+  });
+
+  it('expands a folder when its header is clicked', async () => {
+    store.listSavePoints.mockResolvedValue([
+      savePointDeep(2, MANY_FILES),
+      savePointDeep(1, MANY_FILES_BEFORE),
+    ]);
+    const { container } = render(HistoryTimeline);
+    await screen.findByText('sp-1 → sp-2');
+    const headers = container.querySelectorAll('.folder-header');
+    expect(headers.length).toBeGreaterThan(0);
+    await fireEvent.click(headers[0]);
+    const files = container.querySelectorAll('.file-row');
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  it('collapses a folder when its header is clicked again', async () => {
+    store.listSavePoints.mockResolvedValue([
+      savePointDeep(2, { 'SONGS/A.XML': 'newhash' }),
+      savePointDeep(1, { 'SONGS/A.XML': 'oldhash' }),
+    ]);
+    const { container } = render(HistoryTimeline);
+    await screen.findByText('sp-1 → sp-2');
+    expect(container.querySelectorAll('.file-row').length).toBe(1);
+    const header = container.querySelector('.folder-header')!;
+    await fireEvent.click(header);
+    expect(container.querySelectorAll('.file-row').length).toBe(0);
+  });
+
+  it('has expand-all and collapse-all controls', async () => {
+    store.listSavePoints.mockResolvedValue([
+      savePointDeep(2, MANY_FILES),
+      savePointDeep(1, MANY_FILES_BEFORE),
+    ]);
+    const { container } = render(HistoryTimeline);
+    await screen.findByText('sp-1 → sp-2');
+    expect(container.querySelectorAll('.file-row').length).toBe(0);
+    await fireEvent.click(screen.getByText('expand all'));
+    expect(container.querySelectorAll('.file-row').length).toBe(26);
+    await fireEvent.click(screen.getByText('collapse all'));
+    expect(container.querySelectorAll('.file-row').length).toBe(0);
+  });
+
+  it('hides empty folders when the kind filter is applied', async () => {
+    store.listSavePoints.mockResolvedValue([
+      savePointDeep(2, { 'SONGS/A.XML': 'newhash', 'KITS/K.XML': 'kit2' }),
+      savePointDeep(1, { 'SONGS/A.XML': 'oldhash', 'KITS/K.XML': 'kit1' }),
+    ]);
+    const { container } = render(HistoryTimeline);
+    await screen.findByText('sp-1 → sp-2');
+    await fireEvent.click(screen.getByText('Kits'));
+    const headers = container.querySelectorAll('.folder-header');
+    const folderNames = Array.from(headers).map(h => h.textContent);
+    expect(folderNames.some(n => n?.includes('KITS'))).toBe(true);
+    expect(folderNames.some(n => n?.includes('SONGS'))).toBe(false);
+  });
+
+  it('keeps per-file expansion working inside a folder', async () => {
+    store.listSavePoints.mockResolvedValue(TWO_POINTS);
+    render(HistoryTimeline);
+    await fireEvent.click(await screen.findByText('SONGS/A.XML'));
+    expect(await screen.findByText('BPM')).toBeTruthy();
+  });
+
+  it('renders nested folders as a tree', async () => {
+    store.listSavePoints.mockResolvedValue([
+      savePointDeep(2, NESTED_FILES_AFTER),
+      savePointDeep(1, NESTED_FILES_BEFORE),
+    ]);
+    const { container } = render(HistoryTimeline);
+    await screen.findByText('sp-1 → sp-2');
+    const headers = Array.from(container.querySelectorAll('.folder-header'));
+    const names = headers.map(h => h.textContent ?? '');
+    expect(names.some(n => n.includes('DEMOS'))).toBe(true);
+    expect(names.some(n => n.includes('Nord Drum'))).toBe(true);
+  });
+});
+
 describe('moving existing save points into a folder', () => {
   beforeEach(() => {
     store.browserSavePointCount.mockResolvedValue(3);

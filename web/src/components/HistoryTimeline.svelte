@@ -54,6 +54,7 @@
       selectedId = null;
       compareId = null;
       expanded = {};
+    folderOverrides = null;
       await refresh();
       offerMigrate = await historyStore.browserSavePointCount();
     } catch (e) {
@@ -69,6 +70,7 @@
     selectedId = null;
     compareId = null;
     expanded = {};
+    folderOverrides = null;
     await refresh();
   }
 
@@ -139,6 +141,7 @@
       selectedId = saved.id;
       compareId = null;
       expanded = {};
+    folderOverrides = null;
       const changedCount = previousOf(saved)
         ? compareSavePoints(previousOf(saved)!, saved).filter((f) => f.status !== "unchanged").length
         : saved.entries.length;
@@ -232,6 +235,7 @@
     if (selectedId === savePoint.id) selectedId = null;
     if (compareId === savePoint.id) compareId = null;
     expanded = {};
+    folderOverrides = null;
     await refresh();
     trackToolAction("history", "prune");
   }
@@ -251,11 +255,98 @@
   function pickCompare(id: number) {
     compareId = compareId === id ? null : id;
     expanded = {};
+    folderOverrides = null;
   }
 
   function select(id: number) {
     selectedId = id;
     expanded = {};
+    folderOverrides = null;
+  }
+
+  const FOLDER_COLLAPSE_THRESHOLD = 20;
+
+  interface FolderNode {
+    name: string;
+    fullPath: string;
+    files: FileChange[];
+    children: FolderNode[];
+  }
+
+  function buildFolderTree(files: FileChange[]): FolderNode[] {
+    const root: FolderNode = { name: '', fullPath: '', files: [], children: [] };
+
+    for (const file of files) {
+      const parts = file.path.split('/');
+      const fileName = parts.pop()!;
+      let node = root;
+      let pathSoFar = '';
+      for (const part of parts) {
+        pathSoFar = pathSoFar ? `${pathSoFar}/${part}` : part;
+        let child = node.children.find(c => c.name === part);
+        if (!child) {
+          child = { name: part, fullPath: pathSoFar, files: [], children: [] };
+          node.children.push(child);
+        }
+        node = child;
+      }
+      node.files.push(file);
+    }
+
+    return root.children;
+  }
+
+  function countFilesInTree(node: FolderNode): number {
+    return node.files.length + node.children.reduce((s, c) => s + countFilesInTree(c), 0);
+  }
+
+  function folderCounts(node: FolderNode): { changed: number; added: number; removed: number } {
+    const all = allFilesInTree(node);
+    return {
+      changed: all.filter(f => f.status === 'changed').length,
+      added: all.filter(f => f.status === 'added').length,
+      removed: all.filter(f => f.status === 'removed').length,
+    };
+  }
+
+  function allFilesInTree(node: FolderNode): FileChange[] {
+    return [...node.files, ...node.children.flatMap(c => allFilesInTree(c))];
+  }
+
+  const folderTree = $derived(buildFolderTree(fileChanges));
+
+  let folderOverrides: Record<string, boolean> | null = $state(null);
+
+  function allFolderPaths(nodes: FolderNode[]): Record<string, boolean> {
+    const result: Record<string, boolean> = {};
+    function walk(ns: FolderNode[]) {
+      for (const n of ns) {
+        result[n.fullPath] = true;
+        walk(n.children);
+      }
+    }
+    walk(nodes);
+    return result;
+  }
+
+  const expandedFolders: Record<string, boolean> = $derived.by(() => {
+    if (folderOverrides !== null) return folderOverrides;
+    if (fileChanges.length <= FOLDER_COLLAPSE_THRESHOLD) {
+      return allFolderPaths(folderTree);
+    }
+    return {};
+  });
+
+  function toggleFolder(path: string) {
+    folderOverrides = { ...expandedFolders, [path]: !expandedFolders[path] };
+  }
+
+  function expandAll() {
+    folderOverrides = allFolderPaths(folderTree);
+  }
+
+  function collapseAll() {
+    folderOverrides = {};
   }
 
   function viewOnlyCount(changes: FieldChange[]): number {
@@ -396,58 +487,91 @@
           {#if fileChanges.length === 0}
             <p class="empty">Nothing changed between these two.</p>
           {:else}
-            <ul class="files">
-              {#each fileChanges as file (file.path)}
-                <li>
-                  <div class="file-row">
-                    <button
-                      class="file-name"
-                      onclick={() => toggleFile(file)}
-                      disabled={file.status !== "changed"}
-                    >
-                      <span class="status status-{file.status}">{file.status}</span>
-                      <span>{file.path}</span>
-                    </button>
-                    {#if file.beforeHash}
-                      <button class="tiny" onclick={() => restore(file)} disabled={!!busy}>
-                        restore this version
-                      </button>
-                    {/if}
-                  </div>
+            <div class="folder-controls">
+              <button class="tiny" onclick={expandAll}>expand all</button>
+              <button class="tiny" onclick={collapseAll}>collapse all</button>
+            </div>
 
-                  {#if expanded[file.path]}
-                    {@const changes = expanded[file.path]}
-                    {@const musical = musicalChanges(changes)}
-                    <ul class="fields">
-                      {#each musical as change (change.path)}
-                        <li><span class="field-label">{change.label}</span><span class="field-value">{change.summary}</span></li>
-                      {/each}
-                      {#if musical.length === 0}
-                        <li class="muted">Nothing musical changed.</li>
-                      {/if}
-                      {#if viewOnlyCount(changes) > 0}
-                        <li>
-                          <button
-                            class="tiny"
-                            onclick={() => (showViewOnly = { ...showViewOnly, [file.path]: !showViewOnly[file.path] })}
-                          >
-                            {showViewOnly[file.path] ? "hide" : "show"}
-                            {viewOnlyCount(changes)} view-only changes
-                          </button>
-                        </li>
-                        {#if showViewOnly[file.path]}
-                          {#each changes.filter((c) => c.viewOnly) as change (change.path)}
-                            <li class="muted">
-                              <span class="field-label">{change.label}</span><span class="field-value">{change.summary}</span>
-                            </li>
-                          {/each}
-                        {/if}
-                      {/if}
-                    </ul>
+            {#snippet fileRow(file: FileChange)}
+              <div class="file-row">
+                <button
+                  class="file-name"
+                  onclick={() => toggleFile(file)}
+                  disabled={file.status !== "changed"}
+                >
+                  <span class="status status-{file.status}">{file.status}</span>
+                  <span>{file.path}</span>
+                </button>
+                {#if file.beforeHash}
+                  <button class="tiny" onclick={() => restore(file)} disabled={!!busy}>
+                    restore this version
+                  </button>
+                {/if}
+              </div>
+
+              {#if expanded[file.path]}
+                {@const changes = expanded[file.path]}
+                {@const musical = musicalChanges(changes)}
+                <ul class="fields">
+                  {#each musical as change (change.path)}
+                    <li><span class="field-label">{change.label}</span><span class="field-value">{change.summary}</span></li>
+                  {/each}
+                  {#if musical.length === 0}
+                    <li class="muted">Nothing musical changed.</li>
                   {/if}
-                </li>
+                  {#if viewOnlyCount(changes) > 0}
+                    <li>
+                      <button
+                        class="tiny"
+                        onclick={() => (showViewOnly = { ...showViewOnly, [file.path]: !showViewOnly[file.path] })}
+                      >
+                        {showViewOnly[file.path] ? "hide" : "show"}
+                        {viewOnlyCount(changes)} view-only changes
+                      </button>
+                    </li>
+                    {#if showViewOnly[file.path]}
+                      {#each changes.filter((c) => c.viewOnly) as change (change.path)}
+                        <li class="muted">
+                          <span class="field-label">{change.label}</span><span class="field-value">{change.summary}</span>
+                        </li>
+                      {/each}
+                    {/if}
+                  {/if}
+                </ul>
+              {/if}
+            {/snippet}
+
+            {#snippet folderNodes(nodes: FolderNode[])}
+              {#each nodes as node (node.fullPath)}
+                {@const fc = folderCounts(node)}
+                <div class="folder">
+                  <button class="folder-header" onclick={() => toggleFolder(node.fullPath)}>
+                    <span class="folder-arrow">{expandedFolders[node.fullPath] ? "▼" : "▶"}</span>
+                    <span class="folder-name">{node.name}</span>
+                    <span class="folder-count">{countFilesInTree(node)} files</span>
+                    <span class="folder-stats">
+                      {#if fc.changed > 0}{fc.changed} changed{/if}
+                      {#if fc.added > 0} {fc.added} added{/if}
+                      {#if fc.removed > 0} {fc.removed} removed{/if}
+                    </span>
+                  </button>
+                  {#if expandedFolders[node.fullPath]}
+                    <div class="folder-contents">
+                      {#if node.children.length > 0}
+                        {@render folderNodes(node.children)}
+                      {/if}
+                      {#each node.files as file (file.path)}
+                        <div class="folder-file">
+                          {@render fileRow(file)}
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
               {/each}
-            </ul>
+            {/snippet}
+
+            {@render folderNodes(folderTree)}
           {/if}
         {/if}
       </section>
@@ -616,14 +740,52 @@
     gap: 0.3rem;
     margin-bottom: 0.75rem;
   }
+  .folder-controls {
+    display: flex;
+    gap: 0.3rem;
+    margin-bottom: 0.5rem;
+  }
+  .folder {
+    border-top: 1px solid var(--border);
+  }
+  .folder-header {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    width: 100%;
+    border: none;
+    padding: 0.4rem 0;
+    text-align: left;
+    font-family: "DM Mono", monospace;
+    font-size: 0.8rem;
+  }
+  .folder-arrow {
+    font-size: 0.6rem;
+    width: 0.8rem;
+    flex-shrink: 0;
+  }
+  .folder-name {
+    font-weight: 600;
+  }
+  .folder-count {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+  }
+  .folder-stats {
+    color: var(--text-secondary);
+    font-size: 0.65rem;
+  }
+  .folder-contents {
+    padding-left: 1rem;
+  }
+  .folder-file {
+    border-top: 1px solid var(--border);
+    padding: 0.5rem 0;
+  }
   .files {
     list-style: none;
     margin: 0;
     padding: 0;
-  }
-  .files > li {
-    border-top: 1px solid var(--border);
-    padding: 0.5rem 0;
   }
   .file-row {
     display: flex;
