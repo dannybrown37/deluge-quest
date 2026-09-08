@@ -158,6 +158,10 @@
     return doc;
   }
 
+  function normalizePath(p: string): string {
+    return p.replace(/^\//, "").toUpperCase();
+  }
+
   function extractFileRefs(xmlText: string): Set<string> {
     const refs = new Set<string>();
     const doc = parseSongXml(xmlText);
@@ -404,12 +408,18 @@
 
     const sampleRefs = new Map<string, Set<string>>();
     for (const [ref, sources] of localRefSources) {
-      if (ref.startsWith("SAMPLES/")) sampleRefs.set(ref, sources);
+      if (normalizePath(ref).startsWith("SAMPLES/")) sampleRefs.set(ref, sources);
     }
-    const sampleKeys = new Set(allSamples.keys());
-    const unused = [...sampleKeys].filter(k => !sampleRefs.has(k)).sort();
+    const normToSample = new Map<string, string>();
+    for (const k of allSamples.keys()) normToSample.set(normalizePath(k), k);
+    const normRefs = new Set([...sampleRefs.keys()].map(normalizePath));
+    const unused = [...normToSample.entries()]
+      .filter(([norm]) => !normRefs.has(norm))
+      .map(([, orig]) => orig)
+      .sort();
+    const normKeys = new Set(normToSample.keys());
     const missing: MissingRef[] = [...sampleRefs.entries()]
-      .filter(([r]) => !sampleKeys.has(r))
+      .filter(([r]) => !normKeys.has(normalizePath(r)))
       .map(([r, sources]) => ({ sample: r, referencedBy: [...sources].sort() }))
       .sort((a, b) => a.sample.localeCompare(b.sample));
     const totalBytes = [...allSamples.values()].reduce((a, b) => a + b, 0);

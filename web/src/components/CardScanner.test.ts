@@ -125,6 +125,36 @@ describe('CardScanner', () => {
     expect(mockTrack).toHaveBeenCalledWith('manage', 'scan', expect.objectContaining({ samples: 4 }));
   });
 
+  it('matches sample refs case-insensitively (FAT32)', async () => {
+    mockCardStore.sampleIndex = new Map();
+    mockCardStore.sampleIndex.set('samples/drums/kick.wav', fakeSample('SAMPLES/Drums/kick.wav', 'k'));
+    mockCardStore.songXmls = new Map();
+    mockCardStore.songXmls.set('SONGS/s.XML', '<song><osc1 fileName="SAMPLES/DRUMS/KICK.WAV" /></song>');
+    mockCardStore.presetIndex = new Map();
+
+    render(CardScanner);
+    await fireEvent.click(screen.getByText('Browse for folder'));
+    await waitFor(() => expect(screen.getByText('Sample Library (1)')).toBeTruthy(), { timeout: 3000 });
+
+    const stats = Array.from(document.querySelectorAll('.stat-value')).map((n) => n.textContent);
+    expect(stats).toEqual(['1', '1']);
+  });
+
+  it('strips leading slashes from XML refs', async () => {
+    mockCardStore.sampleIndex = new Map();
+    mockCardStore.sampleIndex.set('samples/hit.wav', fakeSample('SAMPLES/HIT.WAV', 'h'));
+    mockCardStore.songXmls = new Map();
+    mockCardStore.songXmls.set('SONGS/s.XML', '<song><osc1 fileName="/SAMPLES/HIT.WAV" /></song>');
+    mockCardStore.presetIndex = new Map();
+
+    render(CardScanner);
+    await fireEvent.click(screen.getByText('Browse for folder'));
+    await waitFor(() => expect(screen.getByText('Sample Library (1)')).toBeTruthy(), { timeout: 3000 });
+
+    const stats = Array.from(document.querySelectorAll('.stat-value')).map((n) => n.textContent);
+    expect(stats).toEqual(['1', '1']);
+  });
+
   it('lists songs by gear category on the songs tab', async () => {
     await scanAndWait();
     await fireEvent.click(screen.getByText(/^Songs/));

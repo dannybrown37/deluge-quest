@@ -216,3 +216,26 @@ class TestScanCard:
     def test_validates_card_structure(self, tmp_path: Path):
         with pytest.raises(ValueError, match="SAMPLES"):
             scan_card(tmp_path)
+
+    def test_case_insensitive_matching(self, card_root: Path):
+        """FAT32 is case-insensitive; XML may use different case than filesystem."""
+        (card_root / "SAMPLES" / "Drums").mkdir(parents=True, exist_ok=True)
+        (card_root / "SAMPLES" / "Drums" / "kick.wav").touch()
+        _write_xml(
+            card_root / "SONGS" / "S.XML",
+            '<song><osc fileName="SAMPLES/DRUMS/KICK.WAV" /></song>',
+        )
+        report = scan_card(card_root)
+        assert len(report.missing_references) == 0
+        assert len(report.unused_samples) == 0
+
+    def test_leading_slash_in_xml_ref(self, card_root: Path):
+        """Some firmware versions write paths with a leading slash."""
+        (card_root / "SAMPLES" / "RECORD" / "HIT.WAV").touch()
+        _write_xml(
+            card_root / "SONGS" / "S.XML",
+            '<song><osc fileName="/SAMPLES/RECORD/HIT.WAV" /></song>',
+        )
+        report = scan_card(card_root)
+        assert len(report.missing_references) == 0
+        assert len(report.unused_samples) == 0

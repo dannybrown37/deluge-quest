@@ -11,6 +11,11 @@ XML_DIRS = ("SONGS", "KITS", "SYNTHS")
 FILE_ATTRS = ("fileName", "filePath")
 
 
+def _normalize_path(p: str) -> str:
+    """FAT32 is case-insensitive; some firmware writes leading slashes."""
+    return p.lstrip("/").upper()
+
+
 @dataclass
 class CardReport:
     total_samples: int = 0
@@ -112,14 +117,17 @@ def scan_card(
 
     progress("Scanning XML references...")
     all_refs = scan_xml_references(card_root)
-    sample_refs = {r for r in all_refs if r.startswith("SAMPLES/")}
+    sample_refs = {r for r in all_refs if _normalize_path(r).startswith("SAMPLES/")}
 
-    sample_keys = set(all_samples.keys())
-    unused = sample_keys - sample_refs
-    missing = sample_refs - sample_keys
+    norm_to_sample = {_normalize_path(k): k for k in all_samples}
+    norm_refs = {_normalize_path(r) for r in sample_refs}
+    norm_keys = set(norm_to_sample.keys())
+
+    unused = {norm_to_sample[n] for n in norm_keys - norm_refs}
+    missing = {r for r in sample_refs if _normalize_path(r) not in norm_keys}
 
     total_bytes = sum(all_samples.values())
-    reclaimable = sum(all_samples[r] for r in unused)
+    reclaimable = sum(all_samples[norm_to_sample[n]] for n in norm_keys - norm_refs)
 
     progress("Checking presets...")
     preset_names: set[str] = set()
