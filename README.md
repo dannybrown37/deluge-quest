@@ -7,23 +7,24 @@ account.
 
 Live at [deluge.quest](https://deluge.quest).
 
-**Source is public for transparency, not for reuse.** No LICENSE is granted — you're welcome to
+**Source is public for transparency, not for reuse.** No LICENSE is granted. You're welcome to
 read the code and verify it does what it says (everything runs client-side; nothing you load
 ever leaves your browser), but copying, redistributing, or building on it isn't authorized. If
 that changes, this notice will too.
 
 ## What's here
 
-- **SD card manager** — browse samples, fix broken references, sort songs, reclaim space, back up
+- **SD card manager**: browse samples, fix broken references, sort songs, reclaim space, back up
   a card, all via drag-and-drop in the browser (Chromium only — needs the File System Access API).
-- **Song analyzer** — tempo, key, scale, duration, instrument counts across a whole card or a
+- **Song analyzer**: tempo, key, scale, duration, instrument counts across a whole card or a
   folder of files.
-- **Song preview** — play a Deluge song in the browser with per-track mute/volume, no hardware
-  needed.
-- **Kit builder** — assemble a Deluge kit from card samples with vim-style keyboard navigation.
-- **Patch generator** — build synth presets with a live Web Audio preview.
-- **Score converter** — turn a Deluge arrangement into sheet music (MusicXML).
-- **MIDI importer** — turn a MIDI file into a Deluge song.
+- **Song preview**: play a Deluge song in the browser with per-track mute/volume, no hardware
+  needed. It doesn't sound *right*, but it often sounds fun. And ultimately, it will remind you
+  what song is what when you're reviwing your card.
+- **Kit builder**: assemble a Deluge kit from card samples with vim-style keyboard navigation.
+- **Patch generator**: build synth presets with a live Web Audio preview.
+- **Score converter**: turn a Deluge arrangement into sheet music (MusicXML).
+- **MIDI importer**: turn a MIDI file into a Deluge song.
 
 ## Repo layout
 
