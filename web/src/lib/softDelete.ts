@@ -1,9 +1,8 @@
 export const TRASH_DIR = "SOFT_DELETE";
-export const MOVE_BACKUP_DIR = "MOVE_BACKUP";
 export const HISTORY_BACKUP_DIR = "HISTORY_BACKUP";
 
 /** Our own folders. Restoring into one would corrupt the very backups we rely on. */
-const APP_MANAGED = [TRASH_DIR, MOVE_BACKUP_DIR, HISTORY_BACKUP_DIR, "REPAIR_BACKUP"];
+const APP_MANAGED = [TRASH_DIR, HISTORY_BACKUP_DIR, "MOVE_BACKUP", "REPAIR_BACKUP"];
 
 export async function getOrCreateDir(
   root: FileSystemDirectoryHandle,
@@ -41,33 +40,6 @@ export async function moveToTrash(
   await sourceDirHandle.removeEntry(fileName);
 }
 
-export async function moveFile(
-  root: FileSystemDirectoryHandle,
-  fromPath: string,
-  toPath: string,
-): Promise<void> {
-  const fromParts = fromPath.split("/");
-  const fromName = fromParts.pop()!;
-  const fromDir = fromParts.join("/");
-
-  const toParts = toPath.split("/");
-  const toName = toParts.pop()!;
-  const toDir = toParts.join("/");
-
-  const fromDirHandle = await getOrCreateDir(root, fromDir);
-  const fromFileHandle = await fromDirHandle.getFileHandle(fromName);
-  const file = await fromFileHandle.getFile();
-  const data = await file.arrayBuffer();
-
-  const toDirHandle = await getOrCreateDir(root, toDir);
-  const toFileHandle = await toDirHandle.getFileHandle(toName, { create: true });
-  const writable = await toFileHandle.createWritable();
-  await writable.write(data);
-  await writable.close();
-
-  await fromDirHandle.removeEntry(fromName);
-}
-
 export interface RestoreResult {
   /** True when a file was already there and was copied into HISTORY_BACKUP first. */
   backedUp: boolean;
@@ -92,7 +64,7 @@ async function freeBackupName(
 
 /**
  * Puts an earlier version of a file back on the card, copying whatever is there now into
- * HISTORY_BACKUP first. Nothing is destroyed, matching moveToTrash and moveFile.
+ * HISTORY_BACKUP first. Nothing is destroyed, matching moveToTrash.
  */
 export async function restoreFile(
   root: FileSystemDirectoryHandle,
@@ -135,66 +107,4 @@ export async function restoreFile(
   await writable.close();
 
   return { backedUp: current !== null, created: current === null };
-}
-
-export interface XmlUpdateResult {
-  updated: string[];
-  errors: { path: string; message: string }[];
-}
-
-export async function updateXmlReferences(
-  root: FileSystemDirectoryHandle,
-  xmlPaths: string[],
-  xmlTexts: Map<string, string>,
-  moves: Map<string, string>,
-): Promise<XmlUpdateResult> {
-  const result: XmlUpdateResult = { updated: [], errors: [] };
-  if (moves.size === 0) return result;
-
-  const affectedXmls = new Set<string>();
-  for (const [oldPath] of moves) {
-    const oldLower = oldPath.toLowerCase();
-    for (const [xmlPath, text] of xmlTexts) {
-      if (text.toLowerCase().includes(oldLower)) affectedXmls.add(xmlPath);
-    }
-  }
-
-  for (const xmlPath of affectedXmls) {
-    try {
-      const parts = xmlPath.split("/");
-      const fileName = parts.pop()!;
-      const dirPath = parts.join("/");
-      const dirHandle = await getOrCreateDir(root, dirPath);
-      const fileHandle = await dirHandle.getFileHandle(fileName);
-      const file = await fileHandle.getFile();
-      const originalText = await file.text();
-
-      const backupDirHandle = await getOrCreateDir(root, `${MOVE_BACKUP_DIR}/${dirPath}`);
-      const backupFileHandle = await backupDirHandle.getFileHandle(fileName, { create: true });
-      const backupWritable = await backupFileHandle.createWritable();
-      await backupWritable.write(originalText);
-      await backupWritable.close();
-
-      let newText = originalText;
-      for (const [oldPath, newPath] of moves) {
-        const pattern = new RegExp(
-          `"${oldPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`,
-          "gi",
-        );
-        newText = newText.replace(pattern, `"${newPath}"`);
-      }
-
-      const destWritable = await (await dirHandle.getFileHandle(fileName, { create: true })).createWritable();
-      await destWritable.write(newText);
-      await destWritable.close();
-
-      xmlTexts.set(xmlPath, newText);
-      result.updated.push(xmlPath);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Update failed";
-      result.errors.push({ path: xmlPath, message });
-    }
-  }
-
-  return result;
 }

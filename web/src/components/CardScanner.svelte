@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { TRASH_DIR, MOVE_BACKUP_DIR, getOrCreateDir, moveToTrash, moveFile, updateXmlReferences } from "../lib/softDelete";
+  import { TRASH_DIR, getOrCreateDir, moveToTrash } from "../lib/softDelete";
   import { cardStore, walkHandle } from "../lib/cardStore";
   import { trackToolAction } from "../lib/analytics";
 
@@ -44,8 +44,7 @@
   const FILE_ATTRS = ["fileName", "filePath"];
   const SOFT_DELETE_DIR = "SOFT_DELETE";
   const REPAIR_BACKUP_DIR = "REPAIR_BACKUP";
-  const MOVE_BACKUP = "MOVE_BACKUP";
-  const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR, REPAIR_BACKUP_DIR, MOVE_BACKUP]);
+  const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR, REPAIR_BACKUP_DIR]);
 
   /** SOFT_DELETE/ and REPAIR_BACKUP/ are app-managed, not card content — never scan, report, or count them. */
   function isAppManagedPath(relPath: string): boolean {
@@ -77,18 +76,6 @@
   let allSampleSizes = $state(new Map<string, number>());
   let xmlTexts = $state(new Map<string, string>());
   let expandedRefs = $state(new Set<string>());
-  let dragOverFolder = $state<string | null>(null);
-  let draggedPath = $state<string | null>(null);
-  let moveStatus = $state<{ message: string; type: "success" | "error" } | null>(null);
-  let movingPaths = $state(new Set<string>());
-
-  interface MoveRecord {
-    from: string;
-    to: string;
-    updatedXmls: string[];
-  }
-  let moveHistory = $state<MoveRecord[]>([]);
-  let undoingMove = $state<string | null>(null);
 
   interface BackupFileEntry {
     path: string;
@@ -640,231 +627,6 @@
     trackToolAction("manage", "sort_songs", { songs: all.length });
   }
 
-  async function moveSampleTo(oldPath: string, newPath: string) {
-    if (!rootHandle || movingPaths.has(oldPath)) return;
-    movingPaths = new Set([...movingPaths, oldPath]);
-    moveStatus = null;
-
-    try {
-      await moveFile(rootHandle, oldPath, newPath);
-
-      const moves = new Map([[oldPath, newPath]]);
-      const xmlPaths = [...xmlTexts.keys()];
-      const result = await updateXmlReferences(rootHandle, xmlPaths, xmlTexts, moves);
-
-      const newRefs = new Map(refSources);
-      const oldRefs = newRefs.get(oldPath);
-      if (oldRefs) {
-        newRefs.delete(oldPath);
-        newRefs.set(newPath, oldRefs);
-      }
-      refSources = newRefs;
-
-      const newSamplePaths = allSamplePaths.map(p => p === oldPath ? newPath : p).sort();
-      allSamplePaths = newSamplePaths;
-
-      const info = cardStore.sampleIndex.get(oldPath.toLowerCase());
-      if (info) {
-        cardStore.sampleIndex.delete(oldPath.toLowerCase());
-        cardStore.sampleIndex.set(newPath.toLowerCase(), { ...info, path: newPath });
-      }
-
-      if (report) {
-        report = {
-          ...report,
-          unusedSamples: report.unusedSamples.map(p => p === oldPath ? newPath : p).sort(),
-          missingReferences: report.missingReferences,
-        };
-      }
-
-      moveHistory = [{ from: oldPath, to: newPath, updatedXmls: result.updated }, ...moveHistory].slice(0, 20);
-
-      const updatedCount = result.updated.length;
-      const errorCount = result.errors.length;
-      if (errorCount > 0) {
-        moveStatus = { message: `Moved sample. Updated ${updatedCount} XMLs, ${errorCount} failed.`, type: "error" };
-      } else if (updatedCount > 0) {
-        moveStatus = { message: `Moved sample. Updated ${updatedCount} XML${updatedCount === 1 ? "" : "s"}.`, type: "success" };
-      } else {
-        moveStatus = { message: "Moved sample (no XML references to update).", type: "success" };
-      }
-    } catch (e: any) {
-      moveStatus = { message: `Move failed: ${e.message}`, type: "error" };
-    } finally {
-      movingPaths = new Set([...movingPaths].filter(p => p !== oldPath));
-    }
-  }
-
-  async function undoMove(record: MoveRecord) {
-    if (!rootHandle || undoingMove) return;
-    undoingMove = record.to;
-    try {
-      await moveFile(rootHandle, record.to, record.from);
-
-      for (const xmlPath of record.updatedXmls) {
-        const parts = xmlPath.split("/");
-        const fileName = parts.pop()!;
-        const dirPath = parts.join("/");
-        const backupPath = `${MOVE_BACKUP_DIR}/${xmlPath}`;
-        const backupParts = backupPath.split("/");
-        const backupName = backupParts.pop()!;
-        const backupDir = backupParts.join("/");
-        try {
-          const backupDirHandle = await getOrCreateDir(rootHandle, backupDir);
-          const backupFileHandle = await backupDirHandle.getFileHandle(backupName);
-          const backupFile = await backupFileHandle.getFile();
-          const backupText = await backupFile.text();
-
-          const destDirHandle = await getOrCreateDir(rootHandle, dirPath);
-          const destFileHandle = await destDirHandle.getFileHandle(fileName, { create: true });
-          const writable = await destFileHandle.createWritable();
-          await writable.write(backupText);
-          await writable.close();
-
-          xmlTexts.set(xmlPath, backupText);
-        } catch {
-          // backup may not exist if XML wasn't affected
-        }
-      }
-
-      const newRefs = new Map(refSources);
-      const refs = newRefs.get(record.to);
-      if (refs) {
-        newRefs.delete(record.to);
-        newRefs.set(record.from, refs);
-      }
-      refSources = newRefs;
-
-      allSamplePaths = allSamplePaths.map(p => p === record.to ? record.from : p).sort();
-
-      const info = cardStore.sampleIndex.get(record.to.toLowerCase());
-      if (info) {
-        cardStore.sampleIndex.delete(record.to.toLowerCase());
-        cardStore.sampleIndex.set(record.from.toLowerCase(), { ...info, path: record.from });
-      }
-
-      if (report) {
-        report = {
-          ...report,
-          unusedSamples: report.unusedSamples.map(p => p === record.to ? record.from : p).sort(),
-        };
-      }
-
-      moveHistory = moveHistory.filter(r => r !== record);
-      moveStatus = { message: `Undid move: ${record.from.split("/").pop()} restored.`, type: "success" };
-    } catch (e: any) {
-      moveStatus = { message: `Undo failed: ${e.message}`, type: "error" };
-    } finally {
-      undoingMove = null;
-    }
-  }
-
-  function handleDragStart(e: DragEvent, path: string, isFolder = false) {
-    draggedPath = path;
-    e.dataTransfer!.effectAllowed = "move";
-    e.dataTransfer!.setData("text/plain", isFolder ? `folder:${path}` : path);
-  }
-
-  function handleDragEnd() {
-    draggedPath = null;
-    dragOverFolder = null;
-  }
-
-  function handleFolderDragOver(e: DragEvent, folderPath: string) {
-    e.preventDefault();
-    e.dataTransfer!.dropEffect = "move";
-    dragOverFolder = folderPath;
-  }
-
-  function handleFolderDragLeave() {
-    dragOverFolder = null;
-  }
-
-  let newFolderParent: string | null = $state(null);
-  let newFolderName: string = $state("");
-  let createdFolders = $state(new Set<string>());
-
-  async function createFolder(parentPath: string) {
-    if (!rootHandle || !newFolderName.trim()) return;
-    const name = newFolderName.trim();
-    try {
-      const parts = parentPath ? parentPath.split("/") : [];
-      let dir = rootHandle;
-      for (const part of parts) {
-        dir = await dir.getDirectoryHandle(part);
-      }
-      await dir.getDirectoryHandle(name, { create: true });
-      const fullPath = parentPath ? `${parentPath}/${name}` : name;
-      createdFolders = new Set([...createdFolders, fullPath]);
-      moveStatus = { message: `Created folder "${fullPath}/"`, type: "success" };
-    } catch (e: any) {
-      moveStatus = { message: `Failed to create folder: ${e.message}`, type: "error" };
-    }
-    newFolderParent = null;
-    newFolderName = "";
-  }
-
-  async function handleFolderDrop(e: DragEvent, targetFolder: string) {
-    e.preventDefault();
-    dragOverFolder = null;
-    const raw = e.dataTransfer?.getData("text/plain");
-    if (!raw || !rootHandle) return;
-    draggedPath = null;
-
-    if (raw.startsWith("folder:")) {
-      const sourceFolder = raw.slice(7);
-      if (sourceFolder === targetFolder || targetFolder.startsWith(sourceFolder + "/")) return;
-      const folderName = sourceFolder.split("/").pop()!;
-      const filesToMove = allSamplePaths.filter(p => p.startsWith(sourceFolder + "/"));
-      if (filesToMove.length === 0) {
-        moveStatus = { message: "Folder is empty.", type: "error" };
-        return;
-      }
-      let moved = 0;
-      let skipped = 0;
-      for (const filePath of filesToMove) {
-        const relative = filePath.slice(sourceFolder.length + 1);
-        const newPath = `${targetFolder}/${folderName}/${relative}`;
-        if (allSamplePaths.includes(newPath)) { skipped++; continue; }
-        await moveSampleTo(filePath, newPath);
-        moved++;
-      }
-      moveStatus = { message: `Moved ${moved} file${moved === 1 ? "" : "s"} to ${targetFolder}/${folderName}/${skipped ? ` (${skipped} skipped)` : ""}`, type: "success" };
-      return;
-    }
-
-    const sourcePath = raw;
-
-    if (selectedPaths.has(sourcePath) && selectedPaths.size > 1) {
-      const paths = [...selectedPaths];
-      let moved = 0;
-      let skipped = 0;
-      for (const p of paths) {
-        const fn = p.split("/").pop()!;
-        const sf = p.split("/").slice(0, -1).join("/");
-        if (sf === targetFolder) { skipped++; continue; }
-        const np = `${targetFolder}/${fn}`;
-        if (allSamplePaths.includes(np)) { skipped++; continue; }
-        await moveSampleTo(p, np);
-        moved++;
-      }
-      selectedPaths = new Set();
-      moveStatus = { message: `Moved ${moved} file${moved === 1 ? "" : "s"} to ${targetFolder}/${skipped ? ` (${skipped} skipped)` : ""}`, type: "success" };
-      return;
-    }
-
-    const fileName = sourcePath.split("/").pop()!;
-    const sourceFolder = sourcePath.split("/").slice(0, -1).join("/");
-    if (sourceFolder === targetFolder) return;
-
-    const newPath = `${targetFolder}/${fileName}`;
-    if (allSamplePaths.includes(newPath)) {
-      moveStatus = { message: `"${fileName}" already exists in ${targetFolder}/`, type: "error" };
-      return;
-    }
-
-    await moveSampleTo(sourcePath, newPath);
-  }
 
   function toggleRefExpand(path: string) {
     const next = new Set(expandedRefs);
@@ -1352,133 +1114,7 @@
     return root;
   }
 
-  let selectedPaths = $state(new Set<string>());
-  let lastClickedPath = $state<string | null>(null);
-  let showMovePicker = $state(false);
-  let batchMoveRunning = $state(false);
-  let batchMoveResult = $state<{ moved: number; errors: number; details: string[] } | null>(null);
   let currentBreadcrumb = $state("");
-
-  function toggleSelect(path: string, e?: MouseEvent) {
-    const next = new Set(selectedPaths);
-    if (e?.shiftKey && lastClickedPath) {
-      const allVisible = filteredSamplePaths;
-      const a = allVisible.indexOf(lastClickedPath);
-      const b = allVisible.indexOf(path);
-      if (a >= 0 && b >= 0) {
-        const [lo, hi] = a < b ? [a, b] : [b, a];
-        for (let i = lo; i <= hi; i++) next.add(allVisible[i]);
-      }
-    } else if (next.has(path)) {
-      next.delete(path);
-    } else {
-      next.add(path);
-    }
-    lastClickedPath = path;
-    selectedPaths = next;
-  }
-
-  function selectAllInFolder(folderPath: string) {
-    const prefix = folderPath + "/";
-    const inFolder = filteredSamplePaths.filter(p => {
-      if (!p.startsWith(prefix)) return false;
-      const rest = p.slice(prefix.length);
-      return !rest.includes("/");
-    });
-    const next = new Set(selectedPaths);
-    const allSelected = inFolder.every(p => next.has(p));
-    if (allSelected) {
-      inFolder.forEach(p => next.delete(p));
-    } else {
-      inFolder.forEach(p => next.add(p));
-    }
-    selectedPaths = next;
-  }
-
-  function selectAllVisible() {
-    const next = new Set(selectedPaths);
-    const allSelected = filteredSamplePaths.every(p => next.has(p));
-    if (allSelected) {
-      filteredSamplePaths.forEach(p => next.delete(p));
-    } else {
-      filteredSamplePaths.forEach(p => next.add(p));
-    }
-    selectedPaths = next;
-  }
-
-  function clearSelection() {
-    selectedPaths = new Set();
-    lastClickedPath = null;
-  }
-
-  async function batchMoveTo(targetFolder: string) {
-    if (!rootHandle || batchMoveRunning || selectedPaths.size === 0) return;
-    batchMoveRunning = true;
-    batchMoveResult = null;
-    const details: string[] = [];
-    let moved = 0;
-    let errors = 0;
-
-    const paths = [...selectedPaths];
-    for (const oldPath of paths) {
-      const fileName = oldPath.split("/").pop()!;
-      const newPath = `${targetFolder}/${fileName}`;
-      if (oldPath === newPath) continue;
-      if (allSamplePaths.includes(newPath)) {
-        errors++;
-        details.push(`${fileName} — already exists in ${targetFolder}/`);
-        continue;
-      }
-      try {
-        await moveSampleTo(oldPath, newPath);
-        moved++;
-        details.push(`${fileName} → ${targetFolder}/`);
-      } catch {
-        errors++;
-        details.push(`${fileName} — move failed`);
-      }
-    }
-    batchMoveResult = { moved, errors, details };
-    batchMoveRunning = false;
-    trackToolAction("manage", "batch_move", { moved, errors });
-    clearSelection();
-    showMovePicker = false;
-  }
-
-  let showDeleteConfirm = $state(false);
-  let batchDeleteRunning = $state(false);
-  let batchDeleteResult = $state<{ deleted: number; errors: number; details: string[] } | null>(null);
-
-  async function batchDelete() {
-    if (!rootHandle || batchDeleteRunning || selectedPaths.size === 0) return;
-    batchDeleteRunning = true;
-    batchDeleteResult = null;
-    const details: string[] = [];
-    let deleted = 0;
-    let errors = 0;
-
-    const paths = [...selectedPaths];
-    for (const samplePath of paths) {
-      const fileName = samplePath.split("/").pop()!;
-      try {
-        await moveToTrash(rootHandle, samplePath);
-        deleted++;
-        details.push(`${fileName} → SOFT_DELETE/`);
-
-        const moved = new Set(movedFiles);
-        moved.add(samplePath);
-        movedFiles = moved;
-      } catch {
-        errors++;
-        details.push(`${fileName} — failed`);
-      }
-    }
-    batchDeleteResult = { deleted, errors, details };
-    batchDeleteRunning = false;
-    trackToolAction("manage", "batch_delete", { deleted, errors });
-    clearSelection();
-    showDeleteConfirm = false;
-  }
 
   function collectAllFolderPaths(node: SampleFolderNode): string[] {
     const paths: string[] = [];
@@ -1503,7 +1139,7 @@
     return paths;
   });
 
-  let sampleTree = $derived(buildSampleTree(filteredSamplePaths, refSources, unusedSet, createdFolders, allSampleSizes));
+  let sampleTree = $derived(buildSampleTree(filteredSamplePaths, refSources, unusedSet, new Set(), allSampleSizes));
   let presetsTree = $derived(buildTree(report?.unusedPresets ?? []));
 
   let expandedDirs = $state(new Set<string>());
@@ -1655,30 +1291,6 @@
         {/if}
       </div>
 
-      {#if moveStatus}
-        <p class="moved-msg" class:moved-msg--error={moveStatus.type === "error"}>
-          {moveStatus.message}
-        </p>
-      {/if}
-      {#if moveHistory.length > 0}
-        <details class="move-history">
-          <summary>Recent moves ({moveHistory.length})</summary>
-          <ul class="move-history-list">
-            {#each moveHistory as record}
-              <li class="move-history-item">
-                <span class="move-history-paths" title="{record.from} → {record.to}">
-                  {record.from.split("/").pop()} → {record.to.split("/").slice(-2).join("/")}
-                </span>
-                <button
-                  class="btn btn-sm btn-secondary"
-                  disabled={undoingMove !== null}
-                  onclick={() => undoMove(record)}
-                >{undoingMove === record.to ? "Undoing…" : "Undo"}</button>
-              </li>
-            {/each}
-          </ul>
-        </details>
-      {/if}
     </div>
 
     <div class="actions">
@@ -1742,102 +1354,6 @@
             <span class="sample-count">{filteredSamplePaths.length} / {allSamplePaths.length}</span>
           </div>
 
-          {#if selectedPaths.size > 0}
-            <div class="selection-toolbar">
-              <span class="selection-count">{selectedPaths.size} selected</span>
-              {#if canWrite}
-                <button class="btn btn-sm btn-primary" onclick={() => { showMovePicker = true; }} disabled={batchMoveRunning || batchDeleteRunning}>
-                  {batchMoveRunning ? "Moving..." : "Move to..."}
-                </button>
-                <button class="btn btn-sm btn-danger" onclick={() => { showDeleteConfirm = true; }} disabled={batchMoveRunning || batchDeleteRunning}>
-                  {batchDeleteRunning ? "Deleting..." : "Delete"}
-                </button>
-              {/if}
-              <button class="btn btn-sm btn-secondary" onclick={clearSelection}>Clear</button>
-            </div>
-          {/if}
-
-          {#if batchMoveResult}
-            <div class="fix-all-result" class:fix-all-result--success={batchMoveResult.errors === 0}>
-              <p><strong>{batchMoveResult.moved}</strong> moved, <strong>{batchMoveResult.errors}</strong> errors</p>
-              {#if batchMoveResult.details.length > 0}
-                <details>
-                  <summary>Details</summary>
-                  <ul class="fix-all-details">
-                    {#each batchMoveResult.details as detail}
-                      <li>{detail}</li>
-                    {/each}
-                  </ul>
-                </details>
-              {/if}
-            </div>
-          {/if}
-
-          {#if batchDeleteResult}
-            <div class="fix-all-result" class:fix-all-result--success={batchDeleteResult.errors === 0}>
-              <p><strong>{batchDeleteResult.deleted}</strong> deleted, <strong>{batchDeleteResult.errors}</strong> errors</p>
-              {#if batchDeleteResult.details.length > 0}
-                <details>
-                  <summary>Details</summary>
-                  <ul class="fix-all-details">
-                    {#each batchDeleteResult.details as detail}
-                      <li>{detail}</li>
-                    {/each}
-                  </ul>
-                </details>
-              {/if}
-            </div>
-          {/if}
-
-          {#if showMovePicker}
-            <div class="move-picker-overlay" onclick={() => { showMovePicker = false; }} role="presentation">
-              <div class="move-picker" onclick={(e) => e.stopPropagation()} role="dialog">
-                <div class="move-picker-header">
-                  <h4 class="list-heading">Move {selectedPaths.size} file{selectedPaths.size === 1 ? "" : "s"} to...</h4>
-                  <button class="btn btn-sm btn-secondary" onclick={() => { showMovePicker = false; }}>Cancel</button>
-                </div>
-                <div class="move-picker-tree">
-                  {#snippet pickerFolder(node: SampleFolderNode, depth: number)}
-                    {#each [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0])) as [name, child]}
-                      <button
-                        class="move-picker-folder"
-                        style="padding-left: {0.5 + depth * 1}rem"
-                        onclick={() => batchMoveTo(child.folderPath)}
-                        disabled={batchMoveRunning}
-                      >
-                        {name}/
-                        <span class="tree-count">{child.totalFiles}</span>
-                      </button>
-                      {@render pickerFolder(child, depth + 1)}
-                    {/each}
-                  {/snippet}
-                  {@render pickerFolder(sampleTree, 0)}
-                </div>
-              </div>
-            </div>
-          {/if}
-
-          {#if showDeleteConfirm}
-            <div class="move-picker-overlay" onclick={() => { showDeleteConfirm = false; }} role="presentation">
-              <div class="move-picker" onclick={(e) => e.stopPropagation()} role="dialog">
-                <div class="move-picker-header">
-                  <h4 class="list-heading">Delete {selectedPaths.size} file{selectedPaths.size === 1 ? "" : "s"}?</h4>
-                </div>
-                <p class="confirm-detail">Files will be moved to <strong>SOFT_DELETE/</strong> on the card. You can recover them later from that folder.</p>
-                {#if [...selectedPaths].some(p => refSources.has(p))}
-                  {@const refCount = [...selectedPaths].filter(p => refSources.has(p)).length}
-                  <p class="confirm-warn">{refCount} of these file{refCount === 1 ? " is" : "s are"} referenced by songs/kits. Deleting will create broken references.</p>
-                {/if}
-                <div class="confirm-actions">
-                  <button class="btn btn-sm btn-danger" onclick={batchDelete} disabled={batchDeleteRunning}>
-                    {batchDeleteRunning ? "Deleting..." : "Delete"}
-                  </button>
-                  <button class="btn btn-sm btn-secondary" onclick={() => { showDeleteConfirm = false; }}>Cancel</button>
-                </div>
-              </div>
-            </div>
-          {/if}
-
           <div class="file-tree" onscroll={(e) => {
             const container = e.currentTarget as HTMLElement;
             const folders = container.querySelectorAll('[data-folder-path]');
@@ -1857,79 +1373,26 @@
             {#snippet sampleFolderChildren(node: SampleFolderNode)}
               {#each [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0])) as [name, child]}
                 {@const isOpen = expandedDirs.has(child.folderPath)}
-                {@const isDragOver = dragOverFolder === child.folderPath}
                 <div
                   class="tree-item"
                   data-folder-path={child.folderPath}
-                  draggable={canWrite ? "true" : undefined}
-                  ondragstart={(e) => { e.stopPropagation(); handleDragStart(e, child.folderPath, true); }}
-                  ondragend={handleDragEnd}
                 >
                   <div class="tree-dir-row">
-                    {#if canWrite}
-                      <input
-                        type="checkbox"
-                        class="folder-checkbox"
-                        title="Select all in {name}/"
-                        onclick={(e) => { e.stopPropagation(); selectAllInFolder(child.folderPath); }}
-                        checked={child.files.length > 0 && child.files.every(f => selectedPaths.has(f.path))}
-                      />
-                    {/if}
                     <button
                       class="tree-dir"
-                      class:tree-dir--drop-target={isDragOver}
                       onclick={() => toggleDir(child.folderPath)}
-                      ondragover={(e) => handleFolderDragOver(e, child.folderPath)}
-                      ondragleave={handleFolderDragLeave}
-                      ondrop={(e) => handleFolderDrop(e, child.folderPath)}
                     >
                       <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
                       <span class="tree-dir-name">{name}/</span>
                       <span class="tree-count">{child.totalFiles}</span>
                     </button>
-                    {#if canWrite}
-                      <button
-                        class="new-folder-btn"
-                        title="New subfolder"
-                        onclick={() => { newFolderParent = child.folderPath; newFolderName = ""; if (!isOpen) toggleDir(child.folderPath); }}
-                      >+</button>
-                    {/if}
                   </div>
                   {#if isOpen}
                     <div class="tree-children">
-                      {#if newFolderParent === child.folderPath}
-                        <div class="new-folder-input">
-                          <input
-                            class="sample-search"
-                            type="text"
-                            placeholder="Folder name..."
-                            bind:value={newFolderName}
-                            onkeydown={(e) => { if (e.key === "Enter") createFolder(child.folderPath); if (e.key === "Escape") newFolderParent = null; }}
-                          />
-                          <button class="btn btn-sm btn-primary" onclick={() => createFolder(child.folderPath)}>Create</button>
-                          <button class="btn btn-sm btn-secondary" onclick={() => { newFolderParent = null; }}>Cancel</button>
-                        </div>
-                      {/if}
                       {@render sampleFolderChildren(child)}
                       {#each child.files.sort((a, b) => a.name.localeCompare(b.name)) as file}
-                        {@const isMoving = movingPaths.has(file.path)}
                         {@const refsExpanded = expandedRefs.has(file.path)}
-                        <div
-                          class="tree-file tree-file--sample"
-                          class:tree-file--dragging={draggedPath === file.path}
-                          class:tree-file--selected={selectedPaths.has(file.path)}
-                          draggable={canWrite ? "true" : undefined}
-                          ondragstart={(e) => handleDragStart(e, file.path)}
-                          ondragend={handleDragEnd}
-                        >
-                          {#if canWrite}
-                            <input
-                              type="checkbox"
-                              class="file-checkbox"
-                              checked={selectedPaths.has(file.path)}
-                              onclick={(e) => { e.stopPropagation(); toggleSelect(file.path, e); }}
-                            />
-                          {/if}
+                        <div class="tree-file tree-file--sample">
                           <button
                             class="play-btn"
                             class:play-btn--active={playingFile === file.path}
@@ -1948,9 +1411,6 @@
                               onclick={() => toggleRefExpand(file.path)}
                               title="Show referencing songs/kits"
                             >{file.refs.length} ref{file.refs.length === 1 ? "" : "s"}</button>
-                          {/if}
-                          {#if isMoving}
-                            <span class="tree-file-badge">moving...</span>
                           {/if}
                         </div>
                         {#if refsExpanded && file.refs.length > 0}
@@ -2473,13 +1933,6 @@
     font-size: 0.88rem;
     color: var(--teal);
   }
-  .moved-msg {
-    margin-top: 1rem;
-    font-size: 0.85rem;
-    font-family: 'DM Mono', monospace;
-    color: var(--teal);
-  }
-
   .actions {
     display: flex;
     gap: 0.5rem;
@@ -2611,30 +2064,6 @@
   .tree-dir-row {
     display: flex;
     align-items: center;
-  }
-  .new-folder-btn {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0 0.3rem;
-    opacity: 0;
-    transition: opacity 0.15s;
-  }
-  .tree-dir-row:hover .new-folder-btn {
-    opacity: 1;
-  }
-  .new-folder-input {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.2rem 0;
-    margin-left: 1rem;
-  }
-  .new-folder-input .sample-search {
-    flex: 0 1 200px;
-    min-width: 100px;
   }
   .file-tree {
     font-family: 'DM Mono', monospace;
@@ -2871,16 +2300,6 @@
     cursor: default;
   }
 
-  .tree-dir--drop-target {
-    background: var(--accent-dim);
-    border-radius: 3px;
-    outline: 2px dashed var(--accent);
-    outline-offset: -2px;
-  }
-  .tree-file--dragging {
-    opacity: 0.3;
-  }
-
   .ref-count-btn {
     flex-shrink: 0;
     font-family: 'DM Mono', monospace;
@@ -2931,157 +2350,6 @@
     border-bottom: none;
     margin-bottom: 0;
     padding-bottom: 0;
-  }
-
-  .moved-msg--error {
-    color: #c47a7a;
-  }
-
-  .move-history {
-    margin-top: 0.5rem;
-    font-size: 0.8rem;
-  }
-  .move-history summary {
-    cursor: pointer;
-    color: var(--text-muted, #888);
-  }
-  .move-history-list {
-    list-style: none;
-    padding: 0;
-    margin: 0.3rem 0 0 0;
-  }
-  .move-history-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.2rem 0;
-    border-bottom: 1px solid var(--border, #333);
-  }
-  .move-history-paths {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .selection-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.6rem;
-    background: rgba(90, 171, 172, 0.12);
-    border: 1px solid rgba(90, 171, 172, 0.3);
-    border-radius: 6px;
-    margin-bottom: 0.5rem;
-  }
-  .selection-count {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: var(--teal);
-    margin-right: auto;
-  }
-
-  .file-checkbox, .folder-checkbox {
-    flex-shrink: 0;
-    width: 14px;
-    height: 14px;
-    cursor: pointer;
-    accent-color: var(--teal);
-  }
-  .folder-checkbox {
-    margin-right: -0.1rem;
-  }
-
-  .tree-file--selected {
-    background: rgba(90, 171, 172, 0.08);
-    border-radius: 3px;
-  }
-
-  .move-picker-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-  .move-picker {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem;
-    width: min(500px, 90vw);
-    max-height: 70vh;
-    display: flex;
-    flex-direction: column;
-  }
-  .move-picker-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
-  }
-  .move-picker-tree {
-    overflow-y: auto;
-    flex: 1;
-  }
-  .move-picker-folder {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    width: 100%;
-    padding: 0.35rem 0.5rem;
-    border: none;
-    background: none;
-    color: var(--text);
-    cursor: pointer;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.78rem;
-    text-align: left;
-    border-radius: 4px;
-  }
-  .move-picker-folder:hover {
-    background: var(--accent-dim);
-    color: var(--accent);
-  }
-  .move-picker-folder:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .btn-danger {
-    background: transparent;
-    color: #c47a7a;
-    border: 1px solid #c47a7a;
-  }
-  .btn-danger:hover {
-    background: rgba(196, 122, 122, 0.12);
-  }
-  .btn-danger:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .confirm-detail {
-    font-size: 0.82rem;
-    color: var(--text-secondary);
-    margin: 0 0 0.5rem;
-    line-height: 1.4;
-  }
-  .confirm-warn {
-    font-size: 0.82rem;
-    color: #c47a7a;
-    margin: 0 0 0.75rem;
-    line-height: 1.4;
-  }
-  .confirm-actions {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: flex-end;
   }
 
   .breadcrumb-bar {

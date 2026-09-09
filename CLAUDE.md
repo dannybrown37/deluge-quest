@@ -84,7 +84,7 @@ Prose-only pages are Markdown instead (see `/faq`).
 | Page | Component | What it does |
 |---|---|---|
 | `/` | `DelugeUI.svelte` | Interactive 8×16 pad-grid with drum sounds (velocity gradient per 4×4 block), sidebar tools column, demo audio player |
-| `/manage` | `CardScanner.svelte` | SD card management: sample browser with drag-drop reorganization (auto-updates XML refs), song sorting, broken ref repair, analysis, incremental backup |
+| `/manage` | `CardScanner.svelte` | SD card management: sample browser, song sorting, broken ref display, analysis, incremental backup |
 | `/stats` | `SongAnalyzer.svelte` | Batch song stats table over a card or file selection |
 | `/preview` | `SongPreview.svelte` | Web Audio playback of a song with per-track mute/volume |
 | `/kits` | `KitBuilder.svelte` | Build/edit Deluge kit XML from card samples (vim-style keys) |
@@ -114,7 +114,7 @@ per audio file for shareable song links.
 |---|---|
 | `pyodide.ts` | The Python↔JS seam. Lazy singleton loader + 4 bridges: `analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML`. Bridges covered by a real-Pyodide integration test, see Known Issues |
 | `cardStore.ts` | Singleton `cardStore` — the SD card handle, sample index, and song cache, shared across `/manage`, `/stats`, `/kits`, `/preview`. Persists the `FileSystemDirectoryHandle` and a song-XML cache in IndexedDB (`deluge-card-store`, v2). Also exports `walkHandle()` for walking arbitrary directory handles (used by backup) and `APP_MANAGED_DIRS` |
-| `softDelete.ts` | `moveToTrash(root, path)`, `moveFile(root, from, to)`, `updateXmlReferences(root, xmlPaths, xmlTexts, moves)`, `restoreFile(root, path, xml)` — file moves with XML ref updating, and putting an old version back. Backups to `MOVE_BACKUP/` and `HISTORY_BACKUP/` |
+| `softDelete.ts` | `moveToTrash(root, path)`, `restoreFile(root, path, xml)` — soft-delete to `SOFT_DELETE/` and restore with backup to `HISTORY_BACKUP/` |
 | `patchAudio.ts` | Web Audio synth engine (subtractive + FM voices, envelopes) for `/patch` |
 | `songAudio.ts` | Song-level scheduler over `patchAudio` voices + card samples for `/preview` |
 | `kitXml.ts` | `Kit`/`KitRow` model and Deluge kit XML serialization for `/kits` |
@@ -137,8 +137,7 @@ per audio file for shareable song links.
 - **Clips are first-class objects.** `Song.clips` indexed by position in `sessionClips`;
   `Instrument.clip_instances` references clips by index. Matches Deluge's own model.
 - **Nothing is destroyed.** Card operations move files into `SOFT_DELETE/`, `REPAIR_BACKUP/`,
-  `MOVE_BACKUP/`, or `HISTORY_BACKUP/` (all in `APP_MANAGED_DIRS`, never re-scanned).
-  Sample moves back up affected XMLs to `MOVE_BACKUP/` before rewriting references.
+  or `HISTORY_BACKUP/` (all in `APP_MANAGED_DIRS`, never re-scanned).
   `restoreFile()` never overwrites an existing backup — a second restore of the same file lands
   at `NAME.XML.1`, or restoring twice would destroy the version the user started from.
 - **Python↔JS is an untyped string seam.** `pyodide.ts` embeds Python in template literals and
@@ -275,7 +274,7 @@ Backward seeks never re-fire a milestone; `trackedPercent` is monotonic.
 
 | Tool | Actions |
 |---|---|
-| `manage` | `scan` (+samples/unused), `delete_sample`, `batch_move` (+moved/errors), `batch_delete` (+deleted/errors), `sort_songs` (+songs), `fix_all_xml`, `backup` (+files), `export_json` |
+| `manage` | `scan` (+samples/unused), `delete_sample`, `sort_songs` (+songs), `fix_all_xml`, `backup` (+files), `export_json` |
 | `stats` | `analyze_card`, `analyze_drop`, `analyze_error`, `export_csv`, `delete_song`, `convert_score`, `open_in_preview` |
 | `preview` | `inspect`, `inspect_error`, `play` |
 | `kits` | `open_samples`, `load_kit`, `export` (+rows) |

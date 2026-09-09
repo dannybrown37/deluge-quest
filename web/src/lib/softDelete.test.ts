@@ -1,13 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   TRASH_DIR,
-  MOVE_BACKUP_DIR,
   HISTORY_BACKUP_DIR,
   restoreFile,
   getOrCreateDir,
   moveToTrash,
-  moveFile,
-  updateXmlReferences,
 } from './softDelete';
 
 class FakeFile {
@@ -164,135 +161,6 @@ describe('moveToTrash', () => {
 
     expect(await fileExists(root, 'SAMPLES/DRUMS/kick.wav')).toBe(false);
     expect(await readFile(root, `${TRASH_DIR}/SAMPLES/DRUMS/kick.wav`)).toBe('audio-bytes');
-  });
-});
-
-describe('moveFile', () => {
-  it('moves a file between arbitrary paths, creating destination dirs', async () => {
-    const root = makeRoot();
-    await seedFile(root, 'SAMPLES/kick.wav', 'audio-bytes');
-
-    await moveFile(
-      root as unknown as FileSystemDirectoryHandle,
-      'SAMPLES/kick.wav',
-      'SAMPLES/DRUMS/kick.wav',
-    );
-
-    expect(await fileExists(root, 'SAMPLES/kick.wav')).toBe(false);
-    expect(await readFile(root, 'SAMPLES/DRUMS/kick.wav')).toBe('audio-bytes');
-  });
-
-  it('preserves file content across the move', async () => {
-    const root = makeRoot();
-    await seedFile(root, 'a/one.wav', 'unique-payload-123');
-
-    await moveFile(root as unknown as FileSystemDirectoryHandle, 'a/one.wav', 'b/one.wav');
-
-    expect(await readFile(root, 'b/one.wav')).toBe('unique-payload-123');
-  });
-});
-
-describe('updateXmlReferences', () => {
-  it('returns immediately with no moves', async () => {
-    const root = makeRoot();
-    const result = await updateXmlReferences(
-      root as unknown as FileSystemDirectoryHandle,
-      ['song.xml'],
-      new Map([['song.xml', '"SAMPLES/kick.wav"']]),
-      new Map(),
-    );
-    expect(result).toEqual({ updated: [], errors: [] });
-  });
-
-  it('skips XML files that do not reference a moved path', async () => {
-    const root = makeRoot();
-    await seedFile(root, 'song.xml', '"SAMPLES/snare.wav"');
-    const moves = new Map([['SAMPLES/kick.wav', 'SAMPLES/DRUMS/kick.wav']]);
-
-    const result = await updateXmlReferences(
-      root as unknown as FileSystemDirectoryHandle,
-      ['song.xml'],
-      new Map([['song.xml', '"SAMPLES/snare.wav"']]),
-      moves,
-    );
-
-    expect(result).toEqual({ updated: [], errors: [] });
-  });
-
-  it('rewrites matching references, case-insensitively, and backs up the original', async () => {
-    const root = makeRoot();
-    await seedFile(root, 'song.xml', 'sample="SAMPLES/Kick.wav" other="x"');
-    const xmlTexts = new Map([['song.xml', 'sample="SAMPLES/Kick.wav" other="x"']]);
-    const moves = new Map([['SAMPLES/kick.wav', 'SAMPLES/DRUMS/kick.wav']]);
-
-    const result = await updateXmlReferences(
-      root as unknown as FileSystemDirectoryHandle,
-      ['song.xml'],
-      xmlTexts,
-      moves,
-    );
-
-    expect(result.updated).toEqual(['song.xml']);
-    expect(result.errors).toEqual([]);
-    expect(await readFile(root, 'song.xml')).toBe('sample="SAMPLES/DRUMS/kick.wav" other="x"');
-    expect(await readFile(root, `${MOVE_BACKUP_DIR}/song.xml`)).toBe(
-      'sample="SAMPLES/Kick.wav" other="x"',
-    );
-    expect(xmlTexts.get('song.xml')).toBe('sample="SAMPLES/DRUMS/kick.wav" other="x"');
-  });
-
-  it('escapes regex-special characters in the moved path', async () => {
-    const root = makeRoot();
-    const original = 'sample="SAMPLES/kick (1).wav"';
-    await seedFile(root, 'song.xml', original);
-    const xmlTexts = new Map([['song.xml', original]]);
-    const moves = new Map([['SAMPLES/kick (1).wav', 'SAMPLES/DRUMS/kick (1).wav']]);
-
-    const result = await updateXmlReferences(
-      root as unknown as FileSystemDirectoryHandle,
-      ['song.xml'],
-      xmlTexts,
-      moves,
-    );
-
-    expect(result.updated).toEqual(['song.xml']);
-    expect(await readFile(root, 'song.xml')).toBe('sample="SAMPLES/DRUMS/kick (1).wav"');
-  });
-
-  it('falls back to a generic message when a non-Error is thrown', async () => {
-    const root = makeRoot();
-    await seedFile(root, 'SUBDIR/song.xml', '"SAMPLES/kick.wav"');
-    root.getDirectoryHandle = () => {
-      throw 'boom';
-    };
-    const xmlTexts = new Map([['SUBDIR/song.xml', '"SAMPLES/kick.wav"']]);
-    const moves = new Map([['SAMPLES/kick.wav', 'SAMPLES/DRUMS/kick.wav']]);
-
-    const result = await updateXmlReferences(
-      root as unknown as FileSystemDirectoryHandle,
-      ['SUBDIR/song.xml'],
-      xmlTexts,
-      moves,
-    );
-
-    expect(result.errors).toEqual([{ path: 'SUBDIR/song.xml', message: 'Update failed' }]);
-  });
-
-  it('records an error and continues when a referenced XML file is missing', async () => {
-    const root = makeRoot();
-    const xmlTexts = new Map([['missing.xml', '"SAMPLES/kick.wav"']]);
-    const moves = new Map([['SAMPLES/kick.wav', 'SAMPLES/DRUMS/kick.wav']]);
-
-    const result = await updateXmlReferences(
-      root as unknown as FileSystemDirectoryHandle,
-      ['missing.xml'],
-      xmlTexts,
-      moves,
-    );
-
-    expect(result.updated).toEqual([]);
-    expect(result.errors).toHaveLength(1);
-    expect(result.errors[0].path).toBe('missing.xml');
   });
 });
 

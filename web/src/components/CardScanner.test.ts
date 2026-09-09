@@ -9,11 +9,9 @@ vi.mock('../lib/analytics', () => ({
 
 vi.mock('../lib/softDelete', () => ({
   TRASH_DIR: 'SOFT_DELETE',
-  MOVE_BACKUP_DIR: 'MOVE_BACKUP',
+  HISTORY_BACKUP_DIR: 'HISTORY_BACKUP',
   getOrCreateDir: vi.fn(),
   moveToTrash: vi.fn(),
-  moveFile: vi.fn(),
-  updateXmlReferences: vi.fn(),
 }));
 
 vi.mock('../lib/cardStore', async (importOriginal) => {
@@ -251,23 +249,6 @@ describe('CardScanner', () => {
     await fireEvent.click(screen.getByText('Scan another'));
 
     expect(screen.getByText('Select your SD card folder')).toBeTruthy();
-  });
-
-  it('batch-selects and deletes samples with confirmation', async () => {
-    mockMoveToTrash.mockResolvedValue(undefined);
-    await scanAndWait();
-    await expandSamplesFolder();
-
-    const checkboxes = document.querySelectorAll('.file-checkbox');
-    await fireEvent.click(checkboxes[0]);
-
-    expect(screen.getByText('1 selected')).toBeTruthy();
-    await fireEvent.click(screen.getByText('Delete'));
-    expect(screen.getByText(/Delete 1 file\?/)).toBeTruthy();
-
-    await fireEvent.click(screen.getAllByText('Delete')[screen.getAllByText('Delete').length - 1]);
-    await waitFor(() => expect(mockMoveToTrash).toHaveBeenCalled());
-    expect(mockTrack).toHaveBeenCalledWith('manage', 'batch_delete', expect.objectContaining({ deleted: 1 }));
   });
 
   it('shows a backup diff after picking a destination folder', async () => {
