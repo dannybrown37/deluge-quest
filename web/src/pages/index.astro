@@ -52,6 +52,39 @@ import DelugeUI from '../components/DelugeUI.svelte';
     padding: 0.75rem 0.5rem 0;
     text-align: center;
     overflow: hidden;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  :global(body:has(.landing)) {
+    overflow: hidden;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  :global(body:has(.landing) .nav) {
+    flex-shrink: 0;
+  }
+
+  :global(body:has(.landing) #main-content) {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  :global(body:has(.landing) .footer) {
+    display: none;
+  }
+
+  .deluge-desktop {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
 
   .mobile-hero {
@@ -59,7 +92,7 @@ import DelugeUI from '../components/DelugeUI.svelte';
   }
 
   @media (max-width: 700px) {
-    .deluge-desktop { display: block; }
+    .deluge-desktop { display: flex; }
     .mobile-hero { display: none; }
     .landing { padding: 0.5rem 0.25rem 0.25rem; }
   }

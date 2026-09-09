@@ -86,7 +86,6 @@
   let vizCanvas: HTMLCanvasElement;
   let visualizer: AudioVisualizer | null = null;
   let vizMode: VisualizerMode = 'bars';
-  let vizHeight = 120;
 
   function toggleVizMode() {
     vizMode = vizMode === 'bars' ? 'circuit' : 'bars';
@@ -173,19 +172,14 @@
     availableHeight = window.innerHeight - top - FOOTER_RESERVE;
   }
 
-  function measureViz() {
-    if (!scalerEl) return;
-    const scalerRect = scalerEl.getBoundingClientRect();
-    const footer = document.querySelector('.footer');
-    const footerH = footer ? footer.getBoundingClientRect().height : 0;
-    const remaining = window.innerHeight - scalerRect.bottom - footerH - 8;
-    vizHeight = Math.max(40, remaining);
+  function resizeVisualizer() {
+    if (visualizer) visualizer.resize();
   }
 
   $: heightScale = housingHeight > 0 && availableHeight > 200 ? availableHeight / housingHeight : 1;
   $: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH, heightScale);
   $: offsetX = (wrapperWidth - DESIGN_WIDTH * scale) / 2;
-  $: if (scale && mounted) requestAnimationFrame(measureViz);
+  $: if (scale && mounted) requestAnimationFrame(resizeVisualizer);
 
   const AUDITION_PALETTE = ['#4488DD','#DD55AA','#DDBB33','#5AABAC','#CC3030','#AACC30','#3355CC','#FF6622'];
 
@@ -521,12 +515,11 @@
     initPads();
     fetchSongList();
 
-    requestAnimationFrame(() => { measureAvailable(); measureViz(); });
+    requestAnimationFrame(() => { measureAvailable(); });
     initVisualizer();
     connectVisualizerToAudio();
     function onResize() {
       measureAvailable();
-      measureViz();
       visualizer?.resize();
     }
 
@@ -562,6 +555,7 @@
   });
 </script>
 
+<div class="deluge-layout">
 <div class="deluge-scaler" bind:this={scalerEl} bind:clientWidth={wrapperWidth} style="height: {housingHeight * scale}px;">
 <div class="deluge-housing" bind:clientHeight={housingHeight} style="transform: scale({scale}); transform-origin: top left; position: relative; left: {offsetX}px;">
   <div class="wood-panel wood-panel--left"></div>
@@ -842,20 +836,30 @@
 </div>
 </div>
 
-<div class="viz-container" style="height: {vizHeight}px;">
+<div class="viz-container">
   <canvas class="audio-visualizer" bind:this={vizCanvas}></canvas>
   <button class="viz-toggle" on:click={toggleVizMode} title="Switch visualizer mode">
     {vizMode === 'bars' ? '⊞' : '≈'}
   </button>
 </div>
+</div>
 
 <style>
+  /* === Layout wrapper: fills available height from parent === */
+  .deluge-layout {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
   /* === Scaler wrapper === */
   .deluge-scaler {
     width: 100%;
     max-width: 100vw;
     position: relative;
     overflow: hidden;
+    flex-shrink: 0;
   }
 
   /* === Housing === */
@@ -1335,7 +1339,9 @@
 
   .viz-container {
     position: relative;
-    margin-top: 1rem;
+    flex: 1;
+    min-height: 40px;
+    overflow: hidden;
   }
 
   .audio-visualizer {
