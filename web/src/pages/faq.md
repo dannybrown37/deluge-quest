@@ -8,27 +8,29 @@ description: About deluge.quest — open source utilities for the Synthstrom Del
 
 deluge.quest is a love letter to the [Synthstrom Deluge](https://synthstrom.com/product/deluge/).
 
-## ...What does that mean?
+## ...What does that mean?actuall
+
+This website represents a quest to compile disparate tools into an incredibly ergonomic, secure, easy-to-use interface, available on any device with a web browser.
+
+As I built out the "Deluge" UI, I also realized that having Deluge-derived tracks to make the knobs and buttons responsive would be fun, so I compiled a number of Deluge-only tracks I've made over the years and loaded them on the site. Thus, it's also become a music distribution platform for my own Deluge tracks.
+
+## Who are you?
+
+I'm Danny, a self-taught professional software engineer and classically-trained amateur musician.
+
+I love the Deluge! I got my still-7-seg-screen unit at the end of 2019. I have owned dozens of instruments in my life, probably into the 100s now (easily so if you count effects pedals...), and the Deluge is by far my favorite, sparking the most creativity and resulting in the most output.
+
+I have been writing scripts to help manage my Deluge files for years. This website represents my most ambitious Deluge question to date.
+
+## Why did you make this site?
+
+The website is lots of things: an easy way to use and access my tools, a fun project to hone my skills, and a way to share music made with the Deluge.
 
 The Deluge stores songs as XML files on an SD card. These can be difficult to work with on the Deluge itself. On the flipside, there are numerous pain points to manually managing one's SD card on a computer.
 
 This website provides a number of tools to improve the Deluge SD card management experience, to help translate between the Deluge and other music software and back, and to help enhance the creative process of making music with the Deluge.
 
-The website itself is also just a fun project and a way to share music made with the Deluge.
-
-## Who wrote the music on the site?
-
-I did! Check out the load button on the home page's "Deluge" or the [Songs](/songs) page to see what I've made.
-
-This is a Deluge site, so all tracks here were made with sounds generated entirely from the Deluge at recording time. Other than compressing from WAV to MP3, no post-processing was added.
-
-## Who are you?
-
-I'm Danny, a self-taught professional software engineer and classically/academically trained amateur musician.
-
-I love the Deluge! I got my still-7-seg-screen unit at the end of 2019. I have owned dozens of instruments in my life, probably into the 100s now (easily so if you count effects pedals...), and the Deluge is by far my favorite, sparking the most creativity and resulting in the most output.
-
-I have been writing scripts to help me manage my Deluge files for years. This website represents a more ambitious quest to share tools, music, and a really cool website with the Deluge community.
+By creating this website, I personally am more likely to 1) make music with my Deluge, 2) create additional tools to help manage my Deluge files.
 
 ## Are these tools safe to use on my files?
 
@@ -46,7 +48,7 @@ I jokingly toyed with the idea of a "donate patches to the site author" button, 
 
 ## What *are* you tracking?
 
-The site is tracking song plays and tool usage counts, basic analytics to understand how people use the site.
+The site is tracking song plays and tool usage counts: basic analytics to understand how people use the site.
 
 ## What is the tech stack?
 
@@ -54,3 +56,9 @@ The site is tracking song plays and tool usage counts, basic analytics to unders
 - [Pyodide](https://pyodide.org) (Python in WebAssembly)
 - Hosted on [Vercel](https://vercel.com)
 - The code is on GitHub
+
+## Who wrote the music on the site?
+
+[I](#who-are-you) did! Check out the load button on the home page's "Deluge" or the [Songs](/songs) page to see what I've made.
+
+This is a Deluge site, so all tracks here were made with sounds generated entirely from the Deluge at recording time. Other than compressing from WAV to MP3, no post-processing was done to any tracks.
