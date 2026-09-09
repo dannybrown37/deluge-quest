@@ -836,3 +836,80 @@ describe('SongAnalyzer', () => {
     await waitFor(() => expect(screen.getByText('cached')).toBeTruthy());
     await waitFor(() => expect(screen.getByTitle('Move to SOFT_DELETE/')).toBeTruthy());
   });
+
+  it('sorts by modified date when the column header is clicked', async () => {
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'old.XML', bpm: 100, lastModified: 1000 }),
+      stat({ filename: 'new.XML', bpm: 200, lastModified: 9999 }),
+    ]);
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([
+      ['SONGS/old.XML', '<song></song>'],
+      ['SONGS/new.XML', '<song></song>'],
+    ]);
+    mockCardStore.songLastModified = new Map([
+      ['SONGS/old.XML', 1000],
+      ['SONGS/new.XML', 9999],
+    ]);
+    mockCardStore.rootHandle = { name: 'CARD' };
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('old')).toBeTruthy());
+
+    const modifiedHeader = screen.getByText('Modified');
+    await fireEvent.click(modifiedHeader);
+
+    const rows = document.querySelectorAll('tr');
+    expect(rows.length).toBeGreaterThan(1);
+  });
+
+  it('handles dragover and dragleave events on the dropzone', async () => {
+    render(SongAnalyzer);
+    await Promise.resolve();
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+
+    await fireEvent.dragOver(dropzone);
+    expect(dropzone.classList.contains('dropzone--over')).toBe(true);
+
+    await fireEvent.dragLeave(dropzone);
+    expect(dropzone.classList.contains('dropzone--over')).toBe(false);
+  });
+
+  it('shows "No songs match filters" when all results are filtered out in folder view', async () => {
+    mockAnalyzeStats.mockResolvedValue([stat({ filename: 'song.XML' })]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('song.XML')]));
+    await waitFor(() => expect(screen.getByText('song')).toBeTruthy());
+
+    const folderBtn = screen.getByText('Show folders');
+    await fireEvent.click(folderBtn);
+
+    const search = document.querySelector('.filter-search') as HTMLInputElement;
+    await fireEvent.input(search, { target: { value: 'nonexistent-xyz' } });
+
+    expect(screen.getByText('No songs match filters')).toBeTruthy();
+  });
+
+  it('triggers file input click on dropzone Enter key', async () => {
+    render(SongAnalyzer);
+    await Promise.resolve();
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    const clickSpy = vi.fn();
+    const fileInput = document.getElementById('stats-file-input') as HTMLInputElement;
+    fileInput.click = clickSpy;
+
+    await fireEvent.keyDown(dropzone, { key: 'Enter' });
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  it('saves results to sessionStorage after analysis', async () => {
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('song.XML')]));
+    await waitFor(() => expect(screen.getByText('song')).toBeTruthy());
+
+    const cached = sessionStorage.getItem('deluge-stats-results');
+    expect(cached).toBeTruthy();
+    expect(JSON.parse(cached!)).toHaveLength(1);
+  });

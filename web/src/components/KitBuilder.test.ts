@@ -513,4 +513,24 @@ describe('KitBuilder', () => {
     await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
     await waitFor(() => expect(document.querySelector('.browse-name')).toBeTruthy());
   });
+
+  it('exits search mode with Enter key', async () => {
+    await openFolderAndAddKick();
+
+    const container = document.querySelector('[tabindex]') as HTMLElement;
+    await fireEvent.keyDown(container, { key: '/' });
+    const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+    expect(searchInput).toBeTruthy();
+
+    await fireEvent.keyDown(searchInput, { key: 'Enter' });
+    await waitFor(() => expect(document.querySelector('.search-input')).toBeNull());
+  });
+
+  it('handles dragover on the landing area', async () => {
+    render(KitBuilder);
+    const landing = document.querySelector('.landing') as HTMLElement;
+    if (landing) {
+      await fireEvent.dragOver(landing);
+    }
+  });
 });

@@ -561,4 +561,42 @@ describe('SongPreview', () => {
     const tooltip = document.querySelector('.tooltip') as HTMLElement;
     expect(tooltip.getAttribute('style')).toContain('left: 162px');
   });
+
+  it('handles dragover and dragleave on the dropzone', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+
+    await fireEvent.dragOver(dropzone);
+    expect(dropzone.classList.contains('dropzone--over')).toBe(true);
+
+    await fireEvent.dragLeave(dropzone);
+    expect(dropzone.classList.contains('dropzone--over')).toBe(false);
+  });
+
+  it('handles file input change', async () => {
+    render(SongPreview);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', {
+      value: [xmlFile('input-song.XML')],
+      configurable: true,
+    });
+    await fireEvent.change(input);
+
+    await waitFor(() => expect(mockInspectSong).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+  });
+
+  it('resets playState to stopped when onEnd fires', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    await fireEvent.click(screen.getByTitle('Play'));
+    expect(playerInstances.length).toBeGreaterThan(0);
+    const player = playerInstances[playerInstances.length - 1];
+    player.onEnd?.();
+
+    await waitFor(() => expect(screen.getByTitle('Play')).toBeTruthy());
+  });
 });

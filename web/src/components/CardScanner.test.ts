@@ -724,4 +724,46 @@ describe('CardScanner', () => {
 
     await waitFor(() => expect(screen.getByText(/only in backup/)).toBeTruthy());
   });
+
+  it('reconnects via requestReconnect from the dropzone button', async () => {
+    mockCardStore.reconnect.mockResolvedValue(false);
+    mockCardStore.hasPersistedHandle.mockResolvedValue(true);
+    mockCardStore.requestReconnect.mockImplementation(async () => {
+      mockCardStore.rootHandle = { name: 'RECONNECTED' };
+      return true;
+    });
+
+    render(CardScanner);
+    await waitFor(() => expect(screen.getByText('Reconnect previously loaded SD card')).toBeTruthy());
+    await fireEvent.click(screen.getByText('Reconnect previously loaded SD card'));
+
+    await waitFor(() => expect(screen.getByText('Sample Library (4)')).toBeTruthy(), { timeout: 3000 });
+  });
+
+  it('returns to idle when requestReconnect fails', async () => {
+    mockCardStore.reconnect.mockResolvedValue(false);
+    mockCardStore.hasPersistedHandle.mockResolvedValue(true);
+    mockCardStore.requestReconnect.mockResolvedValue(false);
+
+    render(CardScanner);
+    await waitFor(() => expect(screen.getByText('Reconnect previously loaded SD card')).toBeTruthy());
+    await fireEvent.click(screen.getByText('Reconnect previously loaded SD card'));
+
+    await waitFor(() => expect(screen.getByText('Select your SD card folder')).toBeTruthy());
+  });
+
+  it('handles dragover and dragleave on the dropzone', async () => {
+    render(CardScanner);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.dragOver(dropzone);
+    expect(dropzone.classList.contains('dropzone--over')).toBe(true);
+    await fireEvent.dragLeave(dropzone);
+    expect(dropzone.classList.contains('dropzone--over')).toBe(false);
+  });
+
+  it('shows reclaimable bytes on the analysis tab', async () => {
+    await scanAndWait();
+    await fireEvent.click(screen.getByText('Analysis'));
+    expect(screen.getByText(/reclaimable/)).toBeTruthy();
+  });
 });
