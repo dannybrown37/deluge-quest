@@ -115,7 +115,11 @@ function dropEvent(file: File | undefined) {
   return { dataTransfer: { files: file ? [file] : [] } } as unknown as DragEvent;
 }
 
+let lastResizeCallback: ((entries: { contentRect: { width: number } }[]) => void) | undefined;
 class FakeResizeObserver {
+  constructor(cb: (entries: { contentRect: { width: number } }[]) => void) {
+    lastResizeCallback = cb;
+  }
   observe() {}
   disconnect() {}
   unobserve() {}
@@ -125,7 +129,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   playerInstances.length = 0;
   vi.stubGlobal('ResizeObserver', FakeResizeObserver);
-  mockLoadPyodide.mockResolvedValue({});
+  mockLoadPyodide.mockImplementation(async (onProgress?: (stage: string, pct: number) => void) => {
+    onProgress?.('Loading runtime', 10);
+    return {};
+  });
   mockInspectSong.mockResolvedValue(previewData());
   mockCardStore.isLoaded = false;
   mockCardStore.songXmls = new Map();
@@ -584,6 +591,306 @@ describe('SongPreview', () => {
 
     await waitFor(() => expect(mockInspectSong).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+  });
+
+  it('does nothing when dropping with no files', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(undefined));
+    expect(screen.getByText('Drop a Deluge song file')).toBeTruthy();
+  });
+
+  it('ignores malformed sessionStorage payloads', async () => {
+    sessionStorage.setItem('deluge-preview-file', '{not json');
+    sessionStorage.setItem('deluge-stats-results', '{not json either');
+
+    render(SongPreview);
+    await Promise.resolve();
+
+    expect(screen.getByText('Drop a Deluge song file')).toBeTruthy();
+  });
+
+  it('swallows errors loading cached card songs', async () => {
+    mockCardStore.loadCachedSongs.mockRejectedValue(new Error('boom'));
+    render(SongPreview);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(screen.getByText('Drop a Deluge song file')).toBeTruthy();
+  });
+
+  it('shows singular wording for one cached song and one stats result', async () => {
+    sessionStorage.setItem('deluge-stats-results', JSON.stringify([{ a: 1 }]));
+    mockCardStore.loadCachedSongs.mockResolvedValue({
+      songs: [{ path: 'only.XML', xml: '<song></song>' }],
+      cardName: 'CARD',
+      savedAt: 0,
+    });
+
+    render(SongPreview);
+    await waitFor(() => expect(screen.getByText('1 song loaded in Song Stats')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/1 song with arrangement data on CARD/)).toBeTruthy());
+    expect(document.querySelector('.card-picker-sub')?.textContent).not.toMatch(/\(/);
+  });
+
+  it('unmutes a track after a second mute click', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+    await fireEvent.click(document.querySelector('.transport-btn[title="Play"]') as HTMLElement);
+
+    const muteBtn = screen.getByTitle('Mute');
+    await fireEvent.click(muteBtn);
+    expect(playerInstances[0].setTrackMuted).toHaveBeenCalledWith(0, true);
+
+    const unmuteBtn = screen.getByTitle('Unmute');
+    await fireEvent.click(unmuteBtn);
+    expect(playerInstances[0].setTrackMuted).toHaveBeenCalledWith(0, false);
+  });
+
+  it('ignores timeline clicks left of the label column', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    const svg = document.querySelector('.timeline-svg') as SVGSVGElement;
+    vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue({
+      left: 0, top: 0, right: 800, bottom: 100, width: 800, height: 100, x: 0, y: 0, toJSON() {},
+    });
+    await fireEvent.click(svg, { clientX: 5, clientY: 20 });
+
+    expect(playerInstances.length).toBe(0);
+  });
+
+  it('seeks without creating a new player while already playing', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    await fireEvent.click(document.querySelector('.transport-btn[title="Play"]') as HTMLElement);
+    expect(playerInstances.length).toBe(1);
+
+    const svg = document.querySelector('.timeline-svg') as SVGSVGElement;
+    vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue({
+      left: 0, top: 0, right: 800, bottom: 100, width: 800, height: 100, x: 0, y: 0, toJSON() {},
+    });
+    await fireEvent.click(svg, { clientX: 300, clientY: 20 });
+
+    expect(playerInstances.length).toBe(1);
+    expect(playerInstances[0].seek).toHaveBeenCalled();
+  });
+
+  it('shows positive EQ gain with a plus sign', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+    await fireEvent.click(document.querySelector('.transport-btn[title="Play"]') as HTMLElement);
+
+    const midKnob = document.querySelector('.knob-hitbox[title="Mid"]') as HTMLElement;
+    await fireEvent.mouseDown(midKnob, { clientY: 100 });
+    await fireEvent.mouseMove(document, { clientY: -50 });
+    await fireEvent.mouseUp(document);
+
+    expect(screen.getByText(/^\+\d+$/)).toBeTruthy();
+  });
+
+  it('creates a session-mode clip without loop repeats', async () => {
+    mockInspectSong.mockResolvedValue(
+      previewData({
+        hasArrangement: false,
+        tracks: [
+          {
+            name: 'Custom Track',
+            isKit: false,
+            instrumentType: 'custom',
+            midiChannel: null,
+            cvChannel: null,
+            patch: null,
+            clips: [
+              {
+                positionTicks: 0,
+                lengthTicks: 192,
+                clipLengthTicks: 192,
+                clipIndex: 0,
+                noteCount: 1,
+                rowCount: 1,
+                noteRows: [],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    const clipRect = document.querySelector('.timeline-svg rect[style*="cursor: pointer"]') as SVGRectElement;
+    expect(clipRect).toBeTruthy();
+    expect(screen.getAllByText('Custom Track').length).toBeGreaterThan(0);
+  });
+
+  it('resets playing state and uses card sample resolver when card is loaded', async () => {
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([['song1.XML', '<song></song>']]);
+    mockCardStore.rootHandle = { name: 'MY_CARD' };
+    mockCardStore.eligibleSongs.mockReturnValue([]);
+
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    await fireEvent.click(document.querySelector('.transport-btn[title="Play"]') as HTMLElement);
+    expect(playerInstances.length).toBe(1);
+
+    const resolver = (playerInstances[0] as unknown as { sampleResolver: (p: string, c: unknown) => unknown })
+      .sampleResolver;
+    resolver('sample.wav', {});
+    expect((cardStore as unknown as { getSampleBuffer: ReturnType<typeof vi.fn> }).getSampleBuffer)
+      .toHaveBeenCalledWith('sample.wav', {});
+  });
+
+  it('scales ruler step marks for very long songs', async () => {
+    mockInspectSong.mockResolvedValue(
+      previewData({
+        durationTicks: 48 * 4 * 250,
+        tracks: [
+          {
+            name: 'Synth 1', isKit: false, instrumentType: 'synth', midiChannel: null, cvChannel: null, patch: null,
+            clips: [{ positionTicks: 0, lengthTicks: 192, clipLengthTicks: 192, clipIndex: 0, noteCount: 1, rowCount: 1, noteRows: [] }],
+          },
+        ],
+      }),
+    );
+
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    const rulerLabels = Array.from(document.querySelectorAll('.ruler-text')).map((t) => t.textContent);
+    expect(rulerLabels).toContain('17');
+  });
+
+  it('shows the thrown error message when inspection fails', async () => {
+    mockInspectSong.mockRejectedValue(new Error('parse blew up'));
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('parse blew up')).toBeTruthy());
+    expect(mockTrack).toHaveBeenCalledWith('preview', 'inspect_error');
+  });
+
+  it('falls back to a generic error message when inspection throws without one', async () => {
+    mockInspectSong.mockRejectedValue({});
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('Failed to parse song')).toBeTruthy());
+  });
+
+  it('adjusts the EQ High knob by dragging', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+    await fireEvent.click(document.querySelector('.transport-btn[title="Play"]') as HTMLElement);
+
+    const highKnob = document.querySelector('.knob-hitbox[title="High"]') as HTMLElement;
+    await fireEvent.mouseDown(highKnob, { clientY: 100 });
+    await fireEvent.mouseMove(document, { clientY: 40 });
+    await fireEvent.mouseUp(document);
+
+    expect(playerInstances[0].setEQ).toHaveBeenCalledWith('high', expect.any(Number));
+  });
+
+  it('resizes the timeline when the container is resized', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    expect(lastResizeCallback).toBeTruthy();
+    lastResizeCallback?.([{ contentRect: { width: 1200 } }]);
+    await Promise.resolve();
+
+    expect(document.querySelector('.timeline-svg')).toBeTruthy();
+  });
+
+  it('ignores mousemove when no knob is being dragged', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    await fireEvent.mouseMove(document, { clientY: 40 });
+    expect(playerInstances.length).toBe(0);
+  });
+
+  it('formats a single-bar clip without a trailing s', async () => {
+    mockInspectSong.mockResolvedValue(
+      previewData({
+        tracks: [
+          {
+            name: 'Synth 1', isKit: false, instrumentType: 'synth', midiChannel: null, cvChannel: null, patch: null,
+            clips: [{ positionTicks: 0, lengthTicks: 192, clipLengthTicks: 192, clipIndex: 0, noteCount: 1, rowCount: 1, noteRows: [] }],
+          },
+        ],
+      }),
+    );
+
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    const clipRect = document.querySelector('.timeline-svg rect[style*="cursor: pointer"]') as SVGRectElement;
+    await fireEvent.mouseEnter(clipRect, { clientX: 100, clientY: 50 });
+    const text = (document.querySelector('.tooltip') as HTMLElement).textContent ?? '';
+    expect(text).toMatch(/1 bar(?!s)/);
+  });
+
+  it('falls back to instrumentType-derived type when instrumentType is absent', async () => {
+    mockInspectSong.mockResolvedValue(
+      previewData({
+        tracks: [
+          {
+            name: 'Kit Track', isKit: true, instrumentType: undefined as unknown as string, midiChannel: null, cvChannel: null, patch: null,
+            clips: [{ positionTicks: 0, lengthTicks: 192, clipLengthTicks: 192, clipIndex: 0, noteCount: 1, rowCount: 1, noteRows: [] }],
+          },
+        ],
+      }),
+    );
+
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    expect(screen.getAllByText('Kit').length).toBeGreaterThan(0);
+  });
+
+  it('shows plural songs and no card name when the card has no root handle', async () => {
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([['a.XML', '<song></song>'], ['b.XML', '<song></song>']]);
+    mockCardStore.rootHandle = null;
+    mockCardStore.eligibleSongs.mockReturnValue([
+      { path: 'a.XML', xml: '<song></song>' },
+      { path: 'b.XML', xml: '<song></song>' },
+    ]);
+
+    render(SongPreview);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const title = document.querySelector('.card-picker-title')?.textContent ?? '';
+    expect(title).toMatch(/2 songs with arrangement data\s*$/);
   });
 
   it('resets playState to stopped when onEnd fires', async () => {

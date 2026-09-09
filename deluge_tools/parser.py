@@ -308,9 +308,18 @@ def _instrument_key(
     return ("slot", slot, sub)
 
 
+def parse_song_xml(xml_string: str) -> Song:
+    root = ET.fromstring(xml_string)
+    return _parse_song_root(root)
+
+
 def parse_song(path: Path | str) -> Song:
     tree = ET.parse(path)
     root = tree.getroot()
+    return _parse_song_root(root)
+
+
+def _parse_song_root(root: ET.Element) -> Song:
 
     song = Song()
     song.firmware_version = root.get("firmwareVersion", "")

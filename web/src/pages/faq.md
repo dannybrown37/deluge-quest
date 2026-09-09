@@ -42,7 +42,7 @@ That said! I personally always run these tools on a backup of my SD card, not on
 
 Yes, it's secure!
 
-No data you load onto the site is sent to a server. All of the tools run directly in the browser, so your files never leave your machine. No server, no account, no upload.
+No data you load onto the site is sent to a server. All of the tools run directly in the browser, i.e., your files never leave your machine. No server, no account, no upload.
 
 I jokingly toyed with the idea of a "donate patches to the site author" button, but the [Card Management](/manage) tool has revealed the sheer number of unused patches and samples I already have. I can't manage even more of them! (Unless you've got really good ones, in which case, please [reach out](mailto:danny@deluge.quest) to me.)
 
@@ -55,10 +55,10 @@ The site is tracking song plays and tool usage counts: basic analytics to unders
 - [Astro](https://astro.build) + [Svelte](https://svelte.dev)
 - [Pyodide](https://pyodide.org) (Python in WebAssembly)
 - Hosted on [Vercel](https://vercel.com)
-- The code is on GitHub
+- The code is on [GitHub](https://github.com/dannybrown37/deluge-quest)
 
 ## Who wrote the music on the site?
 
-[I did](#who-are-you)! Check out the load button on the home page's "Deluge" or the [Songs](/songs) page to see what I've made.
+[I did](#who-are-you)! Check out the load/play buttons on the [home page's "Deluge"](/) or the [Songs](/songs) page to see what I've made.
 
 This is a Deluge site, so all tracks here were made with sounds generated entirely from the Deluge at recording time. Other than compressing from WAV to MP3, no post-processing was done to any tracks.

@@ -67,6 +67,8 @@ const SONG1_XML = `<song>
 
 const BAD_KIT_XML = `<kit isPlaying="0" isPlaying="1"><thing /></kit>`;
 const UNFIXABLE_KIT_XML = `<kit><thing></kit>`;
+const MIXED_SONG_XML = `<song><instruments><sound name="Kick"><osc1 fileName="SAMPLES/kick.wav" /></sound><midi channel="1" /></instruments></song>`;
+const EXTERNAL_SONG_XML = `<song><instruments><midi channel="1" /></instruments></song>`;
 
 function seedCard() {
   mockCardStore.rootHandle = { name: 'MY_CARD' };
@@ -765,5 +767,269 @@ describe('CardScanner', () => {
     await scanAndWait();
     await fireEvent.click(screen.getByText('Analysis'));
     expect(screen.getByText(/reclaimable/)).toBeTruthy();
+  });
+
+  it('classifies songs with both internal and external gear as mixed', async () => {
+    mockCardStore.songXmls.set('SONGS/mixed.XML', MIXED_SONG_XML);
+    await scanAndWait();
+    await fireEvent.click(screen.getByText(/^Songs/));
+
+    expect(screen.getByText(/External gear/)).toBeTruthy();
+    expect(screen.getByText('mixed')).toBeTruthy();
+  });
+
+  it('classifies songs with only external gear as externalOnly', async () => {
+    mockCardStore.songXmls.set('SONGS/external.XML', EXTERNAL_SONG_XML);
+    await scanAndWait();
+    await fireEvent.click(screen.getByText(/^Songs/));
+
+    expect(screen.getByText('external')).toBeTruthy();
+  });
+
+  it('moves a song into a new category and shows its destination path', async () => {
+    const dir = fakeWritableDir({ 'song1.XML': SONG1_XML });
+    mockGetOrCreateDir.mockResolvedValue(dir);
+    await scanAndWait();
+    await fireEvent.click(screen.getByText(/^Songs/));
+    await fireEvent.click(screen.getByText('Move'));
+
+    await waitFor(() => expect(screen.getByText(/→/)).toBeTruthy());
+  });
+
+  it('shows a Chromium-only message on the backup tab without File System Access', async () => {
+    // @ts-expect-error deliberately removing the feature to test the fallback path
+    delete window.showDirectoryPicker;
+    const file = new File(['kick-data'], 'kick.wav');
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'CARD/SAMPLES/kick.wav' });
+
+    render(CardScanner);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, { dataTransfer: { files: [file], items: undefined } });
+    await waitFor(() => expect(screen.getByText('Sample Library (1)')).toBeTruthy(), { timeout: 3000 });
+
+    await fireEvent.click(screen.getByText('Backup'));
+    expect(screen.getByText(/requires a Chromium-based browser/)).toBeTruthy();
+  });
+
+  it('shows a direct-folder-access message on the backup tab after a drag-and-drop scan', async () => {
+    const file = new File(['kick-data'], 'kick.wav');
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'CARD/SAMPLES/kick.wav' });
+
+    render(CardScanner);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, { dataTransfer: { files: [file], items: undefined } });
+    await waitFor(() => expect(screen.getByText('Sample Library (1)')).toBeTruthy(), { timeout: 3000 });
+
+    await fireEvent.click(screen.getByText('Backup'));
+    expect(screen.getByText(/requires direct folder access/)).toBeTruthy();
+  });
+
+  it('does not show Sort/Move controls on the songs tab after a drag-and-drop scan', async () => {
+    const file = new File(['song-data'], 'song1.xml');
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'CARD/SAMPLES/kick.wav' });
+    const songFile = new File(['song-data'], 'song1.xml');
+    Object.defineProperty(songFile, 'webkitRelativePath', { value: 'CARD/SONGS/song1.xml' });
+
+    render(CardScanner);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, { dataTransfer: { files: [file, songFile], items: undefined } });
+    await waitFor(() => expect(screen.getByText('Sample Library (1)')).toBeTruthy(), { timeout: 3000 });
+
+    await fireEvent.click(screen.getByText(/^Songs/));
+    expect(screen.queryByText('Sort all songs')).toBeFalsy();
+    expect(screen.queryByText('Move')).toBeFalsy();
+  });
+
+  it('marks a backup file as changed when the destination copy has a different size', async () => {
+    mockWalkHandle.mockImplementation(async (_h: unknown, _p: string, out: { path: string; handle: unknown }[]) => {
+      out.push({ path: 'SONGS/song1.XML', handle: { getFile: async () => new File(['different-size-content'], 'song1.XML') } });
+    });
+    vi.stubGlobal('showDirectoryPicker', vi.fn().mockResolvedValue({ name: 'BACKUP_DEST' }));
+
+    await scanAndWait();
+    await fireEvent.click(screen.getByText('Backup'));
+    await fireEvent.click(screen.getByText('Choose backup folder'));
+
+    await waitFor(() => expect(screen.getByText(/1 changed/)).toBeTruthy());
+  });
+
+  it('marks a backup file as changed when only the modification time differs', async () => {
+    mockCardStore.songLastModified.set('SONGS/song1.XML', 999999);
+    mockWalkHandle.mockImplementation(async (_h: unknown, _p: string, out: { path: string; handle: unknown }[]) => {
+      out.push({ path: 'SONGS/song1.XML', handle: { getFile: async () => new File([SONG1_XML], 'song1.XML', { lastModified: 12345 }) } });
+    });
+    vi.stubGlobal('showDirectoryPicker', vi.fn().mockResolvedValue({ name: 'BACKUP_DEST' }));
+
+    await scanAndWait();
+    await fireEvent.click(screen.getByText('Backup'));
+    await fireEvent.click(screen.getByText('Choose backup folder'));
+
+    await waitFor(() => expect(screen.getByText(/1 changed/)).toBeTruthy());
+  });
+
+  it('shows sample sizes in kilobytes and megabytes when large enough', async () => {
+    mockCardStore.sampleIndex = new Map();
+    mockCardStore.sampleIndex.set('samples/small.wav', fakeSample('SAMPLES/small.wav', 'x'.repeat(2048)));
+    mockCardStore.sampleIndex.set('samples/big.wav', fakeSample('SAMPLES/big.wav', 'y'.repeat(2 * 1024 * 1024)));
+    mockCardStore.songXmls = new Map();
+    mockCardStore.presetIndex = new Map();
+
+    render(CardScanner);
+    await fireEvent.click(screen.getByText('Browse for folder'));
+    await waitFor(() => expect(screen.getByText('Sample Library (2)')).toBeTruthy(), { timeout: 3000 });
+    await expandSamplesFolder();
+
+    expect(screen.getByText('2 KB')).toBeTruthy();
+    expect(screen.getByText('2.0 MB')).toBeTruthy();
+  });
+
+  it('shows a moved badge for a song in the folder view after sorting', async () => {
+    const dir = fakeWritableDir({ 'song1.XML': SONG1_XML });
+    mockGetOrCreateDir.mockResolvedValue(dir);
+    await scanAndWait();
+    await fireEvent.click(screen.getByText(/^Songs/));
+    await fireEvent.click(screen.getByText('Move'));
+    await waitFor(() => expect(screen.getByText(/→/)).toBeTruthy());
+
+    await fireEvent.click(screen.getByText('Show folders'));
+    await fireEvent.click(screen.getByText('SONGS/'));
+
+    expect(screen.getByText(/→/)).toBeTruthy();
+  });
+
+  it('shows a moved badge for an unused sample after deleting it', async () => {
+    mockMoveToTrash.mockResolvedValue(undefined);
+    await scanAndWait();
+    await fireEvent.click(screen.getByText('Analysis'));
+    const unusedSection = screen.getByText(/Unused samples/).closest('.analysis-section') as HTMLElement;
+    await fireEvent.click(within(unusedSection).getByText('SAMPLES/'));
+    const unusedRow = screen.getByText('unused.wav').closest('.tree-file') as HTMLElement;
+    await fireEvent.click(within(unusedRow).getByTitle('Move to SOFT_DELETE/'));
+
+    await waitFor(() => expect(screen.getByText('moved')).toBeTruthy());
+  });
+
+  it('shows "No songs found" in the folder view when there are no songs', async () => {
+    mockCardStore.songXmls = new Map();
+    await scanAndWait();
+    await fireEvent.click(screen.getByText(/^Songs/));
+    await fireEvent.click(screen.getByText('Show folders'));
+
+    expect(screen.getByText('No songs found.')).toBeTruthy();
+  });
+
+  it('does not show an error message when the directory picker is dismissed (AbortError)', async () => {
+    const abortErr = new Error('cancelled');
+    abortErr.name = 'AbortError';
+    mockCardStore.pickDirectory.mockRejectedValue(abortErr);
+
+    render(CardScanner);
+    await fireEvent.click(screen.getByText('Browse for folder'));
+
+    expect(screen.queryByText('Try again')).toBeFalsy();
+  });
+
+  it('does nothing when the folder input change event has no files', async () => {
+    // @ts-expect-error deliberately removing the feature to test the fallback path
+    delete window.showDirectoryPicker;
+    render(CardScanner);
+    const input = document.getElementById('clean-folder-input') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [] });
+    await fireEvent.change(input);
+
+    expect(screen.getByText('Select your SD card folder')).toBeTruthy();
+  });
+
+  it('moves an external-gear song and shows its destination path', async () => {
+    mockCardStore.songXmls.set('SONGS/external.XML', EXTERNAL_SONG_XML);
+    const dir = fakeWritableDir({ 'external.XML': EXTERNAL_SONG_XML });
+    mockGetOrCreateDir.mockResolvedValue(dir);
+    await scanAndWait();
+    await fireEvent.click(screen.getByText(/^Songs/));
+    const externalRow = screen.getByText('external').closest('.tree-file') as HTMLElement;
+    await fireEvent.click(within(externalRow).getByText('Move'));
+
+    await waitFor(() => expect(within(externalRow).getByText(/→/)).toBeTruthy());
+  });
+
+  it('does not re-toggle broken refs on a second click of the stat', async () => {
+    await scanAndWait();
+    const brokenBtn = screen.getByText('broken refs').closest('button') as HTMLElement;
+    await fireEvent.click(brokenBtn);
+    await fireEvent.click(brokenBtn);
+    expect(screen.getByText('Sample Library (4)')).toBeTruthy();
+  });
+
+  it('does not show a delete button for unused samples after a drag-and-drop scan', async () => {
+    const kick = new File(['kick-data'], 'kick.wav');
+    Object.defineProperty(kick, 'webkitRelativePath', { value: 'CARD/SAMPLES/kick.wav' });
+    const unused = new File(['unused-data'], 'unused.wav');
+    Object.defineProperty(unused, 'webkitRelativePath', { value: 'CARD/SAMPLES/unused.wav' });
+
+    render(CardScanner);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, { dataTransfer: { files: [kick, unused], items: undefined } });
+    await waitFor(() => expect(screen.getByText('Sample Library (2)')).toBeTruthy(), { timeout: 3000 });
+
+    await fireEvent.click(screen.getByText('Analysis'));
+    await fireEvent.click(screen.getByText('SAMPLES/'));
+    expect(screen.queryByTitle(/Move to/)).toBeFalsy();
+  });
+
+  it('says everything is up to date when the backup destination already matches', async () => {
+    const dir = fakeWritableDir({
+      'song1.XML': SONG1_XML,
+      'badkit.XML': BAD_KIT_XML,
+      'kick.wav': 'kick-data-unique',
+      'unused.wav': 'unused-data',
+      'dup1.wav': 'duplicate-bytes-xyz',
+      'dup2.wav': 'duplicate-bytes-xyz',
+    });
+    mockWalkHandle.mockImplementation(async (_h: unknown, _p: string, out: { path: string; handle: unknown }[]) => {
+      out.push({ path: 'SONGS/song1.XML', handle: { getFile: async () => new File([SONG1_XML], 'song1.XML') } });
+      out.push({ path: 'KITS/badkit.XML', handle: { getFile: async () => new File([BAD_KIT_XML], 'badkit.XML') } });
+      out.push({ path: 'SAMPLES/kick.wav', handle: { getFile: async () => new File(['kick-data-unique'], 'kick.wav') } });
+      out.push({ path: 'SAMPLES/unused.wav', handle: { getFile: async () => new File(['unused-data'], 'unused.wav') } });
+      out.push({ path: 'SAMPLES/dup1.wav', handle: { getFile: async () => new File(['duplicate-bytes-xyz'], 'dup1.wav') } });
+      out.push({ path: 'SAMPLES/dup2.wav', handle: { getFile: async () => new File(['duplicate-bytes-xyz'], 'dup2.wav') } });
+    });
+    mockGetOrCreateDir.mockResolvedValue(dir);
+    vi.stubGlobal('showDirectoryPicker', vi.fn().mockResolvedValue({ name: 'BACKUP_DEST' }));
+
+    await scanAndWait();
+    await fireEvent.click(screen.getByText('Backup'));
+    await fireEvent.click(screen.getByText('Choose backup folder'));
+
+    await waitFor(() => expect(screen.getByText('Everything is up to date.')).toBeTruthy());
+  });
+
+  it('re-scans and changes the backup folder after a completed backup', async () => {
+    const dir = fakeWritableDir({
+      'song1.XML': SONG1_XML,
+      'badkit.XML': BAD_KIT_XML,
+      'kick.wav': 'kick-data-unique',
+      'unused.wav': 'unused-data',
+      'dup1.wav': 'duplicate-bytes-xyz',
+      'dup2.wav': 'duplicate-bytes-xyz',
+    });
+    mockGetOrCreateDir.mockResolvedValue(dir);
+    mockWalkHandle.mockResolvedValue(undefined);
+    vi.stubGlobal('showDirectoryPicker', vi.fn().mockResolvedValue({ name: 'BACKUP_DEST' }));
+
+    await scanAndWait();
+    await fireEvent.click(screen.getByText('Backup'));
+    await fireEvent.click(screen.getByText('Choose backup folder'));
+    await waitFor(() => expect(screen.getByText(/new/)).toBeTruthy());
+    await fireEvent.click(screen.getByText('Back Up Now'));
+    await waitFor(() => expect(screen.getByText(/Backup complete/)).toBeTruthy(), { timeout: 3000 });
+
+    await fireEvent.click(screen.getByText('Re-scan'));
+    await waitFor(() => expect(screen.getByText(/new/)).toBeTruthy());
+
+    await fireEvent.click(screen.getByText('Back Up Now'));
+    await waitFor(() => expect(screen.getByText(/Backup complete/)).toBeTruthy(), { timeout: 3000 });
+    await fireEvent.click(screen.getByText('Change folder'));
+
+    expect(screen.getByText('Choose backup folder')).toBeTruthy();
   });
 });
