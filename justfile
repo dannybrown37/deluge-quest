@@ -13,7 +13,7 @@ default:
 # Install the package and dev dependencies
 install:
   uv venv
-  uv pip install -e ".[dev]"
+  uv sync
 
 # Download the Synthstrom factory SD card contents as a test fixture (gitignored, not committed)
 fetch-fixtures:

@@ -39,7 +39,7 @@ export class AudioVisualizer {
     this.ctx = canvas.getContext('2d')!;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    try { this._paused = localStorage.getItem(STORAGE_KEY) === '1'; } catch {}
+    try { this._paused = localStorage.getItem(STORAGE_KEY) === '1'; } catch { /* localStorage may be unavailable */ }
 
     this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     if (this.motionQuery.matches) this._paused = true;
@@ -75,7 +75,7 @@ export class AudioVisualizer {
 
   set paused(p: boolean) {
     this._paused = p;
-    try { localStorage.setItem(STORAGE_KEY, p ? '1' : '0'); } catch {}
+    try { localStorage.setItem(STORAGE_KEY, p ? '1' : '0'); } catch { /* localStorage may be unavailable */ }
     if (p) {
       cancelAnimationFrame(this.raf);
       this.drawStatic();
