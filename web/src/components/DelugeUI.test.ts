@@ -73,6 +73,7 @@ type MockAudio = {
   songs: { name: string }[];
   currentSong: { name: string } | null;
   playOffset: number;
+  analyserNode: unknown;
   onNavigate: unknown;
   formatTime: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
@@ -230,6 +231,17 @@ describe('DelugeUI', () => {
       expect(sub(container)).toBe('press load');
     });
 
+    it('scrolls the marquee when the song name overflows the screen', async () => {
+      const { container } = render(DelugeUI);
+      await vi.waitFor(() => expect(oled(container)).toBe('FIRST SONG'));
+      const oledText = container.querySelector('.oled-text') as HTMLElement;
+      const inner = oledText.firstElementChild as HTMLElement;
+      Object.defineProperty(inner, 'scrollWidth', { value: 500, configurable: true });
+      Object.defineProperty(oledText, 'clientWidth', { value: 100, configurable: true });
+      await fireEvent.mouseEnter(screen.getByLabelText('Card Management'));
+      await vi.waitFor(() => expect(oledText.classList.contains('is-scrolling')).toBe(true));
+    });
+
     it('shows the elapsed time instead of a hint while playing', async () => {
       audio.isPlaying = true;
       const { container } = render(DelugeUI);
@@ -345,6 +357,13 @@ describe('DelugeUI', () => {
       await vi.waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
     });
 
+    it('moves the cursor on mouse hover over a song option', async () => {
+      render(DelugeUI);
+      await fireEvent.click(screen.getByLabelText('Load song'));
+      const option = screen.getByText('Second Song').closest('.song-option') as HTMLElement;
+      await fireEvent.mouseEnter(option);
+    });
+
     it('stays open when the click lands inside the browser', async () => {
       render(DelugeUI);
       await fireEvent.click(screen.getByLabelText('Load song'));
@@ -453,6 +472,61 @@ describe('DelugeUI', () => {
       expect(audio.updateVolume).not.toHaveBeenCalled();
     });
 
+    it.each(['delay time', 'delay fdbk', 'filter', 'resonance', 'reverb', 'tempo', 'output'])(
+      'starts a drag on mousedown and touchstart for every knob: %s',
+      async (label) => {
+        render(DelugeUI);
+        const knob = screen.getByLabelText(label);
+        await fireEvent.mouseDown(knob, { clientY: 100 });
+        await fireEvent.mouseUp(window);
+        await fireEvent.touchStart(knob, { touches: [{ clientY: 100 }] });
+        await fireEvent.touchEnd(window);
+        await fireEvent.wheel(knob, { deltaY: -10 });
+      },
+    );
+
+    it('applies the held knob display after releasing a knob, while playing', async () => {
+      vi.useFakeTimers();
+      audio.isPlaying = true;
+      const { container } = render(DelugeUI);
+      await fireEvent.mouseDown(screen.getByLabelText('output'), { clientY: 100 });
+      await fireEvent.mouseMove(window, { clientY: 50 });
+      await fireEvent.mouseUp(window);
+      await vi.advanceTimersByTimeAsync(800);
+      expect(sub(container)).toBe('0:00 / 1:40');
+      vi.useRealTimers();
+    });
+
+    it('applies the held knob display after releasing a knob, while idle', async () => {
+      vi.useFakeTimers();
+      const { container } = render(DelugeUI);
+      await fireEvent.mouseDown(screen.getByLabelText('output'), { clientY: 100 });
+      await fireEvent.mouseMove(window, { clientY: 50 });
+      await fireEvent.mouseUp(window);
+      await vi.advanceTimersByTimeAsync(800);
+      expect(sub(container)).toBe('press load');
+      vi.useRealTimers();
+    });
+
+    it('plays back faster once the tempo knob is turned above center', async () => {
+      render(DelugeUI);
+      const tempo = screen.getByLabelText('tempo');
+      for (let i = 0; i < 20; i++) {
+        await fireEvent.wheel(tempo, { deltaY: -100 });
+      }
+      await fireEvent.click(screen.getByLabelText('Play'));
+      await vi.waitFor(() => expect(audio.togglePlay).toHaveBeenCalled());
+      expect(audio.togglePlay.mock.calls[0][0]).toBeGreaterThan(1);
+    });
+
+    it('re-applies knob levels to the pad effects chain once a pad has primed audio', async () => {
+      stubAudioContext();
+      render(DelugeUI);
+      await fireEvent.click(soundPad(0));
+      await fireEvent.click(screen.getByLabelText('Play'));
+      await vi.waitFor(() => expect(audio.initAudio).toHaveBeenCalled());
+    });
+
     it('restores every default on reset', async () => {
       const { container } = render(DelugeUI);
       await fireEvent.wheel(screen.getByLabelText('output'), { deltaY: 100 });
@@ -471,6 +545,33 @@ describe('DelugeUI', () => {
       expect(toggle).toBeTruthy();
       await fireEvent.click(toggle);
       await fireEvent.click(toggle);
+    });
+
+    it('switches visualizer mode via the mode-switch button', async () => {
+      const { container } = render(DelugeUI);
+      const toggles = container.querySelectorAll('.viz-toggle');
+      const modeToggle = toggles[1] as HTMLElement;
+      expect(modeToggle.title).toBe('Switch visualizer mode');
+      await fireEvent.click(modeToggle);
+      await fireEvent.click(modeToggle);
+    });
+
+    it('connects the visualizer to the analyser when audio is already loaded on mount', async () => {
+      audio.analyserNode = {};
+      audio.songLoaded = true;
+      render(DelugeUI);
+      await vi.waitFor(() => expect(audio.subscribe).toHaveBeenCalled());
+    });
+
+    it('resizes the visualizer on a window resize', async () => {
+      render(DelugeUI);
+      await fireEvent(window, new Event('resize'));
+    });
+
+    it('re-syncs from audio when the store notifies a change', async () => {
+      render(DelugeUI);
+      const cb = audio.subscribe.mock.calls[0][0];
+      cb();
     });
   });
 

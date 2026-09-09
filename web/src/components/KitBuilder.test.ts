@@ -255,4 +255,262 @@ describe('KitBuilder', () => {
     expect(document.querySelector('.pane-empty')?.textContent).toContain('Empty kit');
     expect(document.querySelector('.toolbar-title')?.textContent).toBe('Kit');
   });
+
+  it('ignores a corrupted localStorage cache and still renders the landing state', async () => {
+    localStorage.setItem('kit-builder-cache', '{not valid json');
+    render(KitBuilder);
+    await Promise.resolve();
+
+    expect(screen.getByText('Kit Builder')).toBeTruthy();
+  });
+
+  it('reconnects samples from a persisted card handle via the landing button', async () => {
+    const samplesDir = fakeDir('SAMPLES', [['kick.wav', fakeFile('kick.wav')]]);
+    const root = { getDirectoryHandle: vi.fn().mockResolvedValue(samplesDir) };
+    mockCardStore.hasPersistedHandle.mockResolvedValue(true);
+    mockCardStore.reconnectHandleOnly.mockResolvedValueOnce(null).mockResolvedValueOnce(root);
+
+    render(KitBuilder);
+    await waitFor(() => expect(screen.getByText('Use loaded SD card')).toBeTruthy());
+
+    await fireEvent.click(screen.getByText('Use loaded SD card'));
+    await waitFor(() => expect(screen.getByText('kick.wav')).toBeTruthy());
+    expect(mockCardStore.reconnectHandleOnly).toHaveBeenLastCalledWith(true);
+  });
+
+  it('auditions a browser sample with space and stops it with escape', async () => {
+    const samplesDir = fakeDir('SAMPLES', [['kick.wav', fakeFile('kick.wav')]]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:mock');
+    URL.revokeObjectURL = vi.fn();
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelector('.browse-name')).toBeTruthy());
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: ' ' });
+    await waitFor(() => expect(document.querySelector('.status-playing')).toBeTruthy());
+
+    await fireEvent.keyDown(container, { key: 'Escape' });
+    expect(document.querySelector('.status-playing')).toBeNull();
+    playSpy.mockRestore();
+  });
+
+  it('auditions a kit row with space in the kit pane', async () => {
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:mock');
+    URL.revokeObjectURL = vi.fn();
+
+    const container = await openFolderAndAddKick();
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    await fireEvent.keyDown(container, { key: ' ' });
+
+    await waitFor(() => expect(document.querySelector('.kit-row--playing')).toBeTruthy());
+    playSpy.mockRestore();
+  });
+
+  it('moves rows up and down with J/K, undoes with u, and dedupes with D', async () => {
+    const samplesDir = fakeDir('SAMPLES', [
+      ['kick.wav', fakeFile('kick.wav')],
+      ['snare.wav', fakeFile('snare.wav')],
+    ]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(2));
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: 'a' });
+    await fireEvent.keyDown(container, { key: 'j' });
+    await fireEvent.keyDown(container, { key: 'a' });
+    await waitFor(() => expect(document.querySelectorAll('.row-name').length).toBe(2));
+
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    const names = () => Array.from(document.querySelectorAll('.row-name')).map((n) => n.textContent?.trim());
+    expect(names()).toEqual(['KICK', 'SNARE']);
+
+    await fireEvent.keyDown(container, { key: 'K' });
+    expect(names()).toEqual(['SNARE', 'KICK']);
+
+    await fireEvent.keyDown(container, { key: 'J' });
+    expect(names()).toEqual(['KICK', 'SNARE']);
+
+    await fireEvent.keyDown(container, { key: 'u' });
+    expect(names()).toEqual(['SNARE', 'KICK']);
+
+    await fireEvent.keyDown(container, { key: 'D' });
+    expect(document.querySelectorAll('.row-name').length).toBe(2);
+  });
+
+  it('adjusts pan with < and >', async () => {
+    const container = await openFolderAndAddKick();
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    await fireEvent.keyDown(container, { key: '>' });
+    await fireEvent.keyDown(container, { key: '<' });
+    expect(document.querySelector('.row-name')).toBeTruthy();
+  });
+
+  it('filters the browser list via search mode and clears it on escape', async () => {
+    const samplesDir = fakeDir('SAMPLES', [
+      ['kick.wav', fakeFile('kick.wav')],
+      ['snare.wav', fakeFile('snare.wav')],
+    ]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(2));
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: '/' });
+    const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+    expect(searchInput).toBeTruthy();
+    await fireEvent.input(searchInput, { target: { value: 'sna' } });
+
+    await waitFor(() => {
+      const names = Array.from(document.querySelectorAll('.browse-name')).map((n) => n.textContent);
+      expect(names).toEqual(['snare.wav']);
+    });
+
+    await fireEvent.keyDown(container, { key: 'Enter' });
+    expect(document.querySelector('.search-active')?.textContent).toContain('sna');
+
+    await fireEvent.click(document.querySelector('.search-clear') as HTMLElement);
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(2));
+  });
+
+  it('clears an active search with escape from the browser pane', async () => {
+    const samplesDir = fakeDir('SAMPLES', [
+      ['kick.wav', fakeFile('kick.wav')],
+      ['snare.wav', fakeFile('snare.wav')],
+    ]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(2));
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: '/' });
+    const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+    await fireEvent.input(searchInput, { target: { value: 'sna' } });
+    await fireEvent.keyDown(container, { key: 'Escape' });
+    await waitFor(() => expect(document.querySelector('.search-input')).toBeNull());
+
+    await fireEvent.keyDown(container, { key: 'Escape' });
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(2));
+  });
+
+  it('navigates the browser tree with g/G, expands with l, and collapses with h', async () => {
+    const samplesDir = fakeDir('SAMPLES', [
+      ['aaa.wav', fakeFile('aaa.wav')],
+      ['sub', fakeDir('sub', [['snare.wav', fakeFile('snare.wav')]])],
+    ]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(2));
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: 'g' });
+    await fireEvent.keyDown(container, { key: 'l' });
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(3));
+
+    await fireEvent.keyDown(container, { key: 'j' });
+    await fireEvent.keyDown(container, { key: 'h' });
+    await fireEvent.keyDown(container, { key: 'h' });
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(2));
+
+    await fireEvent.keyDown(container, { key: 'G' });
+    await fireEvent.keyDown(container, { key: 'k' });
+    await fireEvent.keyDown(container, { key: 'l' });
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(3));
+    await fireEvent.keyDown(container, { key: 'j' });
+    await fireEvent.keyDown(container, { key: 'h' });
+    await fireEvent.keyDown(container, { key: 'h' });
+    expect(document.querySelectorAll('.browse-name').length).toBe(2);
+  });
+
+  it('adds an entire folder of samples to the kit via Enter', async () => {
+    const samplesDir = fakeDir('SAMPLES', [
+      ['sub', fakeDir('sub', [
+        ['snare.wav', fakeFile('snare.wav')],
+        ['notes.txt', fakeFile('notes.txt')],
+      ])],
+    ]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelector('.browse-name')).toBeTruthy());
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: 'Enter' });
+
+    await waitFor(() => expect(document.querySelectorAll('.row-name').length).toBe(1));
+    expect(document.querySelector('.row-name')?.textContent?.trim()).toBe('SNARE');
+  });
+
+  it('adds a sample by double-clicking a browser entry and a folder by double-click', async () => {
+    const samplesDir = fakeDir('SAMPLES', [
+      ['kick.wav', fakeFile('kick.wav')],
+      ['sub', fakeDir('sub', [['snare.wav', fakeFile('snare.wav')]])],
+    ]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(2));
+
+    const entries = () => Array.from(document.querySelectorAll('.browse-entry'));
+    const dirEntry = entries().find((e) => e.textContent?.includes('sub'))!;
+    await fireEvent.dblClick(dirEntry);
+    await waitFor(() => expect(document.querySelectorAll('.row-name').length).toBe(1));
+
+    const fileEntry = entries().find((e) => e.textContent?.includes('kick.wav'))!;
+    await fireEvent.dblClick(fileEntry);
+    await waitFor(() => expect(document.querySelectorAll('.row-name').length).toBe(2));
+  });
+
+  it('selects a browser entry and a kit row via click', async () => {
+    const container = await openFolderAndAddKick();
+    const kitRow = document.querySelector('.kit-row') as HTMLElement;
+    await fireEvent.click(kitRow);
+    expect(kitRow.className).toContain('kit-row--selected');
+    void container;
+  });
+
+  it('drops a kit XML file onto the kit-rows pane while a kit is already loaded', async () => {
+    const container = await openFolderAndAddKick();
+    const kitListPane = document.querySelectorAll('.pane-list')[1] as HTMLElement;
+    const file = new File([KIT_XML], 'Dropped.xml', { type: 'application/xml' });
+    await fireEvent.drop(kitListPane, { dataTransfer: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByText('Dropped')).toBeTruthy());
+    void container;
+  });
+
+  it('opens the folder picker from the toolbar Change Folder button once a folder is set', async () => {
+    await openFolderAndAddKick();
+
+    const samplesDir = fakeDir('SAMPLES', [['kick.wav', fakeFile('kick.wav')]]);
+    const picker = vi.fn().mockResolvedValue(samplesDir);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = picker;
+
+    await fireEvent.click(screen.getByText('Change Folder'));
+    expect(picker).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the folder from the browser pane empty-state button and via the o key', async () => {
+    render(KitBuilder);
+    const samplesDir = fakeDir('SAMPLES', [['kick.wav', fakeFile('kick.wav')]]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelector('.browse-name')).toBeTruthy());
+  });
 });

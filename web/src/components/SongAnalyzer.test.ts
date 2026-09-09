@@ -96,9 +96,12 @@ beforeEach(() => {
   mockCardStore.songXmls = new Map();
   mockCardStore.songLastModified = new Map();
   mockCardStore.rootHandle = null;
-  mockCardStore.reconnect.mockResolvedValue(false);
-  mockCardStore.hasPersistedHandle.mockResolvedValue(false);
-  mockCardStore.requestReconnect.mockResolvedValue(false);
+  mockCardStore.reconnect.mockReset().mockResolvedValue(false);
+  mockCardStore.hasPersistedHandle.mockReset().mockResolvedValue(false);
+  mockCardStore.requestReconnect.mockReset().mockResolvedValue(false);
+  mockCardStore.pickDirectory.mockReset().mockResolvedValue(undefined);
+  mockCardStore.adoptHandle.mockReset().mockResolvedValue(undefined);
+  mockCardStore.saveSongCache.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal('confirm', vi.fn(() => true));
 });
 
@@ -440,4 +443,396 @@ describe('SongAnalyzer', () => {
     expect(headerTexts.every(t => !t?.includes('(root)'))).toBe(true);
     expect(headerTexts.some(t => t?.includes('FolderA'))).toBe(true);
     expect(headerTexts.some(t => t?.includes('FolderB'))).toBe(true);
+  });
+
+  it('shows an error when analysis throws', async () => {
+    mockAnalyzeStats.mockRejectedValue(new Error('boom'));
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('song.XML')]));
+    await waitFor(() => expect(screen.getByText('boom')).toBeTruthy());
+  });
+
+  it('shows an error when analysis from card store throws', async () => {
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([['SONGS/song.XML', '<song></song>']]);
+    mockCardStore.rootHandle = { name: 'CARD' };
+    mockAnalyzeStats.mockRejectedValue(new Error('card boom'));
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('card boom')).toBeTruthy());
+    expect(mockTrack).toHaveBeenCalledWith('stats', 'analyze_error');
+  });
+
+  it('does not delete when confirm is declined', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([['SONGS/song.XML', '<song></song>']]);
+    mockCardStore.rootHandle = { name: 'CARD' };
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('song')).toBeTruthy());
+
+    await fireEvent.click(screen.getByTitle('Move to SOFT_DELETE/'));
+    expect(mockMoveToTrash).not.toHaveBeenCalled();
+    expect(screen.getByText('song')).toBeTruthy();
+  });
+
+  it('logs an error when delete fails', async () => {
+    const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([['SONGS/song.XML', '<song></song>']]);
+    mockCardStore.rootHandle = { name: 'CARD' };
+    mockMoveToTrash.mockRejectedValue(new Error('delete failed'));
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('song')).toBeTruthy());
+
+    await fireEvent.click(screen.getByTitle('Move to SOFT_DELETE/'));
+    await waitFor(() => expect(mockMoveToTrash).toHaveBeenCalled());
+    expect(consoleErr).toHaveBeenCalled();
+    expect(screen.getByText('song')).toBeTruthy();
+
+    consoleErr.mockRestore();
+  });
+
+  it('downloads directly on second click without re-converting', async () => {
+    const createUrl = vi.fn().mockReturnValue('blob:mock');
+    URL.createObjectURL = createUrl;
+    URL.revokeObjectURL = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('song.XML')]));
+    await waitFor(() => expect(screen.getByText('song')).toBeTruthy());
+
+    await fireEvent.click(screen.getByTitle('Convert to MusicXML'));
+    await waitFor(() => expect(mockConvertToMusicXML).toHaveBeenCalledTimes(1));
+
+    await fireEvent.click(screen.getByTitle('Download MusicXML'));
+    expect(mockConvertToMusicXML).toHaveBeenCalledTimes(1);
+    expect(clickSpy).toHaveBeenCalledTimes(2);
+
+    clickSpy.mockRestore();
+  });
+
+  it('shows a conversion error message', async () => {
+    mockConvertToMusicXML.mockRejectedValue(new Error('convert failed'));
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('song.XML')]));
+    await waitFor(() => expect(screen.getByText('song')).toBeTruthy());
+
+    await fireEvent.click(screen.getByTitle('Convert to MusicXML'));
+    await waitFor(() => expect(mockConvertToMusicXML).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTitle('Convert to MusicXML')).toBeTruthy());
+    expect(mockTrack).not.toHaveBeenCalledWith('stats', 'convert_score');
+  });
+
+  it('filters by BPM min and max', async () => {
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'a.XML', bpm: 100 }),
+      stat({ filename: 'b.XML', bpm: 200 }),
+    ]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('a.XML'), xmlFile('b.XML')]));
+    await waitFor(() => expect(screen.getByText('a')).toBeTruthy());
+
+    const [minInput, maxInput] = document.querySelectorAll('.filter-input');
+    await fireEvent.input(minInput, { target: { value: '150' } });
+    expect(screen.getByText('b')).toBeTruthy();
+    expect(screen.queryByText('a')).toBeNull();
+
+    await fireEvent.input(minInput, { target: { value: '' } });
+    await fireEvent.input(maxInput, { target: { value: '150' } });
+    expect(screen.getByText('a')).toBeTruthy();
+    expect(screen.queryByText('b')).toBeNull();
+  });
+
+  it('filters by minimum notes', async () => {
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'a.XML', totalNotes: 10 }),
+      stat({ filename: 'b.XML', totalNotes: 500 }),
+    ]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('a.XML'), xmlFile('b.XML')]));
+    await waitFor(() => expect(screen.getByText('a')).toBeTruthy());
+
+    const notesInput = Array.from(document.querySelectorAll('.filter-input'))[2] as HTMLInputElement;
+    await fireEvent.input(notesInput, { target: { value: '100' } });
+    expect(screen.getByText('b')).toBeTruthy();
+    expect(screen.queryByText('a')).toBeNull();
+  });
+
+  it.each([
+    ['yes', 'a'],
+    ['no', 'b'],
+  ])('filters by arrangement presence (%s)', async (value, expected) => {
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'a.XML', hasArrangement: true }),
+      stat({ filename: 'b.XML', hasArrangement: false }),
+    ]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('a.XML'), xmlFile('b.XML')]));
+    await waitFor(() => expect(screen.getByText('a')).toBeTruthy());
+
+    const [, arrSelect] = document.querySelectorAll('.filter-select');
+    await fireEvent.change(arrSelect, { target: { value } });
+    expect(screen.getByText(expected)).toBeTruthy();
+  });
+
+  it.each([
+    ['deluge', 'a'],
+    ['external', 'b'],
+  ])('filters by gear (%s)', async (value, expected) => {
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'a.XML', midiCount: 0, cvCount: 0 }),
+      stat({ filename: 'b.XML', midiCount: 1, cvCount: 0 }),
+    ]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('a.XML'), xmlFile('b.XML')]));
+    await waitFor(() => expect(screen.getByText('a')).toBeTruthy());
+
+    const [, , gearSelect] = document.querySelectorAll('.filter-select');
+    await fireEvent.change(gearSelect, { target: { value } });
+    expect(screen.getByText(expected)).toBeTruthy();
+  });
+
+  it('shows empty-results message when filters match nothing', async () => {
+    mockAnalyzeStats.mockResolvedValue([stat({ filename: 'a.XML' })]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('a.XML')]));
+    await waitFor(() => expect(screen.getByText('a')).toBeTruthy());
+
+    const search = document.querySelector('.filter-search') as HTMLInputElement;
+    await fireEvent.input(search, { target: { value: 'nonexistent' } });
+    expect(screen.getByText('No songs match filters')).toBeTruthy();
+  });
+
+  it('renders summary stats and key matrix, and filters by matrix cell', async () => {
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'a.XML', key: 'C major', bpm: 100, totalNotes: 50, instrumentCount: 2, clipCount: 3 }),
+      stat({ filename: 'b.XML', key: 'C major', bpm: 140, totalNotes: 70, instrumentCount: 1, clipCount: 2 }),
+    ]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('a.XML'), xmlFile('b.XML')]));
+    await waitFor(() => expect(screen.getByText('a')).toBeTruthy());
+
+    expect(document.querySelector('.summary')).toBeTruthy();
+    expect(document.querySelector('.key-matrix')).toBeTruthy();
+
+    const matrixBtn = document.querySelector('.matrix-btn') as HTMLElement;
+    expect(matrixBtn.textContent).toBe('2');
+    await fireEvent.click(matrixBtn);
+    expect(screen.getByText('a')).toBeTruthy();
+    expect(screen.getByText('b')).toBeTruthy();
+  });
+
+  it('shows an error row style and skips key chip for error keys', async () => {
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'bad.XML', key: 'Error: parse failed' }),
+    ]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('bad.XML')]));
+    await waitFor(() => expect(screen.getByText('bad')).toBeTruthy());
+
+    expect(document.querySelector('.row--error')).toBeTruthy();
+    expect(document.querySelector('.key-error')).toBeTruthy();
+  });
+
+  it.each([
+    ['key', ['a', 'b']],
+    ['instruments', ['b', 'a']],
+    ['clips', ['b', 'a']],
+    ['notes', ['b', 'a']],
+  ])('sorts by %s column', async (col, expected) => {
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'a.XML', key: 'C major', instrumentCount: 5, clipCount: 5, totalNotes: 500 }),
+      stat({ filename: 'b.XML', key: 'D minor', instrumentCount: 1, clipCount: 1, totalNotes: 1 }),
+    ]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('a.XML'), xmlFile('b.XML')]));
+    await waitFor(() => expect(screen.getByText('a')).toBeTruthy());
+
+    const header = Array.from(document.querySelectorAll('.sort-btn')).find(
+      (b) => b.getAttribute('class')?.includes('sort-btn') && b.textContent?.trim().toLowerCase().startsWith(col === 'notes' ? 'notes' : col === 'clips' ? 'clips' : col === 'instruments' ? 'inst' : 'key'),
+    ) as HTMLElement;
+    await fireEvent.click(header);
+
+    const rows = Array.from(document.querySelectorAll('.cell-name-text')).map((n) => n.textContent);
+    expect(rows).toEqual(expected);
+  });
+
+  it('restores results from session cache on mount', async () => {
+    sessionStorage.setItem('deluge-stats-results', JSON.stringify([stat({ filename: 'cached.XML' })]));
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('cached')).toBeTruthy());
+  });
+
+  it('opens the SD card root via the File System Access API', async () => {
+    vi.stubGlobal('showDirectoryPicker', vi.fn());
+    mockCardStore.pickDirectory.mockImplementation(async (cb: (status: string, current: number, total: number) => void) => {
+      cb('Indexing', 1, 2);
+      mockCardStore.songXmls = new Map([['SONGS/song.XML', '<song></song>']]);
+    });
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText(/Open SD card root/)).toBeTruthy());
+    await fireEvent.click(screen.getByText(/Open SD card root/));
+
+    await waitFor(() => expect(screen.getByText('song')).toBeTruthy());
+    expect(mockCardStore.pickDirectory).toHaveBeenCalled();
+  });
+
+  it('shows an error when the opened folder has no SONGS directory', async () => {
+    vi.stubGlobal('showDirectoryPicker', vi.fn());
+    mockCardStore.pickDirectory.mockResolvedValue(undefined);
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText(/Open SD card root/)).toBeTruthy());
+    await fireEvent.click(screen.getByText(/Open SD card root/));
+
+    await waitFor(() => expect(screen.getByText(/Not a Deluge SD card/)).toBeTruthy());
+  });
+
+  it('silently ignores an AbortError from the folder picker', async () => {
+    vi.stubGlobal('showDirectoryPicker', vi.fn());
+    const abortErr = new Error('aborted');
+    abortErr.name = 'AbortError';
+    mockCardStore.pickDirectory.mockRejectedValue(abortErr);
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText(/Open SD card root/)).toBeTruthy());
+    await fireEvent.click(screen.getByText(/Open SD card root/));
+
+    await waitFor(() => expect(mockCardStore.pickDirectory).toHaveBeenCalled());
+    expect(screen.queryByText(/Not a Deluge SD card/)).toBeNull();
+    expect(document.querySelector('.error-card')).toBeNull();
+  });
+
+  it('shows an error for non-abort folder picker failures', async () => {
+    vi.stubGlobal('showDirectoryPicker', vi.fn());
+    mockCardStore.pickDirectory.mockRejectedValue(new Error('picker failed'));
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText(/Open SD card root/)).toBeTruthy());
+    await fireEvent.click(screen.getByText(/Open SD card root/));
+
+    await waitFor(() => expect(screen.getByText('picker failed')).toBeTruthy());
+  });
+
+  it('handles a folder input change (webkitdirectory)', async () => {
+    mockAnalyzeStats.mockResolvedValue([stat({ filename: 'folder-song.XML' })]);
+    render(SongAnalyzer);
+    const input = document.getElementById('stats-folder-input') as HTMLInputElement;
+    Object.defineProperty(input, 'files', {
+      value: [xmlFile('folder-song.XML')],
+      configurable: true,
+    });
+    await fireEvent.change(input);
+    await waitFor(() => expect(screen.getByText('folder-song')).toBeTruthy());
+  });
+
+  it('adopts a dropped directory handle when available', async () => {
+    mockCardStore.adoptHandle.mockImplementation(async () => {
+      mockCardStore.songXmls = new Map([['SONGS/song.XML', '<song></song>']]);
+    });
+    const item = {
+      kind: 'file',
+      getAsFileSystemHandle: vi.fn().mockResolvedValue({
+        kind: 'directory',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      }),
+    };
+
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, {
+      dataTransfer: { items: [item] },
+    } as unknown as DragEvent);
+
+    await waitFor(() => expect(screen.getByText('song')).toBeTruthy());
+    expect(mockCardStore.adoptHandle).toHaveBeenCalled();
+  });
+
+  it('shows an error when the adopted directory handle has no songs', async () => {
+    const item = {
+      kind: 'file',
+      getAsFileSystemHandle: vi.fn().mockResolvedValue({
+        kind: 'directory',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      }),
+    };
+
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, {
+      dataTransfer: { items: [item] },
+    } as unknown as DragEvent);
+
+    await waitFor(() => expect(screen.getByText(/Not a Deluge SD card/)).toBeTruthy());
+  });
+
+  it('walks a dropped FileSystemEntry tree recursively via webkitGetAsEntry', async () => {
+    mockAnalyzeStats.mockResolvedValue([stat({ filename: 'nested.XML' })]);
+    const fileEntry = {
+      isFile: true,
+      isDirectory: false,
+      fullPath: '/SONGS/nested.XML',
+      name: 'nested.XML',
+      file: (resolve: (f: File) => void) => resolve(xmlFile('nested.XML')),
+    };
+    const dirReader = {
+      readEntries: (() => {
+        let called = false;
+        return (cb: (entries: { isFile: boolean; isDirectory: boolean; fullPath: string; name: string; file?: (f: (file: File) => void) => void; createReader?: () => unknown }[]) => void) => {
+          if (!called) {
+            called = true;
+            cb([fileEntry]);
+          } else {
+            cb([]);
+          }
+        };
+      })(),
+    };
+    const dirEntry = {
+      isFile: false,
+      isDirectory: true,
+      name: 'SONGS',
+      createReader: () => dirReader,
+    };
+    const item = {
+      kind: 'file',
+      webkitGetAsEntry: () => dirEntry,
+    };
+
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, {
+      dataTransfer: { items: [item] },
+    } as unknown as DragEvent);
+
+    await waitFor(() => expect(screen.getByText('nested')).toBeTruthy());
+  });
+
+  it('reconnects from session cache when a card was previously connected', async () => {
+    sessionStorage.setItem('deluge-stats-results', JSON.stringify([stat({ filename: 'cached.XML' })]));
+    mockCardStore.reconnect.mockImplementation(async () => {
+      mockCardStore.songXmls = new Map([['SONGS/cached.XML', '<song></song>']]);
+      mockCardStore.rootHandle = { name: 'CARD' };
+      return true;
+    });
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('cached')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTitle('Move to SOFT_DELETE/')).toBeTruthy());
   });
