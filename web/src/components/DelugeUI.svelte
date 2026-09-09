@@ -212,9 +212,9 @@
   }
 
   const SIDEBAR_LEFT: { rows: number[]; color: string; link: string; label: string; group: string; subtext: string }[] = [
-    { rows: [0, 1, 2], color: GREEN,   link: 'https://github.com/dannybrown37/deluge', label: 'GitHub', group: 'github', subtext: 'view source code' },
-    { rows: [3, 4, 5], color: '#CC3030', link: '/songs', label: 'Songs', group: 'songs', subtext: 'browse all tracks' },
-    { rows: [6, 7],    color: GREEN,   link: '/faq', label: 'FAQ', group: 'faq', subtext: 'open source / community' },
+    { rows: [0, 1], color: GREEN,   link: 'https://github.com/dannybrown37/deluge', label: 'GitHub', group: 'github', subtext: 'view source code' },
+    { rows: [2, 3], color: '#CC3030', link: '/songs', label: 'Songs', group: 'songs', subtext: 'browse all tracks' },
+    { rows: [4, 5, 6, 7],    color: GREEN,   link: '/faq', label: 'FAQ', group: 'faq', subtext: 'open source / community' },
   ];
 
   function sidebarLeftAt(r: number): typeof SIDEBAR_LEFT[number] {
@@ -835,7 +835,7 @@
       <div class="grid-label-group grid-label-group--sound6"><span class="grid-label-text">Clap ↑</span></div>
       <div class="grid-label-group grid-label-group--sound7"><span class="grid-label-text">Sweep ↓</span></div>
       <div class="grid-labels-gap"></div>
-      <div class="grid-label-group grid-label-group--sidebar-left"><span class="grid-label-text">FAQ</span></div>
+      <div class="grid-label-group grid-label-group--sidebar-left"><span class="grid-label-text">Meta</span></div>
       <div class="grid-label-group grid-label-group--sidebar-right"><span class="grid-label-text">Tools</span></div>
     </div>
   </div>
