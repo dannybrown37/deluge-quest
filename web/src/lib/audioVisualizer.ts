@@ -183,8 +183,8 @@ export class AudioVisualizer {
     const ctx = this.ctx;
     const binCount = this.freqData.length;
 
-    const padX = 20;
-    const padY = 10;
+    const padX = Math.max(20, w * 0.04);
+    const padY = Math.max(16, h * 0.12);
     const spacingX = (w - padX * 2) / (CIRCUIT_COLS - 1);
     const spacingY = (h - padY * 2) / (CIRCUIT_ROWS - 1);
     const centerCol = (CIRCUIT_COLS - 1) / 2;
@@ -279,8 +279,8 @@ export class AudioVisualizer {
 
   private drawCircuitIdle(w: number, h: number, _dt: number) {
     const ctx = this.ctx;
-    const padX = 20;
-    const padY = 10;
+    const padX = Math.max(20, w * 0.04);
+    const padY = Math.max(16, h * 0.12);
     const spacingX = (w - padX * 2) / (CIRCUIT_COLS - 1);
     const spacingY = (h - padY * 2) / (CIRCUIT_ROWS - 1);
     const centerCol = (CIRCUIT_COLS - 1) / 2;
