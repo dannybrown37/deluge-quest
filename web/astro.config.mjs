@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 
 import svelte from '@astrojs/svelte';
+import sitemap from '@astrojs/sitemap';
 
 /**
  * @typedef {{ type: string; tagName?: string; properties?: Record<string, any>; children?: HastNode[] }} HastNode
@@ -25,7 +26,8 @@ function rehypeExternalLinks() {
 
 // https://astro.build/config
 export default defineConfig({
-  integrations: [svelte()],
+  site: 'https://deluge.quest',
+  integrations: [svelte(), sitemap()],
   markdown: {
     rehypePlugins: [rehypeExternalLinks],
   },

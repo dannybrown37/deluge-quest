@@ -8,6 +8,7 @@ interface Props {
 }
 
 const { title, description = "Browser-based tools for Synthstrom Deluge" } = Astro.props;
+const canonicalURL = new URL(Astro.url.pathname, 'https://deluge.quest');
 ---
 
 <html lang="en">
@@ -18,9 +19,12 @@ const { title, description = "Browser-based tools for Synthstrom Deluge" } = Ast
     <meta property="og:title" content={`${title} — deluge.quest`} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:url" content={canonicalURL.href} />
+    <meta property="og:image" content="https://deluge.quest/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={`${title} — deluge.quest`} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content="https://deluge.quest/og-image.png" />
     <title>{title} — deluge.quest</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <ClientRouter />

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://deluge.quest/sitemap-index.xml
