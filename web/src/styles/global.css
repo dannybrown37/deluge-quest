@@ -12,6 +12,7 @@
   --teal-dim: #3A7B7C18;
   --border: #D0CDC5;
   --code-bg: #E0DDD6;
+  --text-on-color: #FAFAF8;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,6 +28,7 @@
     --teal-dim: #5AABAC14;
     --border: #38373E;
     --code-bg: #24232A;
+    --text-on-color: #FAFAF8;
   }
 }
 
@@ -42,6 +44,7 @@
   --teal-dim: #5AABAC14;
   --border: #38373E;
   --code-bg: #24232A;
+  --text-on-color: #FAFAF8;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }

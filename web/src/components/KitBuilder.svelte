@@ -828,8 +828,8 @@
 </div>
 
 <style>
-  .kit-builder { outline: none; min-height: 400px; }
-  .kit-builder:focus { outline: none; }
+  .kit-builder { min-height: 400px; }
+  .kit-builder:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
   /* Landing */
   .landing {
@@ -1005,6 +1005,9 @@
     outline: none;
     width: 140px;
   }
+  .search-input:focus-visible {
+    border-color: var(--teal);
+  }
   .search-active {
     font-family: 'DM Mono', monospace;
     font-size: 0.72rem;
@@ -1129,6 +1132,9 @@
     color: var(--text);
     width: 100%;
     outline: none;
+  }
+  .rename-input:focus-visible {
+    border-color: var(--teal);
   }
 
   /* Status bar */

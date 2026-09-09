@@ -2100,7 +2100,7 @@
     border-radius: 4px;
     outline: none;
   }
-  .sample-search:focus {
+  .sample-search:focus-visible {
     border-color: var(--teal);
   }
   .sample-filter-btns {
@@ -2114,7 +2114,7 @@
   }
   .btn-primary {
     background: var(--teal);
-    color: #fff;
+    color: var(--text-on-color);
     border-color: var(--teal);
   }
   .tree-dir-row {

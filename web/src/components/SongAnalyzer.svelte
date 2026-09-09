@@ -1164,7 +1164,7 @@
     background: var(--surface);
     color: var(--text);
   }
-  .filter-search:focus {
+  .filter-search:focus-visible {
     outline: none;
     border-color: var(--accent);
   }
@@ -1181,7 +1181,7 @@
     color: var(--text);
     cursor: pointer;
   }
-  .filter-select:focus {
+  .filter-select:focus-visible {
     outline: none;
     border-color: var(--accent);
   }
@@ -1205,7 +1205,7 @@
     background: var(--surface);
     color: var(--text);
   }
-  .filter-input:focus {
+  .filter-input:focus-visible {
     outline: none;
     border-color: var(--accent);
   }

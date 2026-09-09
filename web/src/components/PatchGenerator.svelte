@@ -846,7 +846,7 @@ ${cables}
   .generate-btn {
     padding: 0.7rem 2rem;
     background: var(--accent);
-    color: #fff;
+    color: var(--text-on-color);
     border: none;
     border-radius: 6px;
     font-family: 'DM Mono', monospace;
@@ -873,7 +873,7 @@ ${cables}
   }
   .preview-btn.playing {
     background: var(--teal);
-    color: #fff;
+    color: var(--text-on-color);
   }
 
   .download-btn {
