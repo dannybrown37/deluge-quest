@@ -68,9 +68,8 @@ const byYear = [...songs].sort((a, b) => {
         <button class="sort-btn" data-sort="genre">Genre</button>
       </span>
     </div>
-    <div class="page-sub-row">
+    <div class="page-sub-col">
       <p class="page-sub">Tracks I've made on the Synthstrom Deluge, recorded on the Deluge itself and compressed from WAV to MP3 with no other post-processing.</p>
-
     </div>
     <ul class="song-list" id="song-list">
       {byYear.map(song => (
