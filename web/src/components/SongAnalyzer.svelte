@@ -28,6 +28,8 @@
   let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
   let filePaths = $state(new Map<string, string>());
   let deletingFiles = $state(new Set<string>());
+  let viewMode = $state<"flat" | "folders">("flat");
+  let collapsedFolders = $state<string[]>([]);
   let reconnectAvailable = $state(false);
   let reconnecting = $state(false);
   let hasFileSystemAccess = $derived(typeof window !== "undefined" && "showDirectoryPicker" in window);
@@ -95,6 +97,39 @@
     const s = [...filtered].sort(fn);
     return sortAsc ? s : s.reverse();
   });
+
+  interface FolderGroup {
+    folder: string;
+    songs: SongStats[];
+  }
+
+  let filePathsSnapshot = $derived([...filePaths.entries()]);
+
+  let folderGroups = $derived.by(() => {
+    const lookup = new Map(filePathsSnapshot);
+    const groups = new Map<string, SongStats[]>();
+    for (const s of sorted) {
+      const path = lookup.get(s.filename) ?? s.filename;
+      const parts = path.split("/");
+      parts.pop();
+      const folder = parts.length > 0 ? parts.join("/") : "(root)";
+      if (!groups.has(folder)) groups.set(folder, []);
+      groups.get(folder)!.push(s);
+    }
+    const result: FolderGroup[] = [];
+    for (const [folder, songs] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      result.push({ folder, songs });
+    }
+    return result;
+  });
+
+  function toggleFolder(folder: string) {
+    if (collapsedFolders.includes(folder)) {
+      collapsedFolders = collapsedFolders.filter(f => f !== folder);
+    } else {
+      collapsedFolders = [...collapsedFolders, folder];
+    }
+  }
 
   let allKeys = $derived.by(() => {
     const keys: Record<string, number> = {};
@@ -774,117 +809,156 @@
             {reconnecting ? "Reconnecting…" : "Reconnect folder to enable delete"}
           </button>
         {/if}
+        <button class="btn btn-secondary btn-sm" onclick={() => { if (viewMode === "flat") { collapsedFolders = folderGroups.map(g => g.folder); viewMode = "folders"; } else { viewMode = "flat"; } }}>{viewMode === "flat" ? "Show folders" : "Show flat"}</button>
         <button class="btn btn-secondary btn-sm" onclick={exportCsv}>Export CSV</button>
         <button class="btn btn-secondary btn-sm" onclick={reset}>Analyze more</button>
       </div>
     </div>
 
     <!-- Table -->
-    <div class="table-wrap">
-      <table>
-        <colgroup>
-          <col class="col-name" />
-          <col class="col-bpm" />
-          <col class="col-key" />
-          <col class="col-duration" />
-          <col class="col-type" />
-          <col class="col-instruments" />
-          <col class="col-clips" />
-          <col class="col-notes" />
-          <col class="col-modified col-hide-narrow" />
-        </colgroup>
-        <thead>
-          <tr>
-            {#each [
-              { id: 'name', label: 'Song' },
-              { id: 'bpm', label: 'BPM' },
-              { id: 'key', label: 'Key' },
-              { id: 'duration', label: 'Duration' },
-              { id: 'type', label: 'Type' },
-              { id: 'instruments', label: 'Inst' },
-              { id: 'clips', label: 'Clips' },
-              { id: 'notes', label: 'Notes' },
-              { id: 'modified', label: 'Modified', hide: 'col-hide-narrow' },
-            ] as col}
-              <th class={col.hide ?? ''} title={col.id === 'type' ? 'I = Internal synth, K = Kit, M = MIDI out, C = CV out, A = Audio' : undefined}>
-                {#if sortFns[col.id] || col.id === 'arr'}
-                  <button
-                    class="sort-btn"
-                    class:sort-btn--active={sortBy === col.id}
-                    onclick={() => setSort(col.id)}
-                  >
-                    {col.label}
-                    {#if sortBy === col.id}
-                      <span class="sort-arrow">{sortAsc ? '▲' : '▼'}</span>
-                    {/if}
+    {#snippet songRow(s: SongStats)}
+      {@const name = s.filename.replace(/\.XML$/i, '')}
+      <tr class:row--error={s.key.startsWith('Error')}>
+        <td class="cell-name">
+          <span class="cell-name-text" title={filePaths.get(s.filename) ?? name}>{name}</span>
+          {#if ((s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)) || (rootHandle && filePaths.has(s.filename))}
+            <span class="cell-name-actions">
+              {#if (s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)}
+                {#if convertingFile === s.filename}
+                  <span class="score-btn score-btn--busy">Converting…</span>
+                {:else}
+                  <button class="score-btn" class:score-btn--done={convertedFiles.has(s.filename)} title={convertedFiles.has(s.filename) ? "Download MusicXML" : "Convert to MusicXML"} onclick={() => convertScore(s.filename)}>
+                    {convertedFiles.has(s.filename) ? "Download" : "Score"}
                   </button>
-                {:else}
-                  {col.label}
                 {/if}
-              </th>
-            {/each}
-          </tr>
-        </thead>
-        <tbody>
-          {#each sorted as s}
-            {@const name = s.filename.replace(/\.XML$/i, '')}
-            <tr class:row--error={s.key.startsWith('Error')}>
-              <td class="cell-name">
-                <span class="cell-name-text" title={filePaths.get(s.filename) ?? name}>{name}</span>
-                {#if ((s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)) || (rootHandle && filePaths.has(s.filename))}
-                  <span class="cell-name-actions">
-                    {#if (s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)}
-                      {#if convertingFile === s.filename}
-                        <span class="score-btn score-btn--busy">Converting…</span>
-                      {:else}
-                        <button class="score-btn" class:score-btn--done={convertedFiles.has(s.filename)} title={convertedFiles.has(s.filename) ? "Download MusicXML" : "Convert to MusicXML"} onclick={() => convertScore(s.filename)}>
-                          {convertedFiles.has(s.filename) ? "Download" : "Score"}
-                        </button>
-                      {/if}
-                      <button class="score-btn inspect-btn" title="Preview song" onclick={() => openInPreview(s.filename)}>Preview</button>
-                    {/if}
-                    {#if rootHandle && filePaths.has(s.filename)}
-                      <button
-                        class="score-btn delete-btn"
-                        title="Move to {SOFT_DELETE_DIR_NAME}/"
-                        disabled={deletingFiles.has(s.filename)}
-                        onclick={() => deleteSong(s.filename)}
-                      >
-                        {deletingFiles.has(s.filename) ? "…" : "Delete"}
-                      </button>
-                    {/if}
-                  </span>
-                {/if}
-              </td>
-              <td class="cell-num" title={s.bpm > 0 ? s.bpm.toFixed(1) : ''}>{s.bpm > 0 ? s.bpm.toFixed(0) : '-'}</td>
-              <td title={s.key}>
-                {#if s.key.startsWith('Error')}
-                  <span class="key-error">Error</span>
-                {:else}
-                  <button class="key-chip" class:key-chip--active={filterKey === s.key} onclick={() => filterByKey(s.key)}>{s.key}</button>
-                {/if}
-              </td>
-              <td class="cell-num" title={s.durationStr}>{s.durationStr}</td>
-              <td class="cell-type" title="I = Internal synth, K = Kit, M = MIDI out, C = CV out, A = Audio">
-                {#if s.synthCount}<span class="type-badge type-badge--synth">I</span>{/if}
-                {#if s.kitCount}<span class="type-badge type-badge--kit">K</span>{/if}
-                {#if s.midiCount}<span class="type-badge type-badge--midi">M</span>{/if}
-                {#if s.cvCount}<span class="type-badge type-badge--cv">C</span>{/if}
-                {#if s.audioCount}<span class="type-badge type-badge--audio">A</span>{/if}
-                {#if !s.synthCount && !s.kitCount && !s.midiCount && !s.cvCount && !s.audioCount}-{/if}
-              </td>
-              <td class="cell-num" title={`${s.synthCount} synth, ${s.kitCount} kit${s.midiCount ? `, ${s.midiCount} MIDI` : ''}${s.cvCount ? `, ${s.cvCount} CV` : ''}${s.audioCount ? `, ${s.audioCount} audio` : ''}`}>{s.instrumentCount || '-'}</td>
-              <td class="cell-num" title={`${s.clipCount} clips`}>{s.clipCount || '-'}</td>
-              <td class="cell-num" title={s.totalNotes.toLocaleString()}>{s.totalNotes > 0 ? s.totalNotes.toLocaleString() : '-'}</td>
-              <td class="cell-date col-hide-narrow" title={formatDateFull(s.lastModified)}>{formatDate(s.lastModified)}</td>
-            </tr>
-          {/each}
-          {#if sorted.length === 0}
-            <tr><td colspan="99" class="cell-empty">No songs match filters</td></tr>
+                <button class="score-btn inspect-btn" title="Preview song" onclick={() => openInPreview(s.filename)}>Preview</button>
+              {/if}
+              {#if rootHandle && filePaths.has(s.filename)}
+                <button
+                  class="score-btn delete-btn"
+                  title="Move to {SOFT_DELETE_DIR_NAME}/"
+                  disabled={deletingFiles.has(s.filename)}
+                  onclick={() => deleteSong(s.filename)}
+                >
+                  {deletingFiles.has(s.filename) ? "…" : "Delete"}
+                </button>
+              {/if}
+            </span>
           {/if}
-        </tbody>
-      </table>
-    </div>
+        </td>
+        <td class="cell-num" title={s.bpm > 0 ? s.bpm.toFixed(1) : ''}>{s.bpm > 0 ? s.bpm.toFixed(0) : '-'}</td>
+        <td title={s.key}>
+          {#if s.key.startsWith('Error')}
+            <span class="key-error">Error</span>
+          {:else}
+            <button class="key-chip" class:key-chip--active={filterKey === s.key} onclick={() => filterByKey(s.key)}>{s.key}</button>
+          {/if}
+        </td>
+        <td class="cell-num" title={s.durationStr}>{s.durationStr}</td>
+        <td class="cell-type" title="I = Internal synth, K = Kit, M = MIDI out, C = CV out, A = Audio">
+          {#if s.synthCount}<span class="type-badge type-badge--synth">I</span>{/if}
+          {#if s.kitCount}<span class="type-badge type-badge--kit">K</span>{/if}
+          {#if s.midiCount}<span class="type-badge type-badge--midi">M</span>{/if}
+          {#if s.cvCount}<span class="type-badge type-badge--cv">C</span>{/if}
+          {#if s.audioCount}<span class="type-badge type-badge--audio">A</span>{/if}
+          {#if !s.synthCount && !s.kitCount && !s.midiCount && !s.cvCount && !s.audioCount}-{/if}
+        </td>
+        <td class="cell-num" title={`${s.synthCount} synth, ${s.kitCount} kit${s.midiCount ? `, ${s.midiCount} MIDI` : ''}${s.cvCount ? `, ${s.cvCount} CV` : ''}${s.audioCount ? `, ${s.audioCount} audio` : ''}`}>{s.instrumentCount || '-'}</td>
+        <td class="cell-num" title={`${s.clipCount} clips`}>{s.clipCount || '-'}</td>
+        <td class="cell-num" title={s.totalNotes.toLocaleString()}>{s.totalNotes > 0 ? s.totalNotes.toLocaleString() : '-'}</td>
+        <td class="cell-date col-hide-narrow" title={formatDateFull(s.lastModified)}>{formatDate(s.lastModified)}</td>
+      </tr>
+    {/snippet}
+
+    {#snippet tableHeader()}
+      <colgroup>
+        <col class="col-name" />
+        <col class="col-bpm" />
+        <col class="col-key" />
+        <col class="col-duration" />
+        <col class="col-type" />
+        <col class="col-instruments" />
+        <col class="col-clips" />
+        <col class="col-notes" />
+        <col class="col-modified col-hide-narrow" />
+      </colgroup>
+      <thead>
+        <tr>
+          {#each [
+            { id: 'name', label: 'Song' },
+            { id: 'bpm', label: 'BPM' },
+            { id: 'key', label: 'Key' },
+            { id: 'duration', label: 'Duration' },
+            { id: 'type', label: 'Type' },
+            { id: 'instruments', label: 'Inst' },
+            { id: 'clips', label: 'Clips' },
+            { id: 'notes', label: 'Notes' },
+            { id: 'modified', label: 'Modified', hide: 'col-hide-narrow' },
+          ] as col}
+            <th class={col.hide ?? ''} title={col.id === 'type' ? 'I = Internal synth, K = Kit, M = MIDI out, C = CV out, A = Audio' : undefined}>
+              {#if sortFns[col.id] || col.id === 'arr'}
+                <button
+                  class="sort-btn"
+                  class:sort-btn--active={sortBy === col.id}
+                  onclick={() => setSort(col.id)}
+                >
+                  {col.label}
+                  {#if sortBy === col.id}
+                    <span class="sort-arrow">{sortAsc ? '▲' : '▼'}</span>
+                  {/if}
+                </button>
+              {:else}
+                {col.label}
+              {/if}
+            </th>
+          {/each}
+        </tr>
+      </thead>
+    {/snippet}
+
+    {#if viewMode === "folders"}
+      <div class="folder-view">
+        {#each folderGroups as group}
+          {@const isCollapsed = collapsedFolders.includes(group.folder)}
+          <div class="folder-group">
+            <button class="folder-header" onclick={() => toggleFolder(group.folder)}>
+              <span class="folder-arrow">{isCollapsed ? "▸" : "▾"}</span>
+              <span class="folder-name">{group.folder}</span>
+              <span class="folder-count">{group.songs.length}</span>
+            </button>
+            {#if !isCollapsed}
+              <div class="table-wrap">
+                <table>
+                  {@render tableHeader()}
+                  <tbody>
+                    {#each group.songs as s}
+                      {@render songRow(s)}
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
+          </div>
+        {/each}
+        {#if folderGroups.length === 0}
+          <p class="cell-empty">No songs match filters</p>
+        {/if}
+      </div>
+    {:else}
+      <div class="table-wrap">
+        <table>
+          {@render tableHeader()}
+          <tbody>
+            {#each sorted as s}
+              {@render songRow(s)}
+            {/each}
+            {#if sorted.length === 0}
+              <tr><td colspan="99" class="cell-empty">No songs match filters</td></tr>
+            {/if}
+          </tbody>
+        </table>
+      </div>
+    {/if}
 
     <!-- Summary -->
     {#if summary}
@@ -1154,6 +1228,60 @@
   }
 
   /* Table */
+  .folder-view {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .folder-group {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .folder-group .table-wrap {
+    border: none;
+    border-radius: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .folder-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface-alt, var(--surface));
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+  }
+
+  .folder-header:hover {
+    background: var(--surface-hover, var(--surface));
+  }
+
+  .folder-arrow {
+    font-size: 0.75rem;
+    width: 1em;
+    flex-shrink: 0;
+  }
+
+  .folder-name {
+    font-weight: 600;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.85rem;
+  }
+
+  .folder-count {
+    margin-left: auto;
+    font-size: 0.75rem;
+    opacity: 0.6;
+  }
+
   .table-wrap {
     overflow-x: auto;
     border: 1px solid var(--border);

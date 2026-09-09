@@ -17,6 +17,37 @@
   let cardName = $state("");
   let cardSavedAt = $state(0);
   let cardFromCache = $state(false);
+  let viewMode = $state<"flat" | "folders">("flat");
+  let collapsedFolders = $state<string[]>([]);
+
+  interface FolderGroup {
+    folder: string;
+    songs: { path: string; xml: string }[];
+  }
+
+  let folderGroups = $derived.by(() => {
+    const groups = new Map<string, { path: string; xml: string }[]>();
+    for (const s of cardSongs) {
+      const parts = s.path.split("/");
+      parts.pop();
+      const folder = parts.length > 0 ? parts.join("/") : "(root)";
+      if (!groups.has(folder)) groups.set(folder, []);
+      groups.get(folder)!.push(s);
+    }
+    const result: FolderGroup[] = [];
+    for (const [folder, songs] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      result.push({ folder, songs });
+    }
+    return result;
+  });
+
+  function toggleFolder(folder: string) {
+    if (collapsedFolders.includes(folder)) {
+      collapsedFolders = collapsedFolders.filter(f => f !== folder);
+    } else {
+      collapsedFolders = [...collapsedFolders, folder];
+    }
+  }
 
   async function tryLoadCardSongs() {
     try {
@@ -146,15 +177,44 @@
       {#if cardFromCache}
         <p class="card-picker-sub">From your last card scan{cardSavedAt ? ` (${new Date(cardSavedAt).toLocaleString()})` : ""}. Rescan on <a href="/manage">Card Management</a> to refresh.</p>
       {/if}
-      <ul class="card-picker-list">
-        {#each cardSongs as song}
-          <li>
-            <button type="button" class="card-picker-item" onclick={() => convert(song.path, song.xml)}>
-              {song.path}
-            </button>
-          </li>
-        {/each}
-      </ul>
+      <div class="card-picker-controls">
+        <button type="button" class="btn btn-secondary btn-sm" onclick={() => { if (viewMode === "flat") { collapsedFolders = folderGroups.map(g => g.folder); viewMode = "folders"; } else { viewMode = "flat"; } }}>{viewMode === "flat" ? "Show folders" : "Show flat"}</button>
+      </div>
+      {#if viewMode === "folders"}
+        <div class="folder-list">
+          {#each folderGroups as group}
+            {@const isCollapsed = collapsedFolders.includes(group.folder)}
+            <div class="folder-group">
+              <button type="button" class="folder-header" onclick={() => toggleFolder(group.folder)}>
+                <span class="folder-arrow">{isCollapsed ? "▸" : "▾"}</span>
+                <span class="folder-name">{group.folder}</span>
+                <span class="folder-count">{group.songs.length}</span>
+              </button>
+              {#if !isCollapsed}
+                <ul class="card-picker-list">
+                  {#each group.songs as song}
+                    <li>
+                      <button type="button" class="card-picker-item" onclick={() => convert(song.path, song.xml)}>
+                        {song.path.split("/").pop()}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <ul class="card-picker-list">
+          {#each cardSongs as song}
+            <li>
+              <button type="button" class="card-picker-item" onclick={() => convert(song.path, song.xml)}>
+                {song.path}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
       <p class="card-picker-hint">or drop a file below</p>
     </div>
   {:else}
@@ -302,6 +362,54 @@
   .card-picker-item:hover {
     background: var(--accent-dim);
     color: var(--accent);
+  }
+  .card-picker-controls {
+    margin-bottom: 0.5rem;
+  }
+  .btn-sm {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.75rem;
+  }
+  .folder-group {
+    margin-bottom: 0.25rem;
+  }
+  .folder-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.35rem 0.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.05s;
+  }
+  .folder-header:hover {
+    background: var(--accent-dim);
+  }
+  .folder-arrow {
+    font-size: 0.7rem;
+    width: 0.8rem;
+    flex-shrink: 0;
+  }
+  .folder-name {
+    flex: 1;
+    text-align: left;
+  }
+  .folder-count {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .folder-list {
+    max-height: 220px;
+    overflow-y: auto;
+    margin-bottom: 0.5rem;
   }
   .card-picker-hint {
     font-size: 0.78rem;

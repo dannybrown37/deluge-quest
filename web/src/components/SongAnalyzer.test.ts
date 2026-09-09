@@ -323,3 +323,121 @@ describe('SongAnalyzer', () => {
     expect(screen.getByText('Drop your SD card or SONGS folder')).toBeTruthy();
   });
 });
+
+  it('toggles between flat and folder view', async () => {
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([
+      ['SONGS/A/one.XML', '<song></song>'],
+      ['SONGS/A/two.XML', '<song></song>'],
+      ['SONGS/B/three.XML', '<song></song>'],
+    ]);
+    mockCardStore.rootHandle = { name: 'CARD' };
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'one.XML' }),
+      stat({ filename: 'two.XML' }),
+      stat({ filename: 'three.XML' }),
+    ]);
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('one')).toBeTruthy());
+
+    // Default is flat — all songs in one table
+    expect(document.querySelectorAll('.cell-name-text').length).toBe(3);
+    expect(document.querySelector('.folder-group')).toBeNull();
+
+    // Toggle to folder view
+    await fireEvent.click(screen.getByText('Show folders'));
+
+    // Should show folder groups
+    expect(document.querySelectorAll('.folder-group').length).toBeGreaterThan(0);
+
+    // Toggle back to flat
+    await fireEvent.click(screen.getByText('Show flat'));
+    expect(document.querySelector('.folder-group')).toBeNull();
+  });
+
+  it('shows folder headers with song counts in folder view', async () => {
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([
+      ['SONGS/MyFolder/one.XML', '<song></song>'],
+      ['SONGS/MyFolder/two.XML', '<song></song>'],
+      ['SONGS/Other/three.XML', '<song></song>'],
+    ]);
+    mockCardStore.rootHandle = { name: 'CARD' };
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'one.XML' }),
+      stat({ filename: 'two.XML' }),
+      stat({ filename: 'three.XML' }),
+    ]);
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('one')).toBeTruthy());
+
+    await fireEvent.click(screen.getByText('Show folders'));
+
+    // Folder headers should show
+    const headers = document.querySelectorAll('.folder-header');
+    expect(headers.length).toBeGreaterThanOrEqual(2);
+
+    // Should contain folder names
+    const headerTexts = Array.from(headers).map(h => h.textContent);
+    expect(headerTexts.some(t => t?.includes('MyFolder'))).toBe(true);
+    expect(headerTexts.some(t => t?.includes('Other'))).toBe(true);
+  });
+
+  it('collapses and expands folders', async () => {
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([
+      ['SONGS/A/one.XML', '<song></song>'],
+      ['SONGS/B/two.XML', '<song></song>'],
+    ]);
+    mockCardStore.rootHandle = { name: 'CARD' };
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'one.XML' }),
+      stat({ filename: 'two.XML' }),
+    ]);
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('one')).toBeTruthy());
+
+    await fireEvent.click(screen.getByText('Show folders'));
+
+    // Folders start collapsed — no song rows visible
+    expect(document.querySelectorAll('.cell-name-text').length).toBe(0);
+
+    // Click first folder header to expand
+    const headers = document.querySelectorAll('.folder-header');
+    await fireEvent.click(headers[0]);
+
+    // One folder expanded — its song visible
+    const visibleSongs = document.querySelectorAll('.cell-name-text');
+    expect(visibleSongs.length).toBe(1);
+  });
+
+  it('folder view works on first toggle from card store', async () => {
+    mockCardStore.isLoaded = true;
+    mockCardStore.songXmls = new Map([
+      ['SONGS/FolderA/one.XML', '<song></song>'],
+      ['SONGS/FolderA/two.XML', '<song></song>'],
+      ['SONGS/FolderB/three.XML', '<song></song>'],
+    ]);
+    mockCardStore.rootHandle = { name: 'CARD' };
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'one.XML' }),
+      stat({ filename: 'two.XML' }),
+      stat({ filename: 'three.XML' }),
+    ]);
+
+    render(SongAnalyzer);
+    await waitFor(() => expect(screen.getByText('one')).toBeTruthy());
+
+    // First toggle — should immediately show folder groups with real folder names
+    await fireEvent.click(screen.getByText('Show folders'));
+
+    const headers = document.querySelectorAll('.folder-header');
+    const headerTexts = Array.from(headers).map(h => h.textContent);
+    // Should NOT show "(root)" — should show real folder paths
+    expect(headerTexts.every(t => !t?.includes('(root)'))).toBe(true);
+    expect(headerTexts.some(t => t?.includes('FolderA'))).toBe(true);
+    expect(headerTexts.some(t => t?.includes('FolderB'))).toBe(true);
+  });
