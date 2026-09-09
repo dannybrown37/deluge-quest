@@ -23,6 +23,7 @@
   let loadedFileName = $state("");
   let hasUnsavedChanges = $state(false);
   let showNewKitModal = $state(false);
+  let undoStack: { rows: KitRow[]; selectedIndex: number }[] = $state([]);
 
   let samplesDir: FileSystemDirectoryHandle | null = $state(null);
   let reconnectAvailable = $state(false);
@@ -220,8 +221,11 @@
     browseIndex = Math.min(browseIndex, visibleEntries.length - 1);
   }
 
+  const AUDIO_EXT = /\.(wav|mp3|ogg|flac|aif|aiff)$/i;
+
   async function addSampleToKit(entry: TreeEntry) {
     if (entry.kind !== "file") return;
+    pushUndo();
     const dirName = samplesDir?.name ?? "SAMPLES";
     const row = createEmptyRow(
       entry.name.replace(/\.[^.]+$/, "").toUpperCase().slice(0, 16),
@@ -229,6 +233,42 @@
     );
     row.fileHandle = entry.handle as FileSystemFileHandle;
     kit.rows.push(row);
+    kit.selectedIndex = kit.rows.length - 1;
+    newRowIndex = kit.rows.length - 1;
+    await tick();
+    if (kitListEl) {
+      kitListEl.scrollTop = kitListEl.scrollHeight;
+    }
+    setTimeout(() => { newRowIndex = -1; }, 1500);
+  }
+
+  async function addFolderToKit(entry: TreeEntry) {
+    if (entry.kind !== "directory") return;
+    pushUndo();
+    const dir = entry.handle as FileSystemDirectoryHandle;
+    const files: { name: string; path: string; handle: FileSystemFileHandle }[] = [];
+    async function collect(d: FileSystemDirectoryHandle, prefix: string) {
+      for await (const [name, handle] of (d as any).entries()) {
+        const path = prefix ? `${prefix}/${name}` : name;
+        if (handle.kind === "file" && AUDIO_EXT.test(name)) {
+          files.push({ name, path, handle: handle as FileSystemFileHandle });
+        } else if (handle.kind === "directory") {
+          await collect(handle as FileSystemDirectoryHandle, path);
+        }
+      }
+    }
+    await collect(dir, entry.path);
+    files.sort((a, b) => a.name.localeCompare(b.name));
+    if (files.length === 0) return;
+    const dirName = samplesDir?.name ?? "SAMPLES";
+    for (const f of files) {
+      const row = createEmptyRow(
+        f.name.replace(/\.[^.]+$/, "").toUpperCase().slice(0, 16),
+        `${dirName}/${f.path}`
+      );
+      row.fileHandle = f.handle;
+      kit.rows.push(row);
+    }
     kit.selectedIndex = kit.rows.length - 1;
     newRowIndex = kit.rows.length - 1;
     await tick();
@@ -282,13 +322,47 @@
     const i = kit.selectedIndex;
     const j = i + dir;
     if (i < 0 || j < 0 || j >= kit.rows.length) return;
+    pushUndo();
     [kit.rows[i], kit.rows[j]] = [kit.rows[j], kit.rows[i]];
     kit.selectedIndex = j;
   }
 
+  function pushUndo() {
+    undoStack.push({
+      rows: kit.rows.map(r => ({ ...r })),
+      selectedIndex: kit.selectedIndex,
+    });
+    if (undoStack.length > 50) undoStack.shift();
+  }
+
+  function undo() {
+    const prev = undoStack.pop();
+    if (!prev) return;
+    kit.rows = prev.rows;
+    kit.selectedIndex = prev.selectedIndex;
+  }
+
   function deleteRow() {
     if (kit.selectedIndex < 0 || kit.rows.length === 0) return;
+    pushUndo();
     kit.rows.splice(kit.selectedIndex, 1);
+    if (kit.selectedIndex >= kit.rows.length) kit.selectedIndex = kit.rows.length - 1;
+  }
+
+  function deduplicateRows() {
+    if (kit.rows.length === 0) return;
+    const seen = new Set<string>();
+    const before = kit.rows.length;
+    const kept: KitRow[] = [];
+    for (const row of kit.rows) {
+      const key = row.samplePath || row.name;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      kept.push(row);
+    }
+    if (kept.length === before) return;
+    pushUndo();
+    kit.rows = kept;
     if (kit.selectedIndex >= kit.rows.length) kit.selectedIndex = kit.rows.length - 1;
   }
 
@@ -408,6 +482,8 @@
       return;
     }
 
+    if (e.key === "u") { undo(); e.preventDefault(); return; }
+
     if (activePane === "browser") handleBrowserKey(e);
     else handleKitKey(e);
   }
@@ -442,12 +518,19 @@
       e.preventDefault();
     } else if (e.key === "Enter" || e.key === "a") {
       if (entry) {
-        if (entry.kind === "directory") expandEntry(entry);
+        if (entry.kind === "directory") addFolderToKit(entry);
         else addSampleToKit(entry);
       }
       e.preventDefault();
     } else if (e.key === " ") {
-      if (entry) auditionBrowserEntry(entry);
+      if (entry) {
+        if (entry.kind === "directory") {
+          if (entry.expanded) collapseEntry(entry);
+          else expandEntry(entry);
+        } else {
+          auditionBrowserEntry(entry);
+        }
+      }
       e.preventDefault();
     } else if (e.key === "/") {
       mode = "search";
@@ -482,6 +565,7 @@
     } else if (key === "l") { cycleLoopMode(); e.preventDefault();
     } else if (key === "p") { cyclePolyMode(); e.preventDefault();
     } else if (key === "e") { exportKit(); e.preventDefault();
+    } else if (key === "D") { deduplicateRows(); e.preventDefault();
     } else if (key === "=" || key === "+") { adjustVolume(5); e.preventDefault();
     } else if (key === "-") { adjustVolume(-5); e.preventDefault();
     } else if (key === ">") { adjustPan(5); e.preventDefault();
@@ -594,7 +678,7 @@
                 role="button"
                 tabindex="-1"
                 onclick={() => { activePane = "browser"; browseIndex = i; }}
-                ondblclick={() => { if (entry.kind === "file") addSampleToKit(entry); else expandEntry(entry); }}
+                ondblclick={() => { if (entry.kind === "file") addSampleToKit(entry); else addFolderToKit(entry); }}
               >
                 <span class="browse-icon">
                   {#if entry.kind === "directory"}
@@ -705,8 +789,8 @@
               <dt><kbd>j</kbd>/<kbd>k</kbd></dt><dd>Navigate up/down</dd>
               <dt><kbd>l</kbd>/<kbd>→</kbd></dt><dd>Expand folder</dd>
               <dt><kbd>h</kbd>/<kbd>←</kbd></dt><dd>Collapse / go to parent</dd>
-              <dt><kbd>Space</kbd></dt><dd>Audition sample</dd>
-              <dt><kbd>Enter</kbd>/<kbd>a</kbd></dt><dd>Add to kit</dd>
+              <dt><kbd>Space</kbd></dt><dd>Audition sample / toggle folder</dd>
+              <dt><kbd>Enter</kbd>/<kbd>a</kbd></dt><dd>Add to kit (folder: add all samples)</dd>
               <dt><kbd>/</kbd></dt><dd>Search/filter</dd>
               <dt><kbd>o</kbd></dt><dd>Open folder</dd>
               <dt><kbd>g</kbd>/<kbd>G</kbd></dt><dd>Top / bottom</dd>
@@ -724,6 +808,7 @@
               <dt><kbd>p</kbd></dt><dd>Cycle polyphonic</dd>
               <dt><kbd>+</kbd>/<kbd>-</kbd></dt><dd>Volume ±5</dd>
               <dt><kbd>&lt;</kbd>/<kbd>&gt;</kbd></dt><dd>Pan ±5</dd>
+              <dt><kbd>D</kbd></dt><dd>Remove duplicates</dd>
               <dt><kbd>e</kbd></dt><dd>Export XML</dd>
             </dl>
           </div>
@@ -731,6 +816,7 @@
             <h4>Global</h4>
             <dl>
               <dt><kbd>Tab</kbd></dt><dd>Switch pane</dd>
+              <dt><kbd>u</kbd></dt><dd>Undo</dd>
               <dt><kbd>?</kbd></dt><dd>This help</dd>
               <dt><kbd>Esc</kbd></dt><dd>Close / clear</dd>
             </dl>

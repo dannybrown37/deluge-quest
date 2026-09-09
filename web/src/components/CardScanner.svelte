@@ -63,8 +63,10 @@
   let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
   let movedFiles = $state(new Set<string>());
   let movingFiles = $state(new Set<string>());
-  let movedSongs = $state(new Set<string>());
+  let movedSongs = $state(new Map<string, string>());
   let movingSongs = $state(new Set<string>());
+  let songViewMode = $state<"flat" | "folders">("flat");
+  let expandedSongDirs = $state(new Set<string>());
   let fileHandles = $state(new Map<string, File>());
   let usingCardStore = $state(false);
   let reconnectAvailable = $state(false);
@@ -234,7 +236,7 @@
   function resetActionState() {
     movedFiles = new Set();
     movingFiles = new Set();
-    movedSongs = new Set();
+    movedSongs = new Map();
     movingSongs = new Set();
     fixedXmlFiles = new Set();
     fixingXmlFiles = new Set();
@@ -579,11 +581,9 @@
       const sourceDir = sourceParts.join("/");
       const destDirPath = ["SONGS", category, relDir].filter(Boolean).join("/");
 
-      // Already in the correct category folder — nothing to move. Do NOT read/write/delete:
-      // writing then deleting the same path is what destroyed songs already sorted correctly.
       if (sourceDir === destDirPath && sourceFileName === fileName) {
-        const moved = new Set(movedSongs);
-        moved.add(songPath);
+        const moved = new Map(movedSongs);
+        moved.set(songPath, "already sorted");
         movedSongs = moved;
         return;
       }
@@ -602,8 +602,9 @@
       await sourceDirHandle.removeEntry(sourceFileName);
       await removeEmptyDirsUpTo(rootHandle, sourceDir, "SONGS");
 
-      const moved = new Set(movedSongs);
-      moved.add(songPath);
+      const destPath = [destDirPath, fileName].join("/");
+      const moved = new Map(movedSongs);
+      moved.set(songPath, `→ ${destPath}`);
       movedSongs = moved;
     } catch (e: any) {
       console.error(`Failed to move ${songPath}:`, e);
@@ -1168,6 +1169,16 @@
     expandedDirs = next;
   }
 
+  function toggleSongDir(path: string) {
+    const next = new Set(expandedSongDirs);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    expandedSongDirs = next;
+  }
+
+  let allSongPaths = $derived([...filteredDelugeOnlySongs, ...filteredExternalSongs]);
+  let songTree = $derived(buildTree(allSongPaths));
+
   async function playSample(samplePath: string) {
     if (currentAudio) {
       currentAudio.pause();
@@ -1434,57 +1445,102 @@
         <div class="list-group">
           <div class="songs-header">
             <h4 class="list-heading">Organize songs</h4>
-            {#if canWrite}
-              <button class="btn btn-secondary btn-sm" onclick={sortAllSongs}>Sort all songs</button>
-            {/if}
+            <div class="songs-header-actions">
+              <button
+                class="btn btn-secondary btn-sm"
+                onclick={() => { songViewMode = songViewMode === "flat" ? "folders" : "flat"; }}
+              >{songViewMode === "flat" ? "Show folders" : "Show flat"}</button>
+              {#if canWrite}
+                <button class="btn btn-secondary btn-sm" onclick={sortAllSongs}>Sort all songs</button>
+              {/if}
+            </div>
           </div>
 
-          {#if filteredDelugeOnlySongs.length > 0}
-            <h5 class="list-subheading">Deluge-only ({filteredDelugeOnlySongs.length})</h5>
-            <div class="file-tree">
-              {#each filteredDelugeOnlySongs as song}
-                {@const isMoved = movedSongs.has(song)}
-                {@const isMoving = movingSongs.has(song)}
-                <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
-                  <span class="tree-file-name" title={song}>{song.split("/").pop()?.replace(/\.XML$/i, "") ?? song}</span>
-                  {#if isMoved}
-                    <span class="tree-file-badge">moved</span>
-                  {:else if canWrite}
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      onclick={() => moveSongToCategory(song, "DELUGE_ONLY")}
-                      disabled={isMoving}
-                    >{isMoving ? "..." : "Move"}</button>
+          {#if songViewMode === "folders"}
+            {#snippet songFolderChildren(node: FolderNode, path: string)}
+              {#each [...node.children.entries()].sort((a, b) => a[0].localeCompare(b[0])) as [name, child]}
+                {@const fullPath = path ? `${path}/${name}` : name}
+                {@const isOpen = expandedSongDirs.has(fullPath)}
+                <div class="tree-item">
+                  <button class="tree-dir" onclick={() => toggleSongDir(fullPath)}>
+                    <span class="tree-arrow">{isOpen ? "▾" : "▸"}</span>
+                    <span class="tree-dir-name">{name}/</span>
+                    <span class="tree-count">{child.totalFiles}</span>
+                  </button>
+                  {#if isOpen}
+                    <div class="tree-children">
+                      {@render songFolderChildren(child, fullPath)}
+                      {#each child.files.sort() as file}
+                        {@const filePath = fullPath ? `${fullPath}/${file}` : file}
+                        {@const moveResult = movedSongs.get(filePath)}
+                        {@const isMoving = movingSongs.has(filePath)}
+                        <div class="tree-file tree-file--sample" class:tree-file--moved={!!moveResult}>
+                          <span class="tree-file-name" title={filePath}>{file.replace(/\.XML$/i, "")}</span>
+                          {#if moveResult}
+                            <span class="tree-file-badge">{moveResult}</span>
+                          {/if}
+                        </div>
+                      {/each}
+                    </div>
                   {/if}
                 </div>
               {/each}
-            </div>
-          {/if}
-
-          {#if filteredExternalSongs.length > 0}
-            <h5 class="list-subheading">External gear ({filteredExternalSongs.length})</h5>
+            {/snippet}
             <div class="file-tree">
-              {#each filteredExternalSongs as song}
-                {@const isMoved = movedSongs.has(song)}
-                {@const isMoving = movingSongs.has(song)}
-                <div class="tree-file tree-file--sample" class:tree-file--moved={isMoved}>
-                  <span class="tree-file-name" title={song}>{song.split("/").pop()?.replace(/\.XML$/i, "") ?? song}</span>
-                  {#if isMoved}
-                    <span class="tree-file-badge">moved</span>
-                  {:else if canWrite}
-                    <button
-                      class="btn btn-secondary btn-sm"
-                      onclick={() => moveSongToCategory(song, "EXTERNAL_GEAR")}
-                      disabled={isMoving}
-                    >{isMoving ? "..." : "Move"}</button>
-                  {/if}
-                </div>
-              {/each}
+              {#if allSongPaths.length > 0}
+                {@render songFolderChildren(songTree, "")}
+              {:else}
+                <p class="list-empty">No songs found.</p>
+              {/if}
             </div>
-          {/if}
+          {:else}
+            {#if filteredDelugeOnlySongs.length > 0}
+              <h5 class="list-subheading">Deluge-only ({filteredDelugeOnlySongs.length})</h5>
+              <div class="file-tree">
+                {#each filteredDelugeOnlySongs as song}
+                  {@const moveResult = movedSongs.get(song)}
+                  {@const isMoving = movingSongs.has(song)}
+                  <div class="tree-file tree-file--sample" class:tree-file--moved={!!moveResult}>
+                    <span class="tree-file-name" title={song}>{song.split("/").pop()?.replace(/\.XML$/i, "") ?? song}</span>
+                    {#if moveResult}
+                      <span class="tree-file-badge">{moveResult}</span>
+                    {:else if canWrite}
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        onclick={() => moveSongToCategory(song, "DELUGE_ONLY")}
+                        disabled={isMoving}
+                      >{isMoving ? "..." : "Move"}</button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
 
-          {#if filteredDelugeOnlySongs.length === 0 && filteredExternalSongs.length === 0}
-            <p class="list-empty">No songs found.</p>
+            {#if filteredExternalSongs.length > 0}
+              <h5 class="list-subheading">External gear ({filteredExternalSongs.length})</h5>
+              <div class="file-tree">
+                {#each filteredExternalSongs as song}
+                  {@const moveResult = movedSongs.get(song)}
+                  {@const isMoving = movingSongs.has(song)}
+                  <div class="tree-file tree-file--sample" class:tree-file--moved={!!moveResult}>
+                    <span class="tree-file-name" title={song}>{song.split("/").pop()?.replace(/\.XML$/i, "") ?? song}</span>
+                    {#if moveResult}
+                      <span class="tree-file-badge">{moveResult}</span>
+                    {:else if canWrite}
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        onclick={() => moveSongToCategory(song, "EXTERNAL_GEAR")}
+                        disabled={isMoving}
+                      >{isMoving ? "..." : "Move"}</button>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+
+            {#if filteredDelugeOnlySongs.length === 0 && filteredExternalSongs.length === 0}
+              <p class="list-empty">No songs found.</p>
+            {/if}
           {/if}
         </div>
 
@@ -2212,6 +2268,11 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 0.4rem;
+  }
+  .songs-header-actions {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
   }
   .list-subheading {
     font-family: 'DM Mono', monospace;
