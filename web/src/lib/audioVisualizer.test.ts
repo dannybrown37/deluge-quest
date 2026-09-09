@@ -70,6 +70,48 @@ function advancePerf(ms: number) {
   perfNow += ms;
 }
 
+let observedElements: Set<Element>;
+let intersectionCallback: (entries: IntersectionObserverEntry[]) => void;
+function stubIntersectionObserver() {
+  observedElements = new Set();
+  vi.stubGlobal('IntersectionObserver', class {
+    constructor(cb: (entries: IntersectionObserverEntry[]) => void) {
+      intersectionCallback = cb;
+    }
+    observe(el: Element) { observedElements.add(el); }
+    disconnect() { observedElements.clear(); }
+  });
+}
+function fireIntersection(isIntersecting: boolean) {
+  intersectionCallback([{ isIntersecting } as IntersectionObserverEntry]);
+}
+
+let storedItems: Map<string, string>;
+function stubLocalStorage() {
+  storedItems = new Map();
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => storedItems.get(k) ?? null,
+    setItem: (k: string, v: string) => storedItems.set(k, v),
+  });
+}
+
+let motionMatches: boolean;
+let motionListeners: ((e: MediaQueryListEvent) => void)[];
+function stubMatchMedia(reducedMotion = false) {
+  motionMatches = reducedMotion;
+  motionListeners = [];
+  vi.stubGlobal('matchMedia', (_q: string) => ({
+    matches: motionMatches,
+    addEventListener: (_type: string, cb: (e: MediaQueryListEvent) => void) => { motionListeners.push(cb); },
+    removeEventListener: (_type: string, cb: (e: MediaQueryListEvent) => void) => {
+      motionListeners = motionListeners.filter(l => l !== cb);
+    },
+  }));
+}
+function fireMotionChange(matches: boolean) {
+  for (const cb of motionListeners) cb({ matches } as MediaQueryListEvent);
+}
+
 interface VisualizerInternals {
   ctx: FakeCtx;
   nodeEnergy: Float32Array;
@@ -89,6 +131,9 @@ function internals(v: AudioVisualizer): VisualizerInternals {
 beforeEach(() => {
   stubRAF();
   stubPerformance();
+  stubIntersectionObserver();
+  stubLocalStorage();
+  stubMatchMedia();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -279,13 +324,135 @@ describe('hexWithAlpha', () => {
 });
 
 describe('destroy', () => {
-  it('stops the loop and disconnects the analyser', () => {
+  it('stops the loop, disconnects the analyser, and cleans up observer/media query', () => {
     const { canvas } = makeCanvas();
     const viz = new AudioVisualizer(canvas);
     viz.connect(makeAnalyser(32, () => {}));
     viz.start();
     viz.destroy();
     expect(viz.connected).toBe(false);
+    expect(rafCallbacks.size).toBe(0);
+    expect(observedElements.size).toBe(0);
+    expect(motionListeners).toHaveLength(0);
+  });
+});
+
+describe('paused', () => {
+  it('defaults to not paused', () => {
+    const { canvas } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    expect(viz.paused).toBe(false);
+  });
+
+  it('restores paused state from localStorage', () => {
+    storedItems.set('deluge-viz-paused', '1');
+    const { canvas } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    expect(viz.paused).toBe(true);
+  });
+
+  it('persists paused state to localStorage', () => {
+    const { canvas } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    viz.paused = true;
+    expect(storedItems.get('deluge-viz-paused')).toBe('1');
+    viz.paused = false;
+    expect(storedItems.get('deluge-viz-paused')).toBe('0');
+  });
+
+  it('draws a static frame when paused and does not schedule rAF', () => {
+    const { canvas, ctx } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    viz.start();
+    rafCallbacks.clear();
+    viz.paused = true;
+    expect(ctx.clearRect).toHaveBeenCalled();
+    expect(rafCallbacks.size).toBe(0);
+  });
+
+  it('start() draws static instead of ticking when paused', () => {
+    storedItems.set('deluge-viz-paused', '1');
+    const { canvas, ctx } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    viz.start();
+    expect(ctx.clearRect).toHaveBeenCalled();
+    expect(rafCallbacks.size).toBe(0);
+  });
+
+  it('resumes animation when unpaused', () => {
+    const { canvas } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    viz.start();
+    viz.paused = true;
+    rafCallbacks.clear();
+    viz.paused = false;
+    expect(rafCallbacks.size).toBe(1);
+  });
+
+  it('draws static in circuit mode when paused', () => {
+    const { canvas, ctx } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    viz.mode = 'circuit';
+    viz.start();
+    rafCallbacks.clear();
+    viz.paused = true;
+    expect(ctx.arc).toHaveBeenCalled();
+  });
+});
+
+describe('prefers-reduced-motion', () => {
+  it('auto-pauses when OS prefers reduced motion', () => {
+    stubMatchMedia(true);
+    const { canvas } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    expect(viz.paused).toBe(true);
+  });
+
+  it('pauses when reduced-motion preference changes at runtime', () => {
+    const { canvas } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    expect(viz.paused).toBe(false);
+    fireMotionChange(true);
+    expect(viz.paused).toBe(true);
+  });
+});
+
+describe('IntersectionObserver', () => {
+  it('observes the canvas element', () => {
+    const { canvas } = makeCanvas();
+    new AudioVisualizer(canvas);
+    expect(observedElements.has(canvas)).toBe(true);
+  });
+
+  it('stops ticking when scrolled out of view', () => {
+    const { canvas } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    viz.start();
+    flushRAF();
+    fireIntersection(false);
+    rafCallbacks.clear();
+    flushRAF();
+    expect(rafCallbacks.size).toBe(0);
+  });
+
+  it('resumes ticking when scrolled back into view', () => {
+    const { canvas } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    viz.start();
+    fireIntersection(false);
+    rafCallbacks.clear();
+    fireIntersection(true);
+    expect(rafCallbacks.size).toBe(1);
+  });
+
+  it('does not resume ticking when visible but paused', () => {
+    const { canvas } = makeCanvas();
+    const viz = new AudioVisualizer(canvas);
+    viz.start();
+    viz.paused = true;
+    fireIntersection(false);
+    rafCallbacks.clear();
+    fireIntersection(true);
     expect(rafCallbacks.size).toBe(0);
   });
 });

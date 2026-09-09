@@ -86,10 +86,17 @@
   let vizCanvas: HTMLCanvasElement;
   let visualizer: AudioVisualizer | null = null;
   let vizMode: VisualizerMode = 'bars';
+  let vizPaused = false;
 
   function toggleVizMode() {
     vizMode = vizMode === 'bars' ? 'circuit' : 'bars';
     if (visualizer) visualizer.mode = vizMode;
+  }
+
+  function toggleVizPaused() {
+    if (!visualizer) return;
+    visualizer.paused = !visualizer.paused;
+    vizPaused = visualizer.paused;
   }
 
   function syncFromAudio() {
@@ -345,6 +352,7 @@
     if (visualizer || !vizCanvas) return;
     visualizer = new AudioVisualizer(vizCanvas);
     visualizer.resize();
+    vizPaused = visualizer.paused;
     visualizer.start();
   }
 
@@ -838,9 +846,14 @@
 
 <div class="viz-container">
   <canvas class="audio-visualizer" bind:this={vizCanvas}></canvas>
-  <button class="viz-toggle" on:click={toggleVizMode} title="Switch visualizer mode">
-    {vizMode === 'bars' ? '⊞' : '≈'}
-  </button>
+  <div class="viz-controls">
+    <button class="viz-toggle" on:click={toggleVizPaused} title={vizPaused ? 'Resume animation' : 'Pause animation'}>
+      {vizPaused ? '▶' : '⏸'}
+    </button>
+    <button class="viz-toggle" on:click={toggleVizMode} title="Switch visualizer mode">
+      {vizMode === 'bars' ? '⊞' : '≈'}
+    </button>
+  </div>
 </div>
 </div>
 
@@ -1350,10 +1363,15 @@
     height: 100%;
   }
 
-  .viz-toggle {
+  .viz-controls {
     position: absolute;
     top: 4px;
     right: 4px;
+    display: flex;
+    gap: 4px;
+  }
+
+  .viz-toggle {
     background: rgba(255,255,255,0.08);
     border: 1px solid rgba(255,255,255,0.12);
     color: rgba(255,255,255,0.5);
