@@ -16,11 +16,11 @@ As I built out the "Deluge" UI, I also realized that having Deluge-derived track
 
 ## Who are you?
 
-I'm Danny, a self-taught professional software engineer and classically-trained amateur musician.
+I'm Danny, a self-taught professional software engineer and classically-academically trained amateur musician.
 
 I love the Deluge! I got my still-7-seg-screen unit at the end of 2019. I have owned dozens of instruments in my life, probably into the 100s now (easily so if you count effects pedals...), and the Deluge is by far my favorite, sparking the most creativity and resulting in the most output.
 
-I have been writing scripts to help manage my Deluge files for years. This website represents my most ambitious Deluge question to date.
+I have been writing scripts to help manage my Deluge files for years. This website represents my most ambitious Deluge quest to date.
 
 ## Why did you make this site?
 
@@ -59,6 +59,6 @@ The site is tracking song plays and tool usage counts: basic analytics to unders
 
 ## Who wrote the music on the site?
 
-[I](#who-are-you) did! Check out the load button on the home page's "Deluge" or the [Songs](/songs) page to see what I've made.
+[I did](#who-are-you)! Check out the load button on the home page's "Deluge" or the [Songs](/songs) page to see what I've made.
 
 This is a Deluge site, so all tracks here were made with sounds generated entirely from the Deluge at recording time. Other than compressing from WAV to MP3, no post-processing was done to any tracks.
