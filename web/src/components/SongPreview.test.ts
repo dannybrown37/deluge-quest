@@ -315,4 +315,250 @@ describe('SongPreview', () => {
 
     expect(screen.getByText('2 songs loaded in Song Stats')).toBeTruthy();
   });
+
+  it('adjusts the EQ Low knob by dragging', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    await fireEvent.click(document.querySelector('.transport-btn[title="Play"]') as HTMLElement);
+
+    const lowKnob = document.querySelector('.knob-hitbox[title="Low"]') as HTMLElement;
+    await fireEvent.mouseDown(lowKnob, { clientY: 100 });
+    await fireEvent.mouseMove(document, { clientY: 40 });
+    await fireEvent.mouseUp(document);
+
+    expect(playerInstances[0].setEQ).toHaveBeenCalledWith('low', expect.any(Number));
+  });
+
+  it('adjusts the Res knob by dragging', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    await fireEvent.click(document.querySelector('.transport-btn[title="Play"]') as HTMLElement);
+
+    const resKnob = document.querySelector('.knob-hitbox[title="Res"]') as HTMLElement;
+    await fireEvent.mouseDown(resKnob, { clientY: 100 });
+    await fireEvent.mouseMove(document, { clientY: 10 });
+    await fireEvent.mouseUp(document);
+
+    expect(playerInstances[0].setFilterRes).toHaveBeenCalled();
+  });
+
+  it('renders a Session chip and loop tooltip for session-mode clips', async () => {
+    mockInspectSong.mockResolvedValue(
+      previewData({
+        hasArrangement: false,
+        tracks: [
+          {
+            name: 'Drum Kit',
+            isKit: true,
+            instrumentType: 'kit',
+            midiChannel: null,
+            cvChannel: null,
+            patch: null,
+            clips: [
+              {
+                positionTicks: 0,
+                lengthTicks: 576,
+                clipLengthTicks: 192,
+                clipIndex: 0,
+                noteCount: 5,
+                rowCount: 2,
+                noteRows: [],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    expect(screen.getByText('Session')).toBeTruthy();
+
+    const clipRect = document.querySelector('.timeline-svg rect[style*="cursor: pointer"]') as SVGRectElement;
+    await fireEvent.mouseEnter(clipRect, { clientX: 100, clientY: 50 });
+    const tooltip = document.querySelector('.tooltip') as HTMLElement;
+    expect(tooltip).toBeTruthy();
+    const text = tooltip.textContent ?? '';
+    expect(text).toMatch(/loops \dx/);
+    expect(text).not.toMatch(/beat/);
+
+    await fireEvent.mouseMove(clipRect, { clientX: 120, clientY: 60 });
+    await fireEvent.mouseLeave(clipRect);
+    expect(document.querySelector('.tooltip')).toBeNull();
+  });
+
+  it('shows fractional bar length in the tooltip', async () => {
+    mockInspectSong.mockResolvedValue(
+      previewData({
+        tracks: [
+          {
+            name: 'Synth 1',
+            isKit: false,
+            instrumentType: 'synth',
+            midiChannel: null,
+            cvChannel: null,
+            patch: null,
+            clips: [
+              {
+                positionTicks: 0,
+                lengthTicks: 96,
+                clipLengthTicks: 96,
+                clipIndex: 0,
+                noteCount: 3,
+                rowCount: 1,
+                noteRows: [],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    const clipRect = document.querySelector('.timeline-svg rect[style*="cursor: pointer"]') as SVGRectElement;
+    await fireEvent.mouseEnter(clipRect, { clientX: 100, clientY: 50 });
+    const text = (document.querySelector('.tooltip') as HTMLElement).textContent ?? '';
+    expect(text).toMatch(/0\.5 bars/);
+  });
+
+  it('auto-scrolls the timeline as the playhead advances', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    await fireEvent.click(document.querySelector('.transport-btn[title="Play"]') as HTMLElement);
+
+    const scrollEl = document.querySelector('.timeline-scroll') as HTMLDivElement;
+    Object.defineProperty(scrollEl, 'clientWidth', { value: 100, configurable: true });
+    Object.defineProperty(scrollEl, 'scrollLeft', { value: 0, writable: true, configurable: true });
+
+    playerInstances[0].onTick?.(10000);
+
+    expect(scrollEl.scrollLeft).not.toBe(0);
+  });
+
+  it('mutes and adjusts volume for a second track', async () => {
+    mockInspectSong.mockResolvedValue(
+      previewData({
+        trackCount: 2,
+        tracks: [
+          {
+            name: 'Synth 1', isKit: false, instrumentType: 'synth', midiChannel: null, cvChannel: null, patch: null,
+            clips: [{ positionTicks: 0, lengthTicks: 192, clipLengthTicks: 192, clipIndex: 0, noteCount: 2, rowCount: 1, noteRows: [] }],
+          },
+          {
+            name: 'Kit 1', isKit: true, instrumentType: 'kit', midiChannel: null, cvChannel: null, patch: null,
+            clips: [{ positionTicks: 0, lengthTicks: 192, clipLengthTicks: 192, clipIndex: 0, noteCount: 4, rowCount: 3, noteRows: [] }],
+          },
+        ],
+      }),
+    );
+
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    await fireEvent.click(document.querySelector('.transport-btn[title="Play"]') as HTMLElement);
+
+    const muteBtns = screen.getAllByTitle('Mute');
+    await fireEvent.click(muteBtns[1]);
+    expect(playerInstances[0].setTrackMuted).toHaveBeenCalledWith(1, true);
+
+    const sliders = document.querySelectorAll('.track-volume-slider');
+    await fireEvent.input(sliders[1], { target: { value: '0.2' } });
+    expect(playerInstances[0].setTrackVolume).toHaveBeenCalledWith(1, 0.2);
+  });
+
+  it('fully resets from the error state', async () => {
+    mockInspectSong.mockResolvedValue(previewData({ tracks: [] }));
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText(/No tracks found/)).toBeTruthy());
+
+    await fireEvent.click(screen.getByText('Try again'));
+    expect(screen.getByText('Drop a Deluge song file')).toBeTruthy();
+  });
+
+  it('displays midi and cv channel details on track rows', async () => {
+    mockInspectSong.mockResolvedValue(
+      previewData({
+        tracks: [
+          {
+            name: 'Midi Out', isKit: false, instrumentType: 'midi', midiChannel: 3, cvChannel: null, patch: null,
+            clips: [{ positionTicks: 0, lengthTicks: 192, clipLengthTicks: 192, clipIndex: 0, noteCount: 1, rowCount: 1, noteRows: [] }],
+          },
+          {
+            name: 'CV Out', isKit: false, instrumentType: 'cv', midiChannel: null, cvChannel: 1, patch: null,
+            clips: [{ positionTicks: 0, lengthTicks: 192, clipLengthTicks: 192, clipIndex: 0, noteCount: 1, rowCount: 1, noteRows: [] }],
+          },
+        ],
+      }),
+    );
+
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    expect(screen.getByText('Ch 4')).toBeTruthy();
+    expect(screen.getByText('Ch 2')).toBeTruthy();
+  });
+
+  it('shows the cached-scan banner with a saved timestamp', async () => {
+    mockCardStore.isLoaded = false;
+    mockCardStore.loadCachedSongs.mockResolvedValue({
+      songs: [{ path: 'song1.XML', xml: '<song></song>' }],
+      cardName: 'MY_CARD',
+      savedAt: Date.now(),
+    });
+
+    render(SongPreview);
+    await waitFor(() => expect(screen.getByText(/From your last card scan/)).toBeTruthy());
+  });
+
+  it('opens the file picker on Enter/Space over the dropzone', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    const input = document.getElementById('preview-file-input') as HTMLInputElement;
+    const clickSpy = vi.spyOn(input, 'click').mockImplementation(() => {});
+
+    await fireEvent.keyDown(dropzone, { key: 'Enter' });
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+
+    await fireEvent.keyDown(dropzone, { key: ' ' });
+    expect(clickSpy).toHaveBeenCalledTimes(2);
+
+    await fireEvent.keyDown(dropzone, { key: 'a' });
+    expect(clickSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('moves the tooltip position while hovering a clip', async () => {
+    render(SongPreview);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await waitFor(() => expect(screen.getByText('120 BPM')).toBeTruthy());
+
+    const clipRect = document.querySelector('.timeline-svg rect[style*="cursor: pointer"]') as SVGRectElement;
+    await fireEvent.mouseEnter(clipRect, { clientX: 100, clientY: 50 });
+    await fireEvent.mouseMove(clipRect, { clientX: 150, clientY: 80 });
+
+    const tooltip = document.querySelector('.tooltip') as HTMLElement;
+    expect(tooltip.getAttribute('style')).toContain('left: 162px');
+  });
 });

@@ -160,4 +160,89 @@ describe('PatchGenerator', () => {
     expect(screen.getByText('FM')).toBeTruthy();
     expect(screen.getByText('MOD 1')).toBeTruthy();
   });
+
+  it('locking Envelope 1 preserves its values across regeneration', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.3);
+    render(PatchGenerator);
+    await fireEvent.click(screen.getByText('Pad'));
+    await fireEvent.click(screen.getByText('Generate Patch'));
+    const before = Array.from(document.querySelectorAll('.env-bar'))
+      .slice(0, 4)
+      .map((el) => (el as HTMLElement).style.height);
+
+    await fireEvent.click(screen.getByTitle('Lock Envelope 1'));
+    vi.spyOn(Math, 'random').mockReturnValue(0.6);
+    await fireEvent.click(screen.getByText('Generate Patch'));
+    const after = Array.from(document.querySelectorAll('.env-bar'))
+      .slice(0, 4)
+      .map((el) => (el as HTMLElement).style.height);
+
+    expect(after).toEqual(before);
+  });
+
+  it('locking Envelope 2 preserves its values across regeneration', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.3);
+    render(PatchGenerator);
+    await fireEvent.click(screen.getByText('Pad'));
+    await fireEvent.click(screen.getByText('Generate Patch'));
+    const before = Array.from(document.querySelectorAll('.env-bar'))
+      .slice(4, 8)
+      .map((el) => (el as HTMLElement).style.height);
+
+    await fireEvent.click(screen.getByTitle('Lock Envelope 2'));
+    vi.spyOn(Math, 'random').mockReturnValue(0.6);
+    await fireEvent.click(screen.getByText('Generate Patch'));
+    const after = Array.from(document.querySelectorAll('.env-bar'))
+      .slice(4, 8)
+      .map((el) => (el as HTMLElement).style.height);
+
+    expect(after).toEqual(before);
+  });
+
+  it('locking Osc 1 preserves its description across regeneration', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.3);
+    render(PatchGenerator);
+    await fireEvent.click(screen.getByText('Pad'));
+    await fireEvent.click(screen.getByText('Generate Patch'));
+    const before = (document.querySelectorAll('.osc-value')[0] as HTMLElement).textContent;
+
+    await fireEvent.click(screen.getByTitle('Lock Osc 1'));
+    vi.spyOn(Math, 'random').mockReturnValue(0.6);
+    await fireEvent.click(screen.getByText('Generate Patch'));
+    const after = (document.querySelectorAll('.osc-value')[0] as HTMLElement).textContent;
+
+    expect(after).toEqual(before);
+  });
+
+  it('shows a non-off arp tag and multiple patch cables for a lead patch', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.55);
+    render(PatchGenerator);
+    await fireEvent.click(screen.getByText('Lead'));
+    await fireEvent.click(screen.getByText('Generate Patch'));
+
+    const arpTag = document.querySelector('.meta-tag--teal');
+    expect(arpTag?.textContent).toContain('Arp:');
+
+    const routingRow = Array.from(document.querySelectorAll('.osc-row')).find((row) =>
+      row.textContent?.includes('patch cable')
+    );
+    expect(routingRow).toBeTruthy();
+    expect(routingRow?.textContent).toMatch(/\d+ patch cables/);
+
+    const metaTags = Array.from(document.querySelectorAll('.meta-tag')).map((el) => el.textContent);
+    expect(metaTags.some((t) => /st$/.test(t || ''))).toBe(true);
+  });
+
+  it('generates an FX patch with bitCrush and routing applied', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.75);
+    render(PatchGenerator);
+    await fireEvent.click(screen.getByText('FX'));
+    await fireEvent.click(screen.getByText('Generate Patch'));
+
+    expect(document.querySelector('.patch-name')).toBeTruthy();
+    const routingRow = Array.from(document.querySelectorAll('.osc-row')).find((row) =>
+      row.textContent?.includes('patch cable')
+    );
+    expect(routingRow).toBeTruthy();
+  });
 });

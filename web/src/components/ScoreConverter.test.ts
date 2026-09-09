@@ -237,4 +237,175 @@ describe('ScoreConverter', () => {
 
     expect(screen.getByText('2 songs loaded in Song Stats')).toBeTruthy();
   });
+
+  it('ignores malformed JSON in deluge-score-file', async () => {
+    sessionStorage.setItem('deluge-score-file', '{not valid json');
+
+    render(ScoreConverter);
+    await Promise.resolve();
+
+    expect(mockConvert).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stashed file missing name or content', async () => {
+    sessionStorage.setItem('deluge-score-file', JSON.stringify({ name: '', content: '' }));
+
+    render(ScoreConverter);
+    await Promise.resolve();
+
+    expect(mockConvert).not.toHaveBeenCalled();
+  });
+
+  it('treats malformed deluge-stats-results as no cached stats', async () => {
+    sessionStorage.setItem('deluge-stats-results', '{broken');
+
+    render(ScoreConverter);
+    await Promise.resolve();
+
+    expect(screen.queryByText(/loaded in Song Stats/)).toBeNull();
+  });
+
+  it('treats a non-array deluge-stats-results as zero count', async () => {
+    sessionStorage.setItem('deluge-stats-results', JSON.stringify({ notAnArray: true }));
+
+    render(ScoreConverter);
+    await Promise.resolve();
+
+    expect(screen.queryByText(/loaded in Song Stats/)).toBeNull();
+  });
+
+  it('invokes the loadPyodide progress callback', async () => {
+    mockLoadPyodide.mockImplementation(async (cb?: (stage: string, pct: number) => void) => {
+      cb?.('Loading runtime', 20);
+      return {};
+    });
+
+    render(ScoreConverter);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent(xmlFile('song.XML')));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockLoadPyodide).toHaveBeenCalledWith(expect.any(Function));
+    expect(screen.getByText('Conversion complete')).toBeTruthy();
+  });
+
+  it('shows the cache timestamp for songs loaded from cache', async () => {
+    mockCardStore.loadCachedSongs.mockResolvedValue({
+      songs: [{ path: 'cached.XML', xml: '<song></song>' }],
+      cardName: 'CACHED_CARD',
+      savedAt: 1700000000000,
+    });
+
+    render(ScoreConverter);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.getByText(/From your last card scan/)).toBeTruthy();
+  });
+
+  it('filters out cached songs without arrangement data', async () => {
+    const { songHasArrangement } = await import('../lib/cardStore');
+    const mockHasArrangement = songHasArrangement as unknown as ReturnType<typeof vi.fn>;
+    mockHasArrangement.mockImplementation((xml: string) => xml.includes('keep'));
+
+    mockCardStore.loadCachedSongs.mockResolvedValue({
+      songs: [
+        { path: 'keep.XML', xml: '<song>keep</song>' },
+        { path: 'drop.XML', xml: '<song>drop</song>' },
+      ],
+      cardName: 'CACHED_CARD',
+      savedAt: 1000,
+    });
+
+    render(ScoreConverter);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.getByText('keep.XML')).toBeTruthy();
+    expect(screen.queryByText('drop.XML')).toBeNull();
+
+    mockHasArrangement.mockImplementation(() => true);
+  });
+
+  describe('folder view', () => {
+    beforeEach(() => {
+      mockCardStore.isLoaded = true;
+      mockCardStore.songXmls = new Map([
+        ['folderA/song1.XML', '<song></song>'],
+        ['folderA/song2.XML', '<song></song>'],
+        ['folderB/song3.XML', '<song></song>'],
+      ]);
+      mockCardStore.rootHandle = { name: 'MY_CARD' };
+      mockCardStore.eligibleSongs.mockReturnValue([
+        { path: 'folderA/song1.XML', xml: '<song></song>' },
+        { path: 'folderA/song2.XML', xml: '<song></song>' },
+        { path: 'folderB/song3.XML', xml: '<song></song>' },
+      ]);
+    });
+
+    it('toggles into folder view and shows folder groups', async () => {
+      render(ScoreConverter);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Show folders' }));
+
+      expect(screen.getByText('folderA')).toBeTruthy();
+      expect(screen.getByText('folderB')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Show flat' })).toBeTruthy();
+    });
+
+    it('collapses and expands a folder group', async () => {
+      render(ScoreConverter);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Show folders' }));
+      // folders start collapsed when entering folder view
+      expect(screen.queryByText('song1.XML')).toBeNull();
+
+      const folderAHeader = screen.getByText('folderA').closest('button') as HTMLElement;
+      await fireEvent.click(folderAHeader);
+      expect(screen.getByText('song1.XML')).toBeTruthy();
+      expect(screen.getByText('song2.XML')).toBeTruthy();
+
+      await fireEvent.click(folderAHeader);
+      expect(screen.queryByText('song1.XML')).toBeNull();
+    });
+
+    it('converts a song from within a folder group', async () => {
+      render(ScoreConverter);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Show folders' }));
+      const folderAHeader = screen.getByText('folderA').closest('button') as HTMLElement;
+      await fireEvent.click(folderAHeader);
+
+      await fireEvent.click(screen.getByText('song1.XML'));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockConvert).toHaveBeenCalledWith('<song></song>', {});
+      expect(screen.getByText('Conversion complete')).toBeTruthy();
+    });
+
+    it('switches back to flat view', async () => {
+      render(ScoreConverter);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Show folders' }));
+      expect(screen.getByText('folderA')).toBeTruthy();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Show flat' }));
+      expect(screen.queryByText('folderA')).toBeNull();
+      expect(screen.getByText('folderA/song1.XML')).toBeTruthy();
+    });
+  });
 });
