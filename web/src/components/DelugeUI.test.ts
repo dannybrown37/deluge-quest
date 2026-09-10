@@ -174,9 +174,9 @@ describe('DelugeUI', () => {
 
     it('gives the left sidebar the site links', () => {
       render(DelugeUI);
-      expect(screen.getAllByLabelText('GitHub')).toHaveLength(3);
-      expect(screen.getAllByLabelText('Songs')).toHaveLength(3);
-      expect(screen.getAllByLabelText('FAQ')).toHaveLength(2);
+      expect(screen.getAllByLabelText('GitHub')).toHaveLength(2);
+      expect(screen.getAllByLabelText('Songs')).toHaveLength(2);
+      expect(screen.getAllByLabelText('FAQ')).toHaveLength(4);
     });
   });
 
