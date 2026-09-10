@@ -751,6 +751,7 @@
               </svg>
             </div>
           </button>
+          <span class="btn-label">Reset Knobs</span>
         </div>
         <!-- Gold (output level) + play button below -->
         <div class="knob-col">
@@ -786,6 +787,7 @@
               {/if}
             </div>
           </button>
+          <span class="btn-label">{isPlaying ? 'Pause' : 'Play Music'}</span>
         </div>
       </div>
     </div>
@@ -982,6 +984,14 @@
   }
   .play-btn--active .play-btn-surface {
     color: #D4A847;
+  }
+  .btn-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.45rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
   }
 
   .load-btn {
@@ -1405,6 +1415,9 @@
     .play-btn-surface svg {
       width: 14px;
       height: 14px;
+    }
+    .btn-label {
+      display: none;
     }
   }
 
