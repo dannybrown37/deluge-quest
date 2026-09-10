@@ -848,10 +848,10 @@
   <canvas class="audio-visualizer" bind:this={vizCanvas}></canvas>
   <div class="viz-controls">
     <button class="viz-toggle" on:click={toggleVizPaused} title={vizPaused ? 'Resume animation' : 'Pause animation'}>
-      {vizPaused ? '▶' : '⏸'}
+      {vizPaused ? '⊘' : '≈'}
     </button>
     <button class="viz-toggle" on:click={toggleVizMode} title="Switch visualizer mode">
-      {vizMode === 'bars' ? '⊞' : '≈'}
+      {vizMode === 'bars' ? '⊞' : '◯'}
     </button>
   </div>
 </div>
@@ -1391,6 +1391,21 @@
   .viz-toggle:hover {
     background: rgba(255,255,255,0.15);
     color: rgba(255,255,255,0.8);
+  }
+
+  /* Mobile: much larger buttons at narrow viewports (account for housing scale) */
+  @media (max-width: 520px) {
+    .play-btn, .load-btn {
+      width: 56px;
+      height: 56px;
+    }
+    .load-btn-surface {
+      font-size: 0.75rem;
+    }
+    .play-btn-surface svg {
+      width: 14px;
+      height: 14px;
+    }
   }
 
 </style>
