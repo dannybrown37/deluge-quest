@@ -187,6 +187,15 @@ describe('DelugeUI', () => {
       await vi.waitFor(() => expect(oled(container)).toBe('DELUGE.QUEST'));
     });
 
+    it('re-derives "drop a song to begin" from idleSubtext when the pointer leaves with no songs', async () => {
+      audio.songs = [];
+      const { container } = render(DelugeUI);
+      await vi.waitFor(() => expect(oled(container)).toBe('DELUGE.QUEST'));
+      await fireEvent.mouseEnter(screen.getByLabelText('Card Management'));
+      await fireEvent.mouseLeave(screen.getByLabelText('Card Management'));
+      await vi.waitFor(() => expect(sub(container)).toBe('drop a song to begin'));
+    });
+
     it('shows the current song name once the list loads', async () => {
       const { container } = render(DelugeUI);
       await vi.waitFor(() => expect(oled(container)).toBe('FIRST SONG'));
@@ -369,6 +378,32 @@ describe('DelugeUI', () => {
       await fireEvent.click(screen.getByLabelText('Load song'));
       await fireEvent.mouseDown(screen.getByText('Second Song'));
       expect(screen.queryByRole('listbox')).toBeTruthy();
+    });
+
+    it('ignores an outside click while the browser is already closed', async () => {
+      render(DelugeUI);
+      await fireEvent.mouseDown(document.body);
+      expect(screen.queryByRole('listbox')).toBeNull();
+    });
+
+    it('stays open when the click lands on the load button itself', async () => {
+      render(DelugeUI);
+      await fireEvent.click(screen.getByLabelText('Load song'));
+      await fireEvent.mouseDown(screen.getByLabelText('Load song'));
+      expect(screen.queryByRole('listbox')).toBeTruthy();
+    });
+
+    it('renders song duration, genre, and year metadata when present', async () => {
+      audio.songs = [
+        { name: 'First Song' },
+        { name: 'Second Song', duration: '3:21', genre: 'Techno', year: '2024' },
+      ];
+      render(DelugeUI);
+      await fireEvent.click(screen.getByLabelText('Load song'));
+      const option = screen.getByText('Second Song').closest('.song-option') as HTMLElement;
+      expect(option.querySelector('.song-duration')?.textContent).toBe('3:21');
+      expect(option.querySelector('.song-genre')?.textContent).toBe('Techno');
+      expect(option.querySelector('.song-year')?.textContent).toBe('2024');
     });
 
     it('moves the cursor with the arrow keys and loads on Enter', async () => {
@@ -586,6 +621,25 @@ describe('DelugeUI', () => {
       render(DelugeUI);
       const cb = audio.subscribe.mock.calls[0][0];
       cb();
+    });
+
+    it('skips the pause toggle before the visualizer exists', async () => {
+      const { container } = render(DelugeUI);
+      const pauseToggle = container.querySelector('.viz-toggle') as HTMLElement;
+      expect(pauseToggle.title).toBe('Pause animation');
+      await fireEvent.click(pauseToggle);
+      expect(pauseToggle.title).toBe('Resume animation');
+    });
+
+    it('does not re-measure the marquee when reduced motion is preferred', async () => {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+      );
+      const { container } = render(DelugeUI);
+      await new Promise(r => setTimeout(r, 0));
+      const oledText = container.querySelector('.oled-text') as HTMLElement;
+      expect(oledText.classList.contains('is-scrolling')).toBe(false);
     });
   });
 

@@ -65,7 +65,7 @@ const SONG1_XML = `<song>
   </instruments>
 </song>`;
 
-const BAD_KIT_XML = `<kit isPlaying="0" isPlaying="1"><thing /></kit>`;
+const BAD_KIT_XML = `<kit isPlaying="0" isPlaying=bad><thing /></kit>`;
 const UNFIXABLE_KIT_XML = `<kit><thing></kit>`;
 const MIXED_SONG_XML = `<song><instruments><sound name="Kick"><osc1 fileName="SAMPLES/kick.wav" /></sound><midi channel="1" /></instruments></song>`;
 const EXTERNAL_SONG_XML = `<song><instruments><midi channel="1" /></instruments></song>`;
@@ -114,26 +114,42 @@ beforeEach(() => {
   seedCard();
 });
 
+interface FakeDir {
+  files: Map<string, string>;
+  removeEntry: ReturnType<typeof vi.fn>;
+  getFileHandle: ReturnType<typeof vi.fn>;
+  getDirectoryHandle: ReturnType<typeof vi.fn>;
+  values: () => AsyncGenerator<string>;
+}
+
 /** In-memory writable directory handle: getOrCreateDir returns this for any path. */
-function fakeWritableDir(initialFiles: Record<string, string> = {}) {
+function fakeWritableDir(initialFiles: Record<string, string> = {}): FakeDir {
   const files = new Map<string, string>(Object.entries(initialFiles));
-  const removeEntry = vi.fn(async (name: string) => {
-    files.delete(name);
-  });
-  const getFileHandle = vi.fn(async (name: string, opts?: { create?: boolean }) => {
-    if (!files.has(name) && !opts?.create) throw new Error(`not found: ${name}`);
-    if (!files.has(name)) files.set(name, '');
-    return {
-      getFile: async () => new File([files.get(name) ?? ''], name),
-      createWritable: async () => ({
-        write: async (data: string | ArrayBuffer) => {
-          files.set(name, typeof data === 'string' ? data : new TextDecoder().decode(data));
-        },
-        close: async () => {},
-      }),
-    };
-  });
-  return { files, removeEntry, getFileHandle, getDirectoryHandle: vi.fn(), values: async function* () {} };
+  const dirObj = {
+    files,
+    removeEntry: vi.fn(async (name: string) => {
+      files.delete(name);
+    }),
+    getFileHandle: vi.fn(async (name: string, opts?: { create?: boolean }) => {
+      if (!files.has(name) && !opts?.create) throw new Error(`not found: ${name}`);
+      if (!files.has(name)) files.set(name, '');
+      return {
+        getFile: async () => new File([files.get(name) ?? ''], name),
+        createWritable: async () => ({
+          write: async (data: string | ArrayBuffer) => {
+            files.set(name, typeof data === 'string' ? data : new TextDecoder().decode(data));
+          },
+          close: async () => {},
+        }),
+      };
+    }),
+    getDirectoryHandle: vi.fn(),
+    values: async function* () {
+      for (const k of files.keys()) yield k;
+    },
+  } satisfies FakeDir;
+  dirObj.getDirectoryHandle.mockImplementation(async () => dirObj);
+  return dirObj;
 }
 
 afterEach(() => {
@@ -479,6 +495,62 @@ describe('CardScanner', () => {
     await fireEvent.click(screen.getByText('Sort all songs'));
 
     await waitFor(() => expect(mockTrack).toHaveBeenCalledWith('manage', 'sort_songs', expect.objectContaining({ songs: expect.any(Number) })));
+  });
+
+  it('sorting a song out of a nested folder removes the now-empty source folders', async () => {
+    mockCardStore.songXmls = new Map();
+    mockCardStore.songXmls.set('SONGS/SUB/song2.XML', SONG1_XML);
+    const dir = fakeWritableDir({ 'song2.XML': SONG1_XML });
+    mockGetOrCreateDir.mockResolvedValue(dir);
+
+    await scanAndWait();
+    await fireEvent.click(screen.getByText(/^Songs/));
+    await fireEvent.click(screen.getByText('Sort all songs'));
+
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith('manage', 'sort_songs', expect.anything()));
+    expect(dir.removeEntry).toHaveBeenCalled();
+  });
+
+  it('fixes an auto-fixable invalid XML file, backing up the original', async () => {
+    const backupDir = fakeWritableDir();
+    const liveDir = fakeWritableDir({ 'badkit.XML': BAD_KIT_XML });
+    mockGetOrCreateDir.mockImplementation(async (_root: unknown, path: string) =>
+      path.startsWith('REPAIR_BACKUP') ? backupDir : liveDir,
+    );
+
+    await scanAndWait();
+    await fireEvent.click(screen.getByText('Analysis'));
+    await fireEvent.click(screen.getByText('Fix'));
+
+    await waitFor(() => expect(screen.getByText('fixed')).toBeTruthy());
+    expect(backupDir.files.get('badkit.XML')).toBe(BAD_KIT_XML);
+    expect(liveDir.files.get('badkit.XML')).not.toBe(BAD_KIT_XML);
+  });
+
+  it('shows an error badge when fixing XML throws', async () => {
+    mockGetOrCreateDir.mockRejectedValue(new Error('disk full'));
+
+    await scanAndWait();
+    await fireEvent.click(screen.getByText('Analysis'));
+    await fireEvent.click(screen.getByText('Fix'));
+
+    await waitFor(() => expect(screen.getByText('disk full')).toBeTruthy());
+  });
+
+  it('fixes all auto-fixable XML files via "Fix all"', async () => {
+    mockCardStore.presetIndex.set('KITS/badkit2.XML', BAD_KIT_XML);
+    const backupDir = fakeWritableDir();
+    const liveDir = fakeWritableDir({ 'badkit.XML': BAD_KIT_XML, 'badkit2.XML': BAD_KIT_XML });
+    mockGetOrCreateDir.mockImplementation(async (_root: unknown, path: string) =>
+      path.startsWith('REPAIR_BACKUP') ? backupDir : liveDir,
+    );
+
+    await scanAndWait();
+    await fireEvent.click(screen.getByText('Analysis'));
+    await fireEvent.click(screen.getByText('Fix all'));
+
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith('manage', 'fix_all_xml'));
+    expect(screen.getAllByText('fixed').length).toBe(2);
   });
 
   it('shows "no issues found" when the report has nothing to flag', async () => {

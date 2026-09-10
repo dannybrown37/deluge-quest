@@ -166,6 +166,97 @@ describe('KitBuilder', () => {
     expect(document.querySelector('.pane-empty')?.textContent).toContain('Empty kit');
   });
 
+  it('adds an entire folder of samples via keyboard, skipping non-audio files', async () => {
+    const samplesDir = fakeDir('SAMPLES', [
+      ['drums', fakeDir('drums', [
+        ['kick.wav', fakeFile('kick.wav')],
+        ['snare.wav', fakeFile('snare.wav')],
+        ['readme.txt', fakeFile('readme.txt')],
+      ])],
+    ]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelector('.browse-name')).toBeTruthy());
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: 'a' });
+
+    await waitFor(() => {
+      const names = Array.from(document.querySelectorAll('.row-name')).map((n) => n.textContent?.trim());
+      expect(names).toEqual(['KICK', 'SNARE']);
+    });
+  });
+
+  it('does nothing when adding an empty folder', async () => {
+    const samplesDir = fakeDir('SAMPLES', [
+      ['empty', fakeDir('empty', [])],
+    ]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelector('.browse-name')).toBeTruthy());
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: 'a' });
+
+    expect(document.querySelector('.pane-empty')?.textContent).toContain('Empty kit');
+  });
+
+  it('reorders rows with J/K and deduplicates rows with D', async () => {
+    const samplesDir = fakeDir('SAMPLES', [
+      ['kick.wav', fakeFile('kick.wav')],
+      ['snare.wav', fakeFile('snare.wav')],
+    ]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelectorAll('.browse-name').length).toBe(2));
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: 'a' });
+    await waitFor(() => expect(document.querySelectorAll('.row-name').length).toBe(1));
+    await fireEvent.keyDown(container, { key: 'j' });
+    await fireEvent.keyDown(container, { key: 'a' });
+    await waitFor(() => expect(document.querySelectorAll('.row-name').length).toBe(2));
+
+    let names = Array.from(document.querySelectorAll('.row-name')).map((n) => n.textContent?.trim());
+    expect(names).toEqual(['KICK', 'SNARE']);
+
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    await fireEvent.keyDown(container, { key: 'K' });
+    names = Array.from(document.querySelectorAll('.row-name')).map((n) => n.textContent?.trim());
+    expect(names).toEqual(['SNARE', 'KICK']);
+
+    await fireEvent.keyDown(container, { key: 'J' });
+    names = Array.from(document.querySelectorAll('.row-name')).map((n) => n.textContent?.trim());
+    expect(names).toEqual(['KICK', 'SNARE']);
+
+    await fireEvent.keyDown(container, { key: 'D' });
+    names = Array.from(document.querySelectorAll('.row-name')).map((n) => n.textContent?.trim());
+    expect(names).toEqual(['KICK', 'SNARE']);
+  });
+
+  it('removes duplicate rows (same sample path) with D', async () => {
+    const container = await openFolderAndAddKick();
+    const kickFile = fakeFile('kick.wav');
+    const samplesDir = fakeDir('SAMPLES', [['kick.wav', kickFile]]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+    await fireEvent.keyDown(container, { key: 'o' });
+    await waitFor(() => expect(document.querySelector('.browse-name')).toBeTruthy());
+    await fireEvent.keyDown(container, { key: 'a' });
+    await waitFor(() => expect(document.querySelectorAll('.row-name').length).toBe(2));
+
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    await fireEvent.keyDown(container, { key: 'D' });
+
+    const names = Array.from(document.querySelectorAll('.row-name')).map((n) => n.textContent?.trim());
+    expect(names).toEqual(['KICK']);
+  });
+
   it('renames the selected row', async () => {
     const container = await openFolderAndAddKick();
     await fireEvent.keyDown(container, { key: 'Tab' });

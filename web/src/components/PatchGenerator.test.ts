@@ -245,4 +245,18 @@ describe('PatchGenerator', () => {
     );
     expect(routingRow).toBeTruthy();
   });
+
+  it.each(['Pad', 'Lead', 'Bass', 'Keys', 'FX'])(
+    'generates valid %s patches across the full random range without throwing',
+    async (label) => {
+      const randomSpy = vi.spyOn(Math, 'random');
+      render(PatchGenerator);
+      await fireEvent.click(screen.getByText(label));
+      for (const r of [0, 0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 0.999]) {
+        randomSpy.mockReturnValue(r);
+        await fireEvent.click(screen.getByText('Generate Patch'));
+        expect(document.querySelector('.patch-name')).toBeTruthy();
+      }
+    },
+  );
 });
