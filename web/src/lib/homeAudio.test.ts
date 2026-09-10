@@ -47,6 +47,7 @@ function createMockGain() {
   return {
     gain: { value: 1, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), setTargetAtTime: vi.fn() },
     connect: vi.fn(),
+    disconnect: vi.fn(),
   };
 }
 

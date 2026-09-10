@@ -14,6 +14,12 @@ type Listener = () => void;
 export class HomeAudioPlayer {
   audioCtx: AudioContext | null = null;
   mediaElement: HTMLAudioElement | null = null;
+  // Untapped duplicate of mediaElement. iOS suspends the AudioContext (and
+  // therefore all sound from mediaElement, which is permanently captured by
+  // mediaSource) on screen lock, but a plain <audio> element keeps playing
+  // through the native pipeline. Muted while foregrounded, unmuted on
+  // visibilitychange so lock-screen playback stays audible.
+  private nativeElement: HTMLAudioElement | null = null;
   private mediaSource: MediaElementAudioSourceNode | null = null;
   gainNode: GainNode | null = null;
   filterNode: BiquadFilterNode | null = null;
@@ -149,6 +155,7 @@ export class HomeAudioPlayer {
 
     this.mediaSource?.disconnect();
     this.mediaElement?.pause();
+    this.nativeElement?.pause();
 
     const el = new Audio();
     el.crossOrigin = 'anonymous';
@@ -161,6 +168,13 @@ export class HomeAudioPlayer {
     this.mediaElement = el;
     this.mediaSource = this.audioCtx.createMediaElementSource(el);
     this.mediaSource.connect(this.filterNode);
+
+    const native = new Audio();
+    native.crossOrigin = 'anonymous';
+    native.preload = 'auto';
+    native.muted = true;
+    this.nativeElement = native;
+
     console.log('[audio] new media chain, ctx:', this.audioCtx.state);
   }
 
@@ -204,6 +218,10 @@ export class HomeAudioPlayer {
       el.addEventListener('error', onError, { once: true });
       el.src = this.songUrl(song.file);
       el.load();
+      if (this.nativeElement) {
+        this.nativeElement.src = el.src;
+        this.nativeElement.load();
+      }
     });
   }
 
@@ -259,16 +277,28 @@ export class HomeAudioPlayer {
 
     if (this.isPlaying) {
       this.mediaElement.pause();
+      this.nativeElement?.pause();
       this.isPlaying = false;
       this.setMediaState('paused');
       cancelAnimationFrame(this.timerRaf);
       this.flushListenTime();
+      // Cutting the source doesn't stop the delay feedback loop from
+      // recirculating already-buffered audio — it keeps looping the tail
+      // until it decays. Break the loop so pause is actually silent.
+      this.delayFeedback?.disconnect();
       this.notify();
       return;
     }
 
     this.mediaElement.playbackRate = playbackRate;
+    if (this.delayFeedback && this.delayNode) this.delayFeedback.connect(this.delayNode);
     await this.mediaElement.play();
+    if (this.nativeElement) {
+      this.nativeElement.playbackRate = playbackRate;
+      this.nativeElement.currentTime = this.mediaElement.currentTime;
+      this.nativeElement.muted = document.visibilityState !== 'hidden';
+      this.nativeElement.play().catch(() => { /* best-effort background fallback */ });
+    }
     this.isPlaying = true;
     console.log('[audio] playing:', this.currentSong?.file, 'ctx:', this.audioCtx?.state, 'gain:', this.gainNode.gain.value, 'src?', !!this.mediaSource);
     this.updateMediaMetadata();
@@ -327,7 +357,18 @@ export class HomeAudioPlayer {
     this.unloadFlushInstalled = true;
     window.addEventListener('pagehide', () => this.flushListenTime());
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') this.flushListenTime();
+      if (document.visibilityState === 'hidden') {
+        this.flushListenTime();
+        if (this.nativeElement) this.nativeElement.muted = false;
+      } else if (this.nativeElement) {
+        this.nativeElement.muted = true;
+        if (this.isPlaying && this.mediaElement) {
+          this.audioCtx?.resume();
+          // Elements drift apart while backgrounded (native keeps real time,
+          // the Web Audio path may have been suspended); resync on return.
+          this.nativeElement.currentTime = this.mediaElement.currentTime;
+        }
+      }
     });
   }
 
