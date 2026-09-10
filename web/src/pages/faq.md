@@ -8,9 +8,9 @@ description: About deluge.quest — open source utilities for the Synthstrom Del
 
 deluge.quest is a love letter to the [Synthstrom Deluge](https://synthstrom.com/product/deluge/).
 
-## ...What does that mean?actuall
+## ...what does that *mean*?
 
-This website represents a quest to compile disparate tools into an incredibly ergonomic, secure, easy-to-use interface, available on any device with a web browser.
+This website represents a personal quest to compile disparate tools into an incredibly ergonomic, secure, easy-to-use interface, available on any device with a web browser.
 
 As I built out the "Deluge" UI, I also realized that having Deluge-derived tracks to make the knobs and buttons responsive would be fun, so I compiled a number of Deluge-only tracks I've made over the years and loaded them on the site. Thus, it's also become a music distribution platform for my own Deluge tracks.
 
