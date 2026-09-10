@@ -345,6 +345,82 @@ describe('KitBuilder', () => {
     expect(document.querySelectorAll('.row-name').length).toBe(2);
   });
 
+  it('cycles polyphonic mode with p', async () => {
+    const container = await openFolderAndAddKick();
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    await fireEvent.keyDown(container, { key: 'p' });
+    expect(document.querySelector('.row-name')).toBeTruthy();
+  });
+
+  async function openEmptyFolder() {
+    const samplesDir = fakeDir('SAMPLES', [['kick.wav', fakeFile('kick.wav')]]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelector('.browse-name')).toBeTruthy());
+    return document.querySelector('.kit-builder') as HTMLElement;
+  }
+
+  it.each([
+    ['d'],
+    ['r'],
+    ['l'],
+    ['p'],
+    ['='],
+    ['<'],
+    ['J'],
+    ['K'],
+    [' '],
+  ])('ignores %s in the kit pane when the kit is empty', async (key) => {
+    const container = await openEmptyFolder();
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    await fireEvent.keyDown(container, { key });
+    expect(document.querySelector('.pane-empty')?.textContent).toContain('Empty kit');
+  });
+
+  it('no-ops undo with an empty history', async () => {
+    const container = await openEmptyFolder();
+    await fireEvent.keyDown(container, { key: 'u' });
+    expect(document.querySelector('.pane-empty')?.textContent).toContain('Empty kit');
+  });
+
+  it('no-ops K when the selected row is already first, and J when already last', async () => {
+    const samplesDir = fakeDir('SAMPLES', [['kick.wav', fakeFile('kick.wav')]]);
+    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText('Open SAMPLES Folder'));
+    await waitFor(() => expect(document.querySelector('.browse-name')).toBeTruthy());
+
+    const container = document.querySelector('.kit-builder') as HTMLElement;
+    await fireEvent.keyDown(container, { key: 'a' });
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    await fireEvent.keyDown(container, { key: 'K' });
+    await fireEvent.keyDown(container, { key: 'J' });
+    expect(document.querySelector('.row-name')?.textContent?.trim()).toBe('KICK');
+  });
+
+  it('does not rename when confirming with a blank value', async () => {
+    const container = await openFolderAndAddKick();
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    await fireEvent.keyDown(container, { key: 'r' });
+    await waitFor(() => expect(document.querySelector('.rename-input')).toBeTruthy());
+
+    const renameInput = document.querySelector('.rename-input') as HTMLInputElement;
+    await fireEvent.input(renameInput, { target: { value: '   ' } });
+    await fireEvent.keyDown(container, { key: 'Enter' });
+
+    expect(document.querySelector('.row-name')?.textContent?.trim()).toBe('KICK');
+  });
+
+  it('dedupes without pushing undo when there is nothing to dedupe', async () => {
+    const container = await openFolderAndAddKick();
+    await fireEvent.keyDown(container, { key: 'Tab' });
+    await fireEvent.keyDown(container, { key: 'D' });
+    expect(document.querySelectorAll('.row-name').length).toBe(1);
+  });
+
   it('adjusts pan with < and >', async () => {
     const container = await openFolderAndAddKick();
     await fireEvent.keyDown(container, { key: 'Tab' });

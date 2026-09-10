@@ -466,6 +466,20 @@ describe('DelugeUI', () => {
       await fireEvent.touchEnd(window);
     });
 
+    it.each([
+      ['delay time', 'updateDelay'],
+      ['delay fdbk', 'updateDelay'],
+      ['reverb', 'updateReverb'],
+      ['tempo', 'updatePlaybackRate'],
+      ['resonance', 'updateFilter'],
+    ])('drags %s and routes it to %s', async (label, fn) => {
+      render(DelugeUI);
+      await fireEvent.mouseDown(screen.getByLabelText(label), { clientY: 100 });
+      await fireEvent.mouseMove(window, { clientY: 50 });
+      expect(audio[fn as keyof typeof audio]).toHaveBeenCalled();
+      await fireEvent.mouseUp(window);
+    });
+
     it('ignores pointer movement when no knob is held', async () => {
       render(DelugeUI);
       await fireEvent.mouseMove(window, { clientY: 50 });

@@ -82,6 +82,19 @@ describe('MidiImporter', () => {
     expect(mockTrack).toHaveBeenCalledWith('import', 'convert_error');
   });
 
+  it('falls back to a generic error message when the rejection has none', async () => {
+    mockConvert.mockRejectedValue({});
+    render(MidiImporter);
+    const dropzone = screen.getByRole('button');
+
+    await fireEvent.drop(dropzone, dropEvent(midiFile('track.mid')));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.getByText('Conversion failed')).toBeTruthy();
+  });
+
   it('resets from the error state back to idle', async () => {
     mockConvert.mockRejectedValue(new Error('bad midi'));
     render(MidiImporter);
@@ -143,6 +156,17 @@ describe('MidiImporter', () => {
 
     expect(mockConvert).toHaveBeenCalled();
     expect(screen.getByText('Import complete')).toBeTruthy();
+  });
+
+  it('does nothing when the file input change has no file', async () => {
+    render(MidiImporter);
+    const input = document.getElementById('midi-file-input') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [] });
+
+    await fireEvent.change(input);
+
+    expect(mockConvert).not.toHaveBeenCalled();
+    expect(screen.getByText('Drop a MIDI file')).toBeTruthy();
   });
 
   it('downloads the result XML', async () => {
