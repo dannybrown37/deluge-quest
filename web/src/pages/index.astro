@@ -5,6 +5,7 @@ import DelugeUI from '../components/DelugeUI.svelte';
 
 <BaseLayout title="Home" description="Browser-based tools for Synthstrom Deluge — score conversion, song inspection, MIDI import. No server, no upload, everything runs in your browser.">
   <section class="landing">
+    <p class="first-visit-hint" id="first-visit-hint">try tapping a pad or spinning a knob ↓</p>
     <div class="deluge-desktop">
       <DelugeUI client:load />
     </div>
@@ -47,15 +48,77 @@ import DelugeUI from '../components/DelugeUI.svelte';
   </section>
 </BaseLayout>
 
+<script>
+  const SESSION_KEY = 'dq-seen-hint';
+
+  // Module scripts run once per session; ClientRouter swaps in a fresh banner on every
+  // client-side nav back to /, so the wiring has to re-run per page load.
+  function setupHint() {
+    const banner = document.getElementById('first-visit-hint');
+    if (!banner) return;
+
+    if (sessionStorage.getItem(SESSION_KEY)) {
+      banner.remove();
+      return;
+    }
+    sessionStorage.setItem(SESSION_KEY, '1');
+    banner.classList.add('show');
+
+    const dismiss = () => banner.classList.remove('show');
+    const desktop = document.querySelector('.deluge-desktop');
+    desktop?.addEventListener('pointerdown', dismiss, { once: true });
+    desktop?.addEventListener('wheel', dismiss, { once: true, passive: true });
+    banner.addEventListener('transitionend', () => banner.remove(), { once: true });
+  }
+
+  setupHint();
+  document.addEventListener('astro:after-swap', setupHint);
+</script>
+
 <style>
   .landing {
-    padding: 0.75rem 0.5rem 0;
+    position: relative;
+    padding: 2rem 0.5rem 0;
     text-align: center;
     overflow: hidden;
     flex: 1;
     display: flex;
     flex-direction: column;
     min-height: 0;
+  }
+
+  .first-visit-hint {
+    position: absolute;
+    top: 0.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  /* Opt-in reveal: the server always ships this markup, so a default of opacity 0
+     is what keeps it from flashing before the seen-this-session check runs. */
+  .first-visit-hint.show {
+    animation:
+      hint-fade-in 0.4s ease both,
+      hint-pulse 1.8s ease-in-out 0.4s infinite;
+  }
+
+  @keyframes hint-fade-in {
+    from { opacity: 0; }
+    to { opacity: 0.6; }
+  }
+
+  @keyframes hint-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
   }
 
   :global(body:has(.landing)) {
@@ -94,7 +157,7 @@ import DelugeUI from '../components/DelugeUI.svelte';
   @media (max-width: 700px) {
     .deluge-desktop { display: flex; }
     .mobile-hero { display: none; }
-    .landing { padding: 0.5rem 0.25rem 0.25rem; }
+    .landing { padding: 2rem 0.25rem 0.25rem; }
   }
 
   .mobile-title {
