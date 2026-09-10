@@ -252,6 +252,19 @@ coverage open="" verbose="":
   printf "\n\033[1m=== Combined coverage by file ===\033[0m\n"
   lcov --rc lcov_branch_coverage=1 --list coverage/merged.lcov 2>/dev/null | colorize_pct
 
+  subtotal_line() {
+    label="$1"; pattern="$2"; subset="$3"
+    lcov --rc lcov_branch_coverage=1 --extract coverage/merged.lcov "$pattern" -o "$subset" > /dev/null 2>&1
+    pct=$(lcov --rc lcov_branch_coverage=1 --summary "$subset" 2>/dev/null | awk -F'[:%]' '
+      /lines/ {l=$2} /functions/ {f=$2} /branches/ {b=$2}
+      END {printf "lines %s%%  functions %s%%  branches %s%%", l, f, b}
+    ')
+    printf "%-14s %s\n" "$label" "$pct" | colorize_pct
+  }
+  printf "\n"
+  subtotal_line "deluge_tools/" "deluge_tools/*" "coverage/py_subset.lcov"
+  subtotal_line "web/src/" "web/src/*" "coverage/web_subset.lcov"
+
   printf "\n\033[1m=== Combined coverage ===\033[0m\n"
   grep -A3 "^Summary coverage rate" coverage/lcov-merge.log | colorize_pct
 
