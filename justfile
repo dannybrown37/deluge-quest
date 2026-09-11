@@ -207,16 +207,26 @@ card-sync go="": card-ensure-mount
     echo "Set DELUGE_CARD_MOUNT or plug in the card"
     exit 1
   fi
+  card_only_paths=(".git" ".xml-remote" ".gitignore" "README.md")
   if [ -z "{{go}}" ]; then
     echo "=== DRY RUN (pass --go to apply) ==="
-    rsync -avn --delete "$src/" "$dest/" --exclude=".git"
+    rsync -avn --delete "${card_only_paths[@]/#/--exclude=}" "$src/" "$dest/"
     echo ""
     echo "Run 'just card-sync --go' to apply"
   else
-    rsync -av --delete "$src/" "$dest/" --exclude=".git"
+    rsync -av --delete "${card_only_paths[@]/#/--exclude=}" "$src/" "$dest/"
     cd "$dest"
     echo ""
-    git status --short
+    changes="$(git status --short)"
+    count="$(echo -n "$changes" | grep -c . || true)"
+    if [ "$count" -eq 0 ]; then
+      echo "No changes"
+    elif [ "$count" -le 12 ]; then
+      echo "$changes"
+    else
+      echo "$count files changed:"
+      echo "$changes" | cut -c1-2 | sort | uniq -c | sort -rn
+    fi
   fi
 
 # Show what changed since last commit
@@ -227,7 +237,7 @@ card-status:
 card-diff:
   cd {{card-dir}} && git diff
 
-# Commit current state with a message
+# Commit current state with a message, prepending a changelog entry to README.md
 card-commit msg="Session snapshot":
   #!/bin/bash
   set -e
@@ -237,6 +247,62 @@ card-commit msg="Session snapshot":
     exit 0
   fi
   git add -A
+  git reset -q -- README.md 2>/dev/null || true
+  if [ ! -f README.md ] && git cat-file -e HEAD:README.md 2>/dev/null; then
+    git show HEAD:README.md > README.md
+  fi
+  format_change() {
+    local status="$1" f1="$2" f2="$3" prefix="$4" verb
+    case "${status:0:1}" in
+      A) verb="Added";; D) verb="Deleted";; M) verb="Modified";;
+      R) verb="Renamed";; C) verb="Copied";; *) verb="$status";;
+    esac
+    if [ -n "$prefix" ]; then
+      f1="${f1#"$prefix"}"
+      f2="${f2#"$prefix"}"
+      verb="$(echo "$verb" | tr '[:upper:]' '[:lower:]')"
+      local lead="  - "
+    else
+      local lead="- "
+    fi
+    if [ "${status:0:1}" = "R" ] || [ "${status:0:1}" = "C" ]; then
+      echo "${lead}${verb} \`$f1\` → \`$f2\`"
+    else
+      echo "${lead}${verb} \`$f1\`"
+    fi
+  }
+  changes="$(git diff --cached --name-status)"
+  count="$(echo -n "$changes" | grep -c . || true)"
+  samples="$(echo "$changes" | awk -F'\t' '$2 ~ /^SAMPLES\// || $3 ~ /^SAMPLES\// {print}')"
+  entry="$(
+    echo "### $(date +%Y-%m-%d) — {{msg}}"
+    if [ "$count" -le 12 ]; then
+      echo "$changes" | while IFS=$'\t' read -r status f1 f2; do
+        format_change "$status" "$f1" "$f2" ""
+      done
+    else
+      echo "- $count files changed (too many to list individually):"
+      echo "$changes" | cut -f1 | cut -c1 | sort | uniq -c | sort -rn | sed 's/^/  - /'
+    fi
+    if [ -n "$samples" ]; then
+      echo "- **Samples:**"
+      echo "$samples" | while IFS=$'\t' read -r status f1 f2; do
+        format_change "$status" "$f1" "$f2" "SAMPLES/"
+      done
+    else
+      echo "- No sample changes."
+    fi
+  )"
+  if [ -f README.md ] && grep -q '^## Changelog$' README.md; then
+    awk -v entry="$entry" '
+      {print}
+      /^## Changelog$/ && !done {print ""; print entry; done=1}
+    ' README.md > README.md.new
+    mv README.md.new README.md
+  else
+    { echo "# Deluge Card Backup"; echo; echo "## Changelog"; echo; echo "$entry"; } > README.md
+  fi
+  git add README.md
   git status --short
   git commit -m "{{msg}}"
 
@@ -279,11 +345,12 @@ card-remote-init url:
   # Sync XML files in for the initial commit
   cd "{{card-dir}}"
   rsync -a \
+    --exclude='.git' --exclude='.xml-remote' \
     --include='*/' \
     --include='*.XML' --include='*.xml' \
     --include='*.JSON' --include='*.json' \
+    --include='README.md' \
     --exclude='*' \
-    --exclude='.git' --exclude='.xml-remote' \
     ./ "$remote_dir/"
   cd "$remote_dir"
   git add -A
@@ -305,11 +372,12 @@ card-push msg="":
     exit 1
   fi
   rsync -a --delete \
+    --exclude='.git' --exclude='.xml-remote' \
     --include='*/' \
     --include='*.XML' --include='*.xml' \
     --include='*.JSON' --include='*.json' \
+    --include='README.md' \
     --exclude='*' \
-    --exclude='.git' --exclude='.xml-remote' \
     ./ "$remote_dir/"
   cd "$remote_dir"
   git add -A
@@ -317,7 +385,10 @@ card-push msg="":
     echo "No XML changes to push"
     exit 0
   fi
-  commit_msg="${msg:-XML sync $(date +%Y-%m-%d\ %H:%M)}"
+  commit_msg="{{msg}}"
+  if [ -z "$commit_msg" ]; then
+    commit_msg="XML sync $(date +%Y-%m-%d\ %H:%M)"
+  fi
   git status --short
   git commit -m "$commit_msg"
   git push
