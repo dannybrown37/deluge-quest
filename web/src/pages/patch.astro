@@ -6,7 +6,15 @@ import PatchGenerator from '../components/PatchGenerator.svelte';
 <BaseLayout title="Patch Generator" description="Generate randomized but musically-sensible Deluge synth presets. Download as XML for your SD card.">
   <section class="page-header">
     <h1 class="page-title">Patch Generator</h1>
-    <p class="page-desc">Generate random Deluge synth presets tuned by category. Download as .XML and drop onto your SD card's SYNTHS folder.</p>
+    <p class="page-desc">Generate random Deluge synth presets tuned by category.</p>
+    <details class="page-details">
+        <summary>How it works &amp; limitations</summary>
+        <ul>
+          <li>You can drop the generated XML into your Deluge SD card's <code>SYNTHS</code> folder and load it as a new preset.</li>
+          <li>The "Preview" button is experimental and cool, but don't expect a 1:1 match with what the Deluge will output. Sometimes it's fairly close, others it's hilariously off.</li>
+          <li>Disclaimer: most of these start out kind of bad, but I've arrived at some pretty good patches with some slight adjustments to the random output.</li>
+        </ul>
+      </details>
   </section>
   <section class="tool-area">
     <PatchGenerator client:only="svelte" />
