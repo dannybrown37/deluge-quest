@@ -680,11 +680,26 @@
                 onclick={() => { activePane = "browser"; browseIndex = i; }}
                 ondblclick={() => { if (entry.kind === "file") addSampleToKit(entry); else addFolderToKit(entry); }}
               >
-                <span class="browse-icon">
+                <span
+                  class="browse-icon"
+                  role="button"
+                  tabindex="-1"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    if (entry.kind === "directory") {
+                      if (entry.expanded) collapseEntry(entry);
+                      else expandEntry(entry);
+                    } else {
+                      auditionBrowserEntry(entry);
+                    }
+                  }}
+                >
                   {#if entry.kind === "directory"}
                     {entry.expanded ? "▼" : "▶"}
+                  {:else if playingAudio && playingAudio.index === -1 && visibleEntries[browseIndex] === entry && playingAudio.audio && !playingAudio.audio.paused}
+                    ■
                   {:else}
-                    ♪
+                    ▶
                   {/if}
                 </span>
                 <span class="browse-name">{entry.name}</span>
@@ -723,6 +738,16 @@
                 onclick={() => { activePane = "kit"; kit.selectedIndex = i; }}
               >
                 <div class="row-index">{i + 1}</div>
+                <button
+                  class="row-audition"
+                  class:row-audition--playing={playingAudio?.index === i}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    if (playingAudio?.index === i) stopPlayback();
+                    else auditionKitRow(i);
+                  }}
+                  title="Audition"
+                >{playingAudio?.index === i ? "■" : "▶"}</button>
                 <div class="row-name">
                   {#if mode === "rename" && i === kit.selectedIndex}
                     <input
@@ -737,6 +762,26 @@
                 </div>
                 <div class="row-sample" title={row.samplePath}>
                   {row.samplePath ? row.samplePath.split("/").pop() : "—"}
+                </div>
+                <div class="row-controls">
+                  <label class="row-slider-label">
+                    <span class="slider-tag">VOL</span>
+                    <input
+                      type="range" min="0" max="100" bind:value={row.volume}
+                      class="row-slider row-slider--vol"
+                      onclick={(e) => e.stopPropagation()}
+                    />
+                    <span class="slider-val">{row.volume}</span>
+                  </label>
+                  <label class="row-slider-label">
+                    <span class="slider-tag">PAN</span>
+                    <input
+                      type="range" min="-50" max="50" bind:value={row.pan}
+                      class="row-slider row-slider--pan"
+                      onclick={(e) => e.stopPropagation()}
+                    />
+                    <span class="slider-val">{row.pan > 0 ? `R${row.pan}` : row.pan < 0 ? `L${-row.pan}` : "C"}</span>
+                  </label>
                 </div>
                 <div class="row-badges">
                   <span class="badge" data-mode={row.loopMode}>{LOOP_LABELS[row.loopMode]}</span>
@@ -1047,7 +1092,11 @@
     width: 0.9rem;
     text-align: center;
     flex-shrink: 0;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: color 0.1s;
   }
+  .browse-icon:hover { color: var(--accent); }
   .browse-name {
     font-family: 'DM Mono', monospace;
     font-size: 0.75rem;
@@ -1060,7 +1109,7 @@
   /* Kit rows */
   .kit-row {
     display: grid;
-    grid-template-columns: 1.5rem 1fr auto;
+    grid-template-columns: 1.5rem 1.2rem 1fr auto auto auto;
     align-items: center;
     gap: 0.4rem;
     padding: 0.35rem 0.6rem;
@@ -1089,6 +1138,69 @@
     font-size: 0.68rem;
     color: var(--text-secondary);
     text-align: center;
+  }
+  .row-audition {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.62rem;
+    padding: 0;
+    width: 1.2rem;
+    text-align: center;
+    transition: color 0.1s;
+  }
+  .row-audition:hover { color: var(--accent); }
+  .row-audition--playing { color: var(--teal); }
+  .row-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .row-slider-label {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+  }
+  .slider-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.03em;
+    width: 1.6rem;
+  }
+  .slider-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    width: 1.5rem;
+    text-align: right;
+  }
+  .row-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 50px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  .row-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+  .row-slider::-moz-range-thumb {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
   }
   .row-name {
     font-family: 'DM Mono', monospace;
