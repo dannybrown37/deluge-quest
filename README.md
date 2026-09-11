@@ -68,6 +68,68 @@ deluge-clean   path/to/sd/card           # find/move unused samples, broken refs
 
 Each takes `--version` and `--help`.
 
+## SD card backup
+
+Git-tracked snapshots of your Deluge SD card. Every song, kit, synth, and sample is versioned —
+you get real diffs, history, and the ability to roll back to any previous state.
+
+### Setup
+
+```bash
+# One-time: initialize from an existing backup or directly from the SD card
+just card-init /mnt/c/Users/you/path/to/backup
+# — or, with the card plugged in (defaults to /mnt/d) —
+just card-init
+```
+
+### Workflow
+
+Plug in the SD card, then:
+
+```bash
+just card-save "Added drum kit patches"   # sync from card + commit
+```
+
+That's the one command you need. For more control:
+
+| Recipe | What it does |
+|---|---|
+| `just card-init` | Copy SD card (or backup path) → `~/deluge-card`, initialize git |
+| `just card-sync` | Dry-run rsync from SD card → local repo (pass `--go` to apply) |
+| `just card-commit "msg"` | Stage everything and commit |
+| `just card-save "msg"` | Sync + commit in one step |
+| `just card-status` | `git status` on the card repo |
+| `just card-diff` | Diff of changed files |
+| `just card-log` | Recent commit history |
+| `just card-size` | Working tree vs `.git` size |
+
+### Pushing XML to GitHub
+
+The local repo tracks everything (samples included), but samples are too large for GitHub.
+A shadow repo pushes only XML and JSON files — songs, kits, synths, settings — which is where
+the meaningful diffs are anyway.
+
+```bash
+# One-time: create a GitHub repo and connect it
+just card-remote-init git@github.com:you/deluge-card.git
+
+# After any session:
+just card-push "Added new drum patterns"
+```
+
+| Recipe | What it does |
+|---|---|
+| `just card-remote-init <url>` | Set up the GitHub remote (initial XML commit + push) |
+| `just card-push "msg"` | Sync XML/JSON → shadow repo, commit, push |
+
+### Configuration
+
+Set these environment variables to override defaults:
+
+- `DELUGE_CARD_DIR` — where the git repo lives (default: `~/deluge-card`)
+- `DELUGE_CARD_MOUNT` — where the SD card mounts in WSL (default: `/mnt/d`)
+- `DELUGE_CARD_DRIVE` — Windows drive letter for mount (default: `D:`)
+
 ## Code quality
 
 Pre-commit hooks (ruff, eslint, gitleaks, end-of-file-fixer) run on every commit —

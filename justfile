@@ -139,6 +139,190 @@ audio-list:
   @ls -lh web/public/audio/ || echo "Directory does not exist"
 
 # ============================================================================
+# SD Card Backup (git-tracked)
+# ============================================================================
+
+# Path to local git-tracked card backup
+card-dir := env("DELUGE_CARD_DIR", home_directory() / "deluge-card")
+
+# Drive letter where the SD card mounts (WSL path)
+card-mount := env("DELUGE_CARD_MOUNT", "/mnt/d")
+
+# Drive letter to pass to `mount -t drvfs` (extracted from card-mount)
+card-drive := env("DELUGE_CARD_DRIVE", "D:")
+
+# Ensure the SD card is mounted (WSL doesn't automount removable drives)
+[private]
+card-ensure-mount:
+  #!/bin/bash
+  set -e
+  if mountpoint -q "{{card-mount}}" 2>/dev/null; then
+    exit 0
+  fi
+  if [ -d "{{card-mount}}" ] && [ -n "$(ls -A '{{card-mount}}' 2>/dev/null)" ]; then
+    exit 0
+  fi
+  echo "Mounting {{card-drive}} → {{card-mount}} ..."
+  sudo mkdir -p "{{card-mount}}"
+  sudo mount -t drvfs "{{card-drive}}" "{{card-mount}}"
+
+# Initialize git repo from an existing backup or SD card
+card-init source="": card-ensure-mount
+  #!/bin/bash
+  set -e
+  src="{{ if source != "" { source } else { "{{card-mount}}" } }}"
+  dest="{{card-dir}}"
+  if [ -d "$dest/.git" ]; then
+    echo "Card repo already exists at $dest"
+    exit 1
+  fi
+  if [ ! -d "$src" ]; then
+    echo "Source not found: $src"
+    echo "Plug in your SD card or pass the path to an existing backup:"
+    echo "  just card-init /mnt/c/Users/you/deluge-backup"
+    exit 1
+  fi
+  echo "Copying $src → $dest ..."
+  mkdir -p "$dest"
+  rsync -a "$src/" "$dest/"
+  cd "$dest"
+  git init
+  git config core.fileMode false
+  git add -A
+  git commit -m "Initial snapshot"
+  echo "Card repo initialized at $dest ($(git rev-list --count HEAD) commit, $(du -sh . --exclude=.git | cut -f1))"
+
+# Sync SD card → local repo (dry run by default, pass --go to apply)
+card-sync go="": card-ensure-mount
+  #!/bin/bash
+  set -e
+  dest="{{card-dir}}"
+  src="{{card-mount}}"
+  if [ ! -d "$dest/.git" ]; then
+    echo "No card repo at $dest — run 'just card-init' first"
+    exit 1
+  fi
+  if [ ! -d "$src" ]; then
+    echo "SD card not found at $src"
+    echo "Set DELUGE_CARD_MOUNT or plug in the card"
+    exit 1
+  fi
+  if [ -z "{{go}}" ]; then
+    echo "=== DRY RUN (pass --go to apply) ==="
+    rsync -avn --delete "$src/" "$dest/" --exclude=".git"
+    echo ""
+    echo "Run 'just card-sync --go' to apply"
+  else
+    rsync -av --delete "$src/" "$dest/" --exclude=".git"
+    cd "$dest"
+    echo ""
+    git status --short
+  fi
+
+# Show what changed since last commit
+card-status:
+  cd {{card-dir}} && git status
+
+# Show diff of changed files
+card-diff:
+  cd {{card-dir}} && git diff
+
+# Commit current state with a message
+card-commit msg="Session snapshot":
+  #!/bin/bash
+  set -e
+  cd "{{card-dir}}"
+  if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+    echo "Nothing to commit — card repo is clean"
+    exit 0
+  fi
+  git add -A
+  git status --short
+  git commit -m "{{msg}}"
+
+# Sync from SD card and commit in one step
+card-save msg="Session snapshot":
+  just card-sync --go
+  just card-commit "{{msg}}"
+
+# Show commit history
+card-log:
+  cd {{card-dir}} && git log --oneline --graph -20
+
+# Show size of card repo vs working tree
+card-size:
+  #!/bin/bash
+  cd "{{card-dir}}"
+  echo "Working tree: $(du -sh --exclude=.git --exclude=.xml-remote . | cut -f1)"
+  echo "Git objects:  $(du -sh .git | cut -f1)"
+  echo "Commits:      $(git rev-list --count HEAD)"
+  if [ -d .xml-remote/.git ]; then
+    echo "XML remote:   $(du -sh .xml-remote/.git | cut -f1) ($(cd .xml-remote && git rev-list --count HEAD) commits)"
+  fi
+
+# Set up the GitHub remote for XML-only pushes
+card-remote-init url:
+  #!/bin/bash
+  set -e
+  cd "{{card-dir}}"
+  remote_dir=".xml-remote"
+  if [ -d "$remote_dir/.git" ]; then
+    echo "XML remote repo already exists at $remote_dir"
+    echo "Current remote: $(cd $remote_dir && git remote get-url origin 2>/dev/null || echo 'none')"
+    exit 1
+  fi
+  mkdir -p "$remote_dir"
+  cd "$remote_dir"
+  git init
+  git config core.fileMode false
+  git remote add origin "{{url}}"
+  # Sync XML files in for the initial commit
+  cd "{{card-dir}}"
+  rsync -a \
+    --include='*/' \
+    --include='*.XML' --include='*.xml' \
+    --include='*.JSON' --include='*.json' \
+    --exclude='*' \
+    --exclude='.git' --exclude='.xml-remote' \
+    ./ "$remote_dir/"
+  cd "$remote_dir"
+  git add -A
+  git commit -m "Initial XML snapshot"
+  git push -u origin main
+  # Make sure the main repo ignores the shadow repo
+  cd "{{card-dir}}"
+  grep -qxF '.xml-remote' .gitignore 2>/dev/null || echo '.xml-remote' >> .gitignore
+  echo "XML remote initialized — use 'just card-push' to sync and push"
+
+# Push XML files to GitHub (syncs from local repo → shadow repo → remote)
+card-push msg="":
+  #!/bin/bash
+  set -e
+  cd "{{card-dir}}"
+  remote_dir=".xml-remote"
+  if [ ! -d "$remote_dir/.git" ]; then
+    echo "No XML remote set up — run 'just card-remote-init <github-url>' first"
+    exit 1
+  fi
+  rsync -a --delete \
+    --include='*/' \
+    --include='*.XML' --include='*.xml' \
+    --include='*.JSON' --include='*.json' \
+    --exclude='*' \
+    --exclude='.git' --exclude='.xml-remote' \
+    ./ "$remote_dir/"
+  cd "$remote_dir"
+  git add -A
+  if git diff --cached --quiet; then
+    echo "No XML changes to push"
+    exit 0
+  fi
+  commit_msg="${msg:-XML sync $(date +%Y-%m-%d\ %H:%M)}"
+  git status --short
+  git commit -m "$commit_msg"
+  git push
+
+# ============================================================================
 # Development Workflow
 # ============================================================================
 
