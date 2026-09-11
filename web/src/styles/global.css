@@ -75,3 +75,23 @@ code {
   padding: 0.15em 0.4em;
   border-radius: 3px;
 }
+
+.page-details {
+  max-width: 640px;
+  margin: 1rem auto 0;
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+.page-details summary {
+  cursor: pointer;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.page-details ul {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+}
+.page-details li {
+  margin-bottom: 0.35rem;
+}

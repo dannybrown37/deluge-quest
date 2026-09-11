@@ -6,7 +6,17 @@ import ScoreConverter from '../components/ScoreConverter.svelte';
 <BaseLayout title="Score Converter" description="Convert Deluge song arrangements to MusicXML sheet music — entirely in your browser.">
   <section class="page-header">
     <h1 class="page-title">Score Converter</h1>
-    <p class="page-desc">Convert your Deluge song arrangement to MusicXML. Open the result in MuseScore, Dorico, Finale, or any notation app.</p>
+    <p class="page-desc">Convert Deluge songs to MusicXML. Open in MuseScore or other notation app.</p>
+    <details class="page-details">
+        <summary>How it works &amp; limitations</summary>
+        <ul>
+          <li>Like <a href="/preview">Song Preview</a>, this an experimental feature originally intended to make it easier to know which song is which on the Deluge SD card.</li>
+          <li>I've tested with MuseScore. It's been a long time since I had access to paid notation software. It presumably works with Finale, Sibelius, et al, but I don't have access to them for testing.</li>
+          <li>It works best on songs with arrangements; a best-effort attempt is made to convert clip-only tracks.</li>
+          <li>All tracks will default to a piano sound except percussions, which will use a basic click sound.</li>
+          <li>You will see some crazy amounts of ledger lines and other weird notation choices. If you're looking for an "Official Score" for your piece, this will get you started, but expect to have cleanup work to do.</li>
+        </ul>
+      </details>
   </section>
   <section class="tool-area">
     <ScoreConverter client:only="svelte" />
