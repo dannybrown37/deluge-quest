@@ -20,6 +20,7 @@ dev = [
 ]
 
 [project.scripts]
+deluge-quest = "deluge_tools.cli_quest:main"
 deluge-score = "deluge_tools.cli:main"
 deluge-import = "deluge_tools.cli_import:main"
 deluge-stats = "deluge_tools.cli_stats:main"

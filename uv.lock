@@ -433,8 +433,16 @@ wheels = [
 name = "deluge-tools"
 version = "0.1.0"
 source = { editable = "." }
-dependencies = [
+
+[package.optional-dependencies]
+all = [
     { name = "mido" },
+    { name = "music21" },
+]
+midi = [
+    { name = "mido" },
+]
+score = [
     { name = "music21" },
 ]
 
@@ -449,9 +457,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mido", specifier = ">=1.3,<2" },
-    { name = "music21", specifier = ">=9.1,<11" },
+    { name = "deluge-tools", extras = ["score", "midi"], marker = "extra == 'all'" },
+    { name = "mido", marker = "extra == 'midi'", specifier = ">=1.3,<2" },
+    { name = "music21", marker = "extra == 'score'", specifier = ">=9.1,<11" },
 ]
+provides-extras = ["score", "midi", "all"]
 
 [package.metadata.requires-dev]
 dev = [

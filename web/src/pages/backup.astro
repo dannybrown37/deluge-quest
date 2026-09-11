@@ -1,10 +1,16 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
+import ProseLayout from '../layouts/ProseLayout.astro';
 import { Content } from '../../../docs/deluge-backup.md';
 ---
 
-<BaseLayout title="Card Backup" description="Git-based backup for your Deluge SD card — full history, real diffs, optional GitHub sync.">
-  <section class="prose">
+<ProseLayout title="Card Backup" description="Git-based backup for your Deluge SD card — full history, real diffs, optional GitHub sync.">
+  <div class="backup-content">
     <Content />
-  </section>
-</BaseLayout>
+  </div>
+</ProseLayout>
+
+<style is:global>
+  .backup-content h1 {
+    display: none;
+  }
+</style>

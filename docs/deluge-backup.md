@@ -1,23 +1,28 @@
 ---
 title: Card Backup
-description: Git-based backup for your Deluge SD card — full history, real diffs, optional GitHub sync.
+description: Git-based backup for your Deluge SD card, with full history, real diffs, optional GitHub sync.
 ---
 
-# deluge-backup
-
-Git-based backup for your Synthstrom Deluge SD card — full history, real diffs, optional GitHub sync.
+## deluge-backup
 
 Your Deluge SD card holds songs, kits, patches, and samples that represent hours of work. `deluge-backup` wraps a simple git workflow into a single command: rsync your card to a local folder, commit with git, and optionally push XML files to GitHub. You get real diffs, full history, and a backup that survives a dead card.
 
 ## Requirements
 
-- **macOS or Linux** (including WSL on Windows). The CLI uses `rsync` and `git` under the hood.
-- Windows users: install [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) and run from there.
+macOS or Linux (including WSL on Windows). The CLI uses `rsync` and `git` under the hood. Windows users should install [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) and run from there.
 
 ## Install
 
+Install globally with `pipx`:
+
 ```bash
 pipx install deluge-tools
+```
+
+Or with `uv`:
+
+```bash
+uv tool install deluge-tools
 ```
 
 No repo clone needed, no `just` dependency. If you already have the [deluge-quest](https://github.com/dannybrown37/deluge-quest) repo cloned, the `just card-*` recipes still work.
@@ -37,72 +42,24 @@ deluge-backup diff
 deluge-backup log
 ```
 
-## Commands
+## The one command you need
 
-### Setup (run once)
+`deluge-backup save "your message"` syncs the SD card and commits in one step. Run it after every session and you're covered. It defaults to "Session snapshot" if you skip the message.
 
-#### `deluge-backup init [source]`
-
-Copies the SD card (or an existing backup folder) into `~/deluge-card` and initializes a git repo. If `source` is omitted, reads from the SD card mount point.
-
-```bash
-deluge-backup init                    # from mounted SD card
-deluge-backup init /path/to/backup    # from an existing folder
-```
-
-#### `deluge-backup remote-init <url>`
-
-Sets up a shadow repo that pushes only XML/JSON files to GitHub (no samples). Keeps the GitHub repo small (typically under 50 MB) while giving you full XML history and diffs on the web.
-
-```bash
-deluge-backup remote-init git@github.com:you/deluge-card.git
-```
-
-### Daily workflow
-
-#### `deluge-backup save [msg]`
-
-The command you'll use most. Syncs the SD card to the local repo and commits in one step.
-
-```bash
-deluge-backup save "Friday jam session"
-deluge-backup save    # defaults to "Session snapshot"
-```
-
-#### `deluge-backup sync [--go]`
-
-Rsyncs the SD card to the local repo. Dry run by default — pass `--go` to apply.
-
-```bash
-deluge-backup sync        # preview what would change
-deluge-backup sync --go   # apply the sync
-```
-
-#### `deluge-backup commit [msg]`
-
-Stages all changes, generates a changelog entry in the repo's README.md, and commits.
-
-```bash
-deluge-backup commit "Rewired SONG003 drums"
-```
-
-#### `deluge-backup push [msg]`
-
-Syncs XML files to the shadow repo and pushes to GitHub. Requires `remote-init` first.
-
-```bash
-deluge-backup push
-deluge-backup push "Weekly XML sync"
-```
-
-### Inspection
+## All commands
 
 | Command | What it does |
 |---|---|
-| `deluge-backup status` | `git status` on the card repo |
-| `deluge-backup diff` | `git diff` on the card repo |
-| `deluge-backup log` | Last 20 commits, compact graph view |
-| `deluge-backup size` | Working tree size, git object size, commit count |
+| `init [source]` | Copy the SD card (or a folder) into `~/deluge-card` and create a git repo |
+| `save [msg]` | Sync SD card + commit in one step — the everyday command |
+| `sync [--go]` | Rsync the card to the repo (dry run by default, `--go` to apply) |
+| `commit [msg]` | Stage everything, generate a changelog, and commit |
+| `remote-init <url>` | Set up a GitHub remote for XML-only pushes (no samples) |
+| `push [msg]` | Sync XML files to the shadow repo and push to GitHub |
+| `status` | `git status` on the card repo |
+| `diff` | `git diff` on the card repo |
+| `log` | Last 20 commits, compact graph view |
+| `size` | Working tree size, git object size, commit count |
 
 ## Configuration
 
@@ -116,12 +73,13 @@ Three environment variables control paths (all have sensible defaults):
 
 ## What gets committed
 
-Everything on the card — songs, kits, synths, samples, firmware files. The auto-generated README.md changelog in the card repo summarizes each commit with per-file status and a samples section.
+Everything on the card — songs, kits, synths, samples, firmware files. Each commit auto-generates a changelog entry in the card repo's README.md with per-file status and a samples section.
 
-## GitHub sync (optional)
+## GitHub sync
 
-`remote-init` creates a shadow repo at `~/deluge-card/.xml-remote` that includes only `.XML`, `.JSON`, and `README.md` — no samples. This keeps the GitHub repo small while still giving you full XML history and diffs on the web. Samples stay in the local repo only.
+This is optional. `remote-init` creates a shadow repo at `~/deluge-card/.xml-remote` that includes only `.XML`, `.JSON`, and `README.md` — no samples. This keeps the GitHub repo small (typically under 50 MB) while giving you full XML history and diffs on the web. Samples stay local.
 
-## Justfile equivalents
-
-If you have the repo cloned, the `just card-*` recipes still work — they do the same thing. The CLI is a pip-installable wrapper around the same workflow.
+```bash
+deluge-backup remote-init git@github.com:you/deluge-card.git
+deluge-backup push
+```
