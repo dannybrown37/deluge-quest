@@ -29,7 +29,7 @@ const TOOL_ROUTES: Record<string, string> = {
   '/kits': 'kits',
   '/patch': 'patch',
   '/import': 'import',
-  '/history': 'history',
+  '/backup': 'backup',
 };
 
 export function toolForPath(pathname: string): string | null {

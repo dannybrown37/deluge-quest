@@ -166,7 +166,7 @@ describe('DelugeUI', () => {
         'Kit Builder',
         'Patch Generator',
         'MIDI Import',
-        'Card History',
+        'Card Backup',
       ]) {
         expect(screen.getByLabelText(label)).toBeTruthy();
       }

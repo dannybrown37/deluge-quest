@@ -7,7 +7,7 @@ import SongPreview from '../components/SongPreview.svelte';
   <section class="page-section">
     <div class="page-header">
       <h1 class="page-title">Song Preview</h1>
-      <p class="page-desc">Preview your Deluge arrangement — see clips, instruments, and song structure, and hear it in the browser.</p>
+      <p class="page-desc">When looking at XML files on a computer, it's easy to forget which song is which, especially for in-progress tracks that are just saved as numbers. This tool is an experiment to try to play Deluge tracks in the browser. It works best with tracks with arrangements but makes an attempt at clip-only tracks. The patches and samples won't sound right, but the goal is just to be an easy reference tool, not to 1:1 recreate Deluge tracks. Sometimes the renditions can sound pretty cool, though (others are unlistenable, it's a coin-toss).</p>
     </div>
     <SongPreview client:load />
   </section>

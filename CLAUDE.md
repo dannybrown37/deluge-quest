@@ -91,7 +91,7 @@ Prose-only pages are Markdown instead (see `/faq`).
 | `/patch` | `PatchGenerator.svelte` | Generate synth presets with live Web Audio preview |
 | `/score` | `ScoreConverter.svelte` | Song XML → MusicXML download |
 | `/import` | `MidiImporter.svelte` | MIDI → Deluge song XML |
-| `/history` | `HistoryTimeline.svelte` | Save points of every song/kit/patch (never samples), plain-words diff between any two, per-file restore. Stored in a folder on disk when one is picked, browser storage otherwise |
+| `/backup` | — | Prose page (Markdown) documenting the git-based `just card*` backup workflow |
 | `/songs` | — | Song index: list of all tracks with links to individual pages |
 | `/songs/[slug]` | `SongPlayer.svelte` | Shareable per-song page with mobile-friendly audio player, OG tags |
 | `/faq` | — | Hand-written prose. It is `src/pages/faq.md` (Markdown), rendered through `ProseLayout.astro` — edit the Markdown, not HTML |
@@ -122,9 +122,6 @@ per audio file for shareable song links.
 | `audioVisualizer.ts` | Canvas-based audio visualizer using `AnalyserNode` — frequency bars (gold/teal) when music plays, ambient wave when idle. Used on home page below the Deluge grid |
 | `homeAudio.ts` | Singleton `homeAudio` — the site-wide `<audio>` player + Web Audio FX chain (filter, reverb, delay, analyser), song list, MediaSession wiring. Shared by the home page, the mini-player in `BaseLayout`, and `/songs/[slug]`. Also emits the song analytics events |
 | `screenGuard.ts` | `shouldSyncScreen(state)` — decides whether the DelugeUI screen may revert to song info, or is currently claimed by a held knob value or a hovered pad |
-| `historyStore.ts` | Singleton `historyStore` — save points, content-addressed. Writes to `historyVault` when a folder is connected, else IndexedDB (`deluge-history` v1, stores `blobs` + `savePoints`, 50-save-point cap + blob GC). `hashXml()`, `classifyPath()`, `migrateToVault()` |
-| `historyVault.ts` | Singleton `historyVault` — the save-point folder on disk. `<vault>/blobs/<hash>.xml` + `<vault>/save-points/0007.json` + `meta.json` (id counter). Handle persisted in IndexedDB `deluge-history-vault`. Chromium only |
-| `xmlDiff.ts` | `diffXml()` (plain-words changes between two XMLs), `musicalChanges()`, `compareSavePoints()`, `readBpm()`, `countNotes()`. Pure TS, no Pyodide |
 | `analytics.ts` | Vercel Web Analytics wrapper. `track()` (never throws), `trackToolVisit()`, `trackToolAction()`, plus pure `crossedMarks()`/`percentPlayed()` for listen milestones |
 
 ## Key Design Decisions
@@ -170,7 +167,7 @@ per audio file for shareable song links.
   or as part of `just coverage` (not part of `just check`, since it's the one recipe with
   out-of-repo network I/O on a cold cache). `loadPyodide()` itself (the browser CDN
   loader/wiring) is still untested. `web/src/components/*.svelte` (~9,000 lines) is now
-  testable — see below — but only `SongPlayer.svelte` has a test so far; the other 9 components
+  testable — see below — but only `SongPlayer.svelte` has a test so far; the other 8 components
   are still uncovered.
 - **Svelte component testing** — `@testing-library/svelte` + `@sveltejs/vite-plugin-svelte`
   (already a transitive dep via `@astrojs/svelte`) are wired into `web/vitest.config.ts`.
@@ -199,12 +196,6 @@ per audio file for shareable song links.
   at its default of `True` with no error. Must use
   `micropip.install.callKwargs(path, {deps: false})`. Same trap applies to any other
   Pyodide/micropip call taking Python kwargs from JS.
-- **Save points are per-file-name, not per-identity** — `/history` matches files across save
-  points by path. A song renamed between two save points reads as one removed plus one added,
-  not as a rename. The UI says so when the two sides came from different cards.
-- **Note counts only** — `xmlDiff` reports how many notes a clip gained or lost, read off the
-  `noteData` hex length. Notes *moved* without a count change report nothing; catching that
-  needs real note decoding.
 - **Only 2 scales** — major and minor. Should support all 14 firmware presets + USER_SCALE label.
 - **`midiChannel`/`cv` instruments** parse correctly now but still render nothing in MusicXML/score output (`converter.py` skips them) — preview/inspector paths (`pyodide.ts`) are fine.
 - **Kit drums at C4** — no General MIDI mapping; all drums render as x-noteheads with lyric labels.
@@ -281,7 +272,6 @@ Backward seeks never re-fire a milestone; `trackedPercent` is monotonic.
 | `patch` | `generate`, `preview`, `download`, `bulk_download` |
 | `score` | `convert`, `convert_error`, `download` |
 | `import` | `convert`, `convert_error`, `download` |
-| `history` | `save_point` (+files/changed), `diff`, `restore`, `prune`, `export_save_point`, `migrate` (+moved/skipped) |
 
 Deliberately **not** tracked: per-row edits (adding one kit row, dragging one sample). They fire
 dozens of times per session and would burn the free-tier event quota without telling you more

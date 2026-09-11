@@ -83,7 +83,7 @@ describe('toolForPath', () => {
     { path: '/kits', expected: 'kits' },
     { path: '/kits/', expected: 'kits' },
     { path: '/manage', expected: 'manage' },
-    { path: '/history', expected: 'history' },
+    { path: '/backup', expected: 'backup' },
     { path: '/', expected: null },
     { path: '/faq', expected: null },
     { path: '/songs/some-song', expected: null },

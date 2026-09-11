@@ -198,7 +198,7 @@
     { group: 'kits',      label: 'Kit Builder',      link: '/kits',      color: AUDITION_PALETTE[4], subtext: 'build & edit drum kits' },
     { group: 'patch',     label: 'Patch Generator',  link: '/patch',     color: AUDITION_PALETTE[5], subtext: 'random synth presets' },
     { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: AUDITION_PALETTE[6], subtext: 'MIDI → Deluge XML' },
-    { group: 'history',   label: 'Card History',     link: '/history',   color: AUDITION_PALETTE[7], subtext: 'view & edit card history' },
+    { group: 'backup',    label: 'Card Backup',      link: '/backup',    color: AUDITION_PALETTE[7], subtext: 'git-based card backup' },
   ];
 
   const FUTURE_TOOLS: { group: string; label: string; subtext: string; color: string }[] = [
