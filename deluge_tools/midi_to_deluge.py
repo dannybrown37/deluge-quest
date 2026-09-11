@@ -5,7 +5,10 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 
-import mido
+try:
+    import mido
+except ImportError:
+    mido = None  # type: ignore[assignment]
 
 from deluge_tools.parser import (
     TICKS_PER_QUARTER,
@@ -221,6 +224,9 @@ def midi_to_deluge_xml(
     root_note: int = 0,
     mode_notes: list[int] | None = None,
 ) -> None:
+    if mido is None:
+        msg = "mido is required for MIDI import: pip install deluge-tools[midi]"
+        raise ImportError(msg)
     mid = mido.MidiFile(str(midi_path))
     bpm, tracks = _extract_tracks(mid)
 

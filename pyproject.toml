@@ -3,10 +3,12 @@ name = "deluge-tools"
 version = "0.1.0"
 description = "Utilities for Synthstrom Deluge song files"
 requires-python = ">=3.11"
-dependencies = [
-    "mido>=1.3,<2",
-    "music21>=9.1,<11",
-]
+dependencies = []
+
+[project.optional-dependencies]
+score = ["music21>=9.1,<11"]
+midi = ["mido>=1.3,<2"]
+all = ["deluge-tools[score,midi]"]
 
 [dependency-groups]
 dev = [
@@ -22,6 +24,7 @@ deluge-score = "deluge_tools.cli:main"
 deluge-import = "deluge_tools.cli_import:main"
 deluge-stats = "deluge_tools.cli_stats:main"
 deluge-clean = "deluge_tools.cli_clean:main"
+deluge-backup = "deluge_tools.cli_backup:main"
 
 [build-system]
 requires = ["hatchling"]

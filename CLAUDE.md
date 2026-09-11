@@ -61,8 +61,9 @@ deluge_tools/           — pure-stdlib format logic (except music21/mido, CLI-o
   cli_import.py         — `deluge-import`
   cli_stats.py          — `deluge-stats`   (directory scanner, table output)
   cli_clean.py          — `deluge-clean`   (card scan/cleanup)
+  cli_backup.py         — `deluge-backup`  (git-based SD card backup)
 tests/                  — test_parser, test_converter, test_analyzer, test_card_scanner,
-                          test_cli_clean, test_cli_stats, test_midi_to_deluge
+                          test_cli_clean, test_cli_stats, test_cli_backup, test_midi_to_deluge
 web/                    — Astro + Svelte, static, deployed to Vercel
   src/pages/            — one .astro shell per tool, each mounting one Svelte island
   src/components/       — the actual product (see table below)
@@ -183,8 +184,9 @@ per audio file for shareable song links.
   and manually invoking the callback passed to a mocked `requestAnimationFrame`.
 - ~~**`micropip.install()` pulled `music21`/`matplotlib`/`numpy`/`pillow` on every page
   load**~~ **FIXED** — found via the new `pyodide.integration.test.ts`. `pyproject.toml` lists
-  `music21` and `mido` as unconditional top-level `dependencies`, so the wheel's METADATA
-  declares them as `Requires-Dist` with no marker; `micropip.install()` with default dependency
+  `music21` and `mido` were unconditional top-level `dependencies` (now moved to
+  `[project.optional-dependencies]` as `score` and `midi` extras), so the wheel's METADATA
+  declared them as `Requires-Dist` with no marker; `micropip.install()` with default dependency
   resolution installed music21's full transitive chain (matplotlib, numpy, Pillow, fonttools,
   …) on every page that called `loadPyodide()`, not just the CLI path that imports
   `song_to_score()`. Fixed with `deps=False` (verified safe: no browser-loaded module
