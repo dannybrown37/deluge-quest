@@ -31,7 +31,7 @@ export async function loadPyodide(onProgress?: ProgressCallback): Promise<Pyodid
     // passes {deps: false} as the positional `keep_going` arg instead,
     // which silently leaves deps at its default of True.
     await micropip.install.callKwargs(
-      "/py/deluge_tools-0.1.0-py3-none-any.whl",
+      "/py/deluge_quest-0.1.0-py3-none-any.whl",
       { deps: false }
     );
 

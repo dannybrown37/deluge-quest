@@ -19,7 +19,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WHEEL_PATH = path.resolve(
   __dirname,
-  "../../public/py/deluge_tools-0.1.0-py3-none-any.whl"
+  "../../public/py/deluge_quest-0.1.0-py3-none-any.whl"
 );
 const FIXTURE_XML_PATH = path.resolve(
   __dirname,
