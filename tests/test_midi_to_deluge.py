@@ -3,16 +3,17 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import mido
 import pytest
 
-from deluge_tools.midi_to_deluge import (
+mido = pytest.importorskip("mido")
+
+from deluge_tools.midi_to_deluge import (  # noqa: E402
     bpm_to_timer_ticks,
     encode_clip_instances,
     encode_note_data,
     midi_to_deluge_xml,
 )
-from deluge_tools.parser import (
+from deluge_tools.parser import (  # noqa: E402
     TICKS_PER_QUARTER,
     ClipInstance,
     Note,
@@ -183,6 +184,237 @@ class TestMidiToDelugeXml:
         row_c = next(r for r in clip.rows if r.y == 60)
         assert row_c.notes[0].length == 48  # quarter note
         assert row_c.notes[0].position == 0
+
+
+class TestMidiToDelugeXmlEdgeCases:
+    def test_root_note_and_mode_notes(self, tmp_path: Path) -> None:
+        midi_path = _make_midi(tmp_path)
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(midi_path, out, root_note=5, mode_notes=[0, 2, 3, 5, 7, 8, 10])
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        assert song.root_note == 5
+        assert song.mode_notes == [0, 2, 3, 5, 7, 8, 10]
+
+    def test_default_mode_notes_is_major(self, tmp_path: Path) -> None:
+        midi_path = _make_midi(tmp_path)
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(midi_path, out)
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        assert song.mode_notes == [0, 2, 4, 5, 7, 9, 11]
+
+    def test_note_on_velocity_zero_treated_as_note_off(self, tmp_path: Path) -> None:
+        mid = mido.MidiFile(ticks_per_beat=480)
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+        track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
+        track.append(mido.Message("note_on", note=60, velocity=100, time=0))
+        track.append(mido.Message("note_on", note=60, velocity=0, time=480))
+        track.append(mido.MetaMessage("end_of_track"))
+        path = tmp_path / "velzero.mid"
+        mid.save(str(path))
+
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(path, out)
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        row = next(r for r in song.clips[0].rows if r.y == 60)
+        assert len(row.notes) == 1
+        assert row.notes[0].length == 48
+
+    def test_note_off_without_note_on_is_ignored(self, tmp_path: Path) -> None:
+        mid = mido.MidiFile(ticks_per_beat=480)
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+        track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
+        track.append(mido.Message("note_off", note=60, velocity=0, time=0))
+        track.append(mido.Message("note_on", note=64, velocity=90, time=0))
+        track.append(mido.Message("note_off", note=64, velocity=0, time=240))
+        track.append(mido.MetaMessage("end_of_track"))
+        path = tmp_path / "orphan_off.mid"
+        mid.save(str(path))
+
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(path, out)
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        pitches = {r.y for r in song.clips[0].rows if r.notes}
+        assert pitches == {64}
+
+    def test_track_with_no_notes_is_excluded(self, tmp_path: Path) -> None:
+        mid = mido.MidiFile(ticks_per_beat=480)
+        empty_track = mido.MidiTrack()
+        mid.tracks.append(empty_track)
+        empty_track.append(mido.MetaMessage("track_name", name="empty"))
+        empty_track.append(mido.MetaMessage("end_of_track"))
+
+        note_track = mido.MidiTrack()
+        mid.tracks.append(note_track)
+        note_track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
+        note_track.append(mido.Message("note_on", note=60, velocity=100, time=0))
+        note_track.append(mido.Message("note_off", note=60, velocity=0, time=480))
+        note_track.append(mido.MetaMessage("end_of_track"))
+        path = tmp_path / "with_empty.mid"
+        mid.save(str(path))
+
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(path, out)
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        assert len(song.clips) == 1
+
+    def test_multiple_notes_same_pitch(self, tmp_path: Path) -> None:
+        mid = mido.MidiFile(ticks_per_beat=480)
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+        track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
+        track.append(mido.Message("note_on", note=60, velocity=100, time=0))
+        track.append(mido.Message("note_off", note=60, velocity=0, time=480))
+        track.append(mido.Message("note_on", note=60, velocity=110, time=0))
+        track.append(mido.Message("note_off", note=60, velocity=0, time=480))
+        track.append(mido.MetaMessage("end_of_track"))
+        path = tmp_path / "repeat.mid"
+        mid.save(str(path))
+
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(path, out)
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        row = next(r for r in song.clips[0].rows if r.y == 60)
+        assert len(row.notes) == 2
+
+    def test_clip_length_rounds_up_to_bar(self, tmp_path: Path) -> None:
+        midi_path = _make_midi(tmp_path)
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(midi_path, out)
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        assert song.clips[0].length % (TICKS_PER_QUARTER * 4) == 0
+
+    def test_second_clip_instance_position_offset(self, tmp_path: Path) -> None:
+        mid = mido.MidiFile(ticks_per_beat=480)
+        for i, pitch in enumerate([60, 72]):
+            track = mido.MidiTrack()
+            mid.tracks.append(track)
+            if i == 0:
+                track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
+            track.append(mido.Message("note_on", note=pitch, velocity=100, time=0))
+            track.append(mido.Message("note_off", note=pitch, velocity=0, time=480))
+            track.append(mido.MetaMessage("end_of_track"))
+        path = tmp_path / "multi_offset.mid"
+        mid.save(str(path))
+
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(path, out)
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        second_inst = song.instruments[1]
+        assert second_inst.clip_instances[0].position != 0
+
+    def test_zero_length_note_clamped_to_one(self, tmp_path: Path) -> None:
+        mid = mido.MidiFile(ticks_per_beat=480)
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+        track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
+        track.append(mido.Message("note_on", note=60, velocity=100, time=0))
+        track.append(mido.Message("note_off", note=60, velocity=0, time=0))
+        track.append(mido.MetaMessage("end_of_track"))
+        path = tmp_path / "zerolen.mid"
+        mid.save(str(path))
+
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(path, out)
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        row = next(r for r in song.clips[0].rows if r.y == 60)
+        assert row.notes[0].length == 1
+
+
+class TestMidoMissing:
+    def test_import_error_when_mido_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import deluge_tools.midi_to_deluge as mod
+
+        monkeypatch.setattr(mod, "mido", None)
+        with pytest.raises(ImportError, match="mido is required"):
+            mod.midi_to_deluge_xml(tmp_path / "nope.mid", tmp_path / "out.XML")
+
+
+class TestBuildSoundParamsElement:
+    def test_contains_default_params(self) -> None:
+        from deluge_tools.midi_to_deluge import _build_sound_params_element
+
+        el = _build_sound_params_element()
+        assert el.tag == "soundParams"
+        assert el.get("volume") == "0x7FFFFFFF"
+        assert el.find("envelope1") is not None
+        assert el.find("patchCables/patchCable") is not None
+        assert el.find("equalizer") is not None
+
+    def test_custom_tag_name(self) -> None:
+        from deluge_tools.midi_to_deluge import _build_sound_params_element
+
+        el = _build_sound_params_element(tag="defaultParams")
+        assert el.tag == "defaultParams"
+
+
+class TestBuildInstrumentElement:
+    def test_without_clip_instances(self) -> None:
+        from deluge_tools.midi_to_deluge import _build_instrument_element
+
+        el = _build_instrument_element(0, "")
+        assert el.get("clipInstances") is None
+        assert el.get("presetSlot") == "0"
+
+    def test_with_clip_instances(self) -> None:
+        from deluge_tools.midi_to_deluge import _build_instrument_element
+
+        el = _build_instrument_element(2, "0xDEADBEEF")
+        assert el.get("clipInstances") == "0xDEADBEEF"
+        assert el.get("presetSlot") == "2"
+
+
+class TestScaleTickAndCeilToBar:
+    @pytest.mark.parametrize(
+        ("midi_tick", "midi_tpb", "expected"),
+        [
+            (0, 480, 0),
+            (480, 480, 48),
+            (240, 480, 24),
+            (960, 480, 96),
+        ],
+    )
+    def test_scale_tick(self, midi_tick: int, midi_tpb: int, expected: int) -> None:
+        from deluge_tools.midi_to_deluge import _scale_tick
+
+        assert _scale_tick(midi_tick, midi_tpb) == expected
+
+    @pytest.mark.parametrize(
+        ("ticks", "expected"),
+        [
+            (0, 192),
+            (-5, 192),
+            (1, 192),
+            (192, 192),
+            (193, 384),
+            (384, 384),
+        ],
+    )
+    def test_ceil_to_bar(self, ticks: int, expected: int) -> None:
+        from deluge_tools.midi_to_deluge import _ceil_to_bar
+
+        assert _ceil_to_bar(ticks) == expected
 
 
 class TestCliImport:

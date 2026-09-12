@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
-from music21 import stream
 
-from deluge_tools.converter import song_to_score
-from deluge_tools.parser import (
+music21 = pytest.importorskip("music21")
+from music21 import stream  # noqa: E402
+
+from deluge_tools.converter import song_to_musicxml, song_to_score  # noqa: E402
+from deluge_tools.parser import (  # noqa: E402
     Clip,
     ClipInstance,
     Instrument,
@@ -374,3 +378,304 @@ class TestClipTruncation:
         score = song_to_score(song)
         notes = list(score.parts[0].flatten().notes)
         assert len(notes) == 2
+
+
+class TestArrangementMusicXML:
+    """Cover the has_arrangement branch of song_to_musicxml, incl. edge cases
+    (missing clip refs, drumless synth rows, empty note sets) that only exist
+    on the arrangement path, not the clip-catalog fallback."""
+
+    def test_arrangement_synth_and_kit_parts(self):
+        synth_clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20)])],
+        )
+        kit_clip = Clip(
+            index=1,
+            instrument_slot=1,
+            instrument_sub_slot=-1,
+            is_kit=True,
+            length=192,
+            rows=[NoteRow(drum_index=0, drum_name="Kick", notes=[Note(0, 12, 100, 20)])],
+        )
+        synth_inst = Instrument(
+            name="Synth 0",
+            slot=0,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        kit_inst = Instrument(
+            name="Kit",
+            slot=1,
+            sub_slot=-1,
+            is_kit=True,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=1)],
+        )
+        song = _make_song([synth_clip, kit_clip], [synth_inst, kit_inst])
+        xml = song_to_musicxml(song)
+        assert "<note" in xml
+        assert "Kick" in xml
+
+    def test_arrangement_skips_instruments_without_clip_instances(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20)])],
+        )
+        no_arrangement_inst = Instrument(name="Idle", slot=0, sub_slot=-1, clip_instances=[])
+        arranged_inst = Instrument(
+            name="Synth 1",
+            slot=1,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [no_arrangement_inst, arranged_inst])
+        xml = song_to_musicxml(song)
+        assert "Idle" not in xml
+
+    def test_synth_clip_instance_referencing_missing_clip_is_skipped(self):
+        inst = Instrument(
+            name="Synth",
+            slot=0,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=99)],
+        )
+        song = _make_song([], [inst])
+        xml = song_to_musicxml(song)
+        assert "<note" not in xml
+
+    def test_drum_clip_instance_referencing_missing_clip_is_skipped(self):
+        inst = Instrument(
+            name="Kit",
+            slot=0,
+            sub_slot=-1,
+            is_kit=True,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=99)],
+        )
+        song = _make_song([], [inst])
+        xml = song_to_musicxml(song)
+        assert "<note" not in xml
+
+    def test_synth_part_skips_rows_without_pitch(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=None, notes=[Note(0, 48, 80, 20)])],
+        )
+        inst = Instrument(
+            name="Synth",
+            slot=0,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        xml = song_to_musicxml(song)
+        assert "<note" not in xml
+
+    def test_synth_part_with_no_notes_omitted(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            length=192,
+            rows=[],
+        )
+        inst = Instrument(
+            name="Synth",
+            slot=0,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        xml = song_to_musicxml(song)
+        assert "Synth" not in xml
+
+    def test_drum_part_with_no_notes_omitted(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            is_kit=True,
+            length=192,
+            rows=[],
+        )
+        inst = Instrument(
+            name="Kit",
+            slot=0,
+            sub_slot=-1,
+            is_kit=True,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        xml = song_to_musicxml(song)
+        assert "Kit" not in xml
+
+
+class TestScoreArrangementEdgeCases:
+    def test_score_synth_clip_instance_referencing_missing_clip_is_skipped(self):
+        inst = Instrument(
+            name="Synth",
+            slot=0,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=99)],
+        )
+        song = _make_song([], [inst])
+        score = song_to_score(song)
+        assert len(score.parts) == 0
+
+    def test_score_kit_instrument_produces_percussion_part(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            is_kit=True,
+            length=192,
+            rows=[NoteRow(drum_index=0, drum_name="Snare", notes=[Note(0, 12, 100, 20)])],
+        )
+        inst = Instrument(
+            name="Kit",
+            slot=0,
+            sub_slot=-1,
+            is_kit=True,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        assert len(score.parts) == 1
+        notes = list(score.parts[0].flatten().notes)
+        assert len(notes) == 1
+        assert notes[0].lyric == "Snare"
+
+    def test_score_synth_part_skips_rows_without_pitch(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=None, notes=[Note(0, 48, 80, 20)])],
+        )
+        inst = Instrument(
+            name="Synth",
+            slot=0,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        assert len(score.parts) == 0
+
+    def test_score_chord_when_multiple_pitches_at_same_position(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            length=192,
+            rows=[
+                NoteRow(y=60, notes=[Note(0, 48, 80, 20)]),
+                NoteRow(y=64, notes=[Note(0, 48, 80, 20)]),
+            ],
+        )
+        inst = Instrument(
+            name="Synth",
+            slot=0,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        score = song_to_score(song)
+        notes = list(score.parts[0].flatten().notesAndRests)
+        chords = [n for n in notes if n.isChord]
+        assert len(chords) == 1
+        assert len(chords[0].pitches) == 2
+
+
+class TestArrangementMusicXMLDetails:
+    def test_minor_mode_key_fifths_shifted(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20)])],
+        )
+        inst = Instrument(
+            name="Synth",
+            slot=0,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = Song(
+            bpm=120.0,
+            root_note=0,
+            mode_notes=[0, 2, 3, 5, 7, 8, 10],
+            instruments=[inst],
+            clips=[clip],
+            in_arrangement_view=True,
+        )
+        xml = song_to_musicxml(song)
+        assert "<fifths>-3</fifths>" in xml
+
+    def test_overlapping_notes_trimmed(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            length=192,
+            rows=[
+                NoteRow(y=60, notes=[Note(0, 96, 80, 20)]),
+                NoteRow(y=64, notes=[Note(48, 48, 80, 20)]),
+            ],
+        )
+        inst = Instrument(
+            name="Synth",
+            slot=0,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [inst])
+        xml = song_to_musicxml(song)
+        assert xml.count("<note") == 2
+
+    def test_clip_catalog_kit_via_musicxml(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=1,
+            instrument_sub_slot=-1,
+            is_kit=True,
+            length=192,
+            rows=[NoteRow(drum_index=0, drum_name="Kick", notes=[Note(0, 12, 100, 20)])],
+        )
+        inst = Instrument(name="Kit", slot=1, sub_slot=-1, is_kit=True, clip_instances=[])
+        song = _make_song([clip], [inst], in_arrangement_view=False)
+        xml = song_to_musicxml(song)
+        assert "Kick" in xml
+
+
+class TestScoreArrangementSkipsIdle:
+    def test_idle_instrument_excluded_from_score(self):
+        clip = Clip(
+            index=0,
+            instrument_slot=0,
+            instrument_sub_slot=-1,
+            length=192,
+            rows=[NoteRow(y=60, notes=[Note(0, 48, 80, 20)])],
+        )
+        idle_inst = Instrument(name="Idle", slot=0, sub_slot=-1, clip_instances=[])
+        arranged_inst = Instrument(
+            name="Synth 1",
+            slot=1,
+            sub_slot=-1,
+            clip_instances=[ClipInstance(position=0, length=192, clip_index=0)],
+        )
+        song = _make_song([clip], [idle_inst, arranged_inst])
+        score = song_to_score(song)
+        names = [p.partName for p in score.parts]
+        assert "Idle" not in names
+        assert "Synth 1" in names
