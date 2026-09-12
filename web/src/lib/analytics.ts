@@ -1,13 +1,17 @@
-import { track as vercelTrack } from '@vercel/analytics';
-
 export type AnalyticsProps = Record<string, string | number | boolean | null>;
+
+declare global {
+  interface Window {
+    umami?: { track: (event: string, props?: AnalyticsProps) => void };
+  }
+}
 
 const PROGRESS_MARKS = [25, 50, 75, 100] as const;
 
 export function track(event: string, props?: AnalyticsProps): void {
   if (typeof window === 'undefined') return;
   try {
-    vercelTrack(event, props);
+    window.umami?.track(event, props);
   } catch { /* analytics must never break playback */ }
 }
 

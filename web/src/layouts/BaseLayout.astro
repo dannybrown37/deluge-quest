@@ -1,6 +1,5 @@
 ---
 import { ClientRouter } from 'astro:transitions';
-import Analytics from '@vercel/analytics/astro';
 
 interface Props {
   title: string;
@@ -28,7 +27,7 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://deluge.quest');
     <title>{title} — deluge.quest</title>
     <link rel="icon" type="image/svg+xml" href="/grid-logo.svg" />
     <ClientRouter />
-    <Analytics />
+    <script defer src="https://cloud.umami.is/script.js" data-website-id="cf58cfd2-1688-412f-b1ba-899ea33208d5"></script>
   </head>
   <body>
     <a href="#main-content" class="skip-link">Skip to content</a>

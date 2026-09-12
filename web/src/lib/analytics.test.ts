@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { crossedMarks, percentPlayed, toolForPath, track, trackToolVisit, trackToolAction } from './analytics';
 
-const { trackMock } = vi.hoisted(() => ({ trackMock: vi.fn() }));
-vi.mock('@vercel/analytics', () => ({ track: trackMock }));
+const trackMock = vi.fn();
 
-beforeEach(() => { trackMock.mockReset(); });
+beforeEach(() => {
+  trackMock.mockReset();
+  vi.stubGlobal('window', { umami: { track: trackMock } });
+});
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('crossedMarks', () => {
@@ -37,7 +39,7 @@ describe('percentPlayed', () => {
 });
 
 describe('track', () => {
-  it('forwards event and props to the vercel analytics client', () => {
+  it('forwards event and props to umami', () => {
     track('song_play', { song: 'demo' });
     expect(trackMock).toHaveBeenCalledWith('song_play', { song: 'demo' });
   });
