@@ -322,6 +322,58 @@ class TestPush:
         assert "no xml changes" in out.lower()
 
 
+class TestOpen:
+    def test_fails_if_no_remote(self, env_vars, card_dir, monkeypatch, capsys):
+        for k, v in env_vars.items():
+            monkeypatch.setenv(k, v)
+        with pytest.raises(SystemExit):
+            _main(["open"])
+        assert "no xml remote" in capsys.readouterr().err.lower()
+
+    def test_opens_https_url_on_non_wsl(self, env_vars, card_dir, monkeypatch, capsys):
+        for k, v in env_vars.items():
+            monkeypatch.setenv(k, v)
+        (card_dir / ".xml-remote" / ".git").mkdir(parents=True)
+        remote_result = subprocess.CompletedProcess(
+            [], 0, stdout="https://github.com/user/repo.git\n"
+        )
+        mock_run = MagicMock(return_value=remote_result)
+        mock_open = MagicMock()
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._is_wsl", return_value=False),
+            patch("webbrowser.open", mock_open),
+        ):
+            _main(["open"])
+        mock_open.assert_called_once_with("https://github.com/user/repo")
+        assert "https://github.com/user/repo" in capsys.readouterr().out
+
+    def test_opens_via_cmd_exe_on_wsl(self, env_vars, card_dir, monkeypatch):
+        for k, v in env_vars.items():
+            monkeypatch.setenv(k, v)
+        (card_dir / ".xml-remote" / ".git").mkdir(parents=True)
+        remote_result = subprocess.CompletedProcess([], 0, stdout="git@github.com:user/repo.git\n")
+        mock_run = MagicMock(return_value=remote_result)
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._is_wsl", return_value=True),
+        ):
+            _main(["open"])
+        calls_str = str(mock_run.call_args_list)
+        assert "cmd.exe" in calls_str
+        assert "https://github.com/user/repo" in calls_str
+
+    def test_fails_if_no_remote_url(self, env_vars, card_dir, monkeypatch, capsys):
+        for k, v in env_vars.items():
+            monkeypatch.setenv(k, v)
+        (card_dir / ".xml-remote" / ".git").mkdir(parents=True)
+        mock_run = MagicMock(return_value=subprocess.CompletedProcess([], 1, stdout=""))
+        with patch("subprocess.run", mock_run):
+            with pytest.raises(SystemExit):
+                _main(["open"])
+        assert "no remote url" in capsys.readouterr().err.lower()
+
+
 class TestWslMount:
     def test_attempts_mount_on_wsl_when_empty(self, tmp_path):
         from deluge_tools.cli_backup import _ensure_mount

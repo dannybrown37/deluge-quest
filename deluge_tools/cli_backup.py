@@ -419,6 +419,52 @@ def cmd_remote_init(args) -> None:
     print("XML remote initialized — use 'deluge-backup push' to sync and push")
 
 
+def _remote_url_to_web(url: str) -> str:
+    url = url.strip()
+    if url.startswith("git@"):
+        host, _, path = url.partition(":")
+        host = host.removeprefix("git@")
+        url = f"https://{host}/{path}"
+    return url.removesuffix(".git")
+
+
+def _open_browser(url: str) -> None:
+    if _is_wsl():
+        subprocess.run(["cmd.exe", "/c", "start", "", url], check=False)
+    else:
+        import webbrowser
+
+        webbrowser.open(url)
+
+
+def cmd_open(args) -> None:
+    card_dir = _card_dir()
+    _require_repo(card_dir)
+
+    remote_dir = card_dir / ".xml-remote"
+    if not (remote_dir / ".git").is_dir():
+        print(
+            "error: no XML remote set up — run 'deluge-backup remote-init <url>' first",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    result = _run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=remote_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        print("error: no remote URL configured", file=sys.stderr)
+        sys.exit(1)
+
+    web_url = _remote_url_to_web(result.stdout.strip())
+    print(f"Opening {web_url} ...")
+    _open_browser(web_url)
+
+
 def cmd_push(args) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
@@ -518,6 +564,8 @@ def main(argv: list[str] | None = None) -> None:
         help="Commit message (default: auto-generated)",
     )
 
+    subparsers.add_parser("open", help="[backup] Open the GitHub remote in a browser")
+
     # -- Inspection --
     subparsers.add_parser("status", help="[info] Show card repo status")
     subparsers.add_parser("diff", help="[info] Show diff of changed files")
@@ -541,6 +589,7 @@ def main(argv: list[str] | None = None) -> None:
         "save": cmd_save,
         "remote-init": cmd_remote_init,
         "push": cmd_push,
+        "open": cmd_open,
     }
     commands[args.command](args)
 

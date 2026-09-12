@@ -88,6 +88,9 @@ deluge-backup remote-init git@github.com:yourname/deluge-card.git
 
 # After that, push whenever you want:
 deluge-backup push
+
+# Jump to the repo on GitHub in your browser:
+deluge-backup open
 ```
 
 If you don't use GitHub, you can skip this. Your local backup is still fully functional. You may want to copy it to a second place for additional safety, like an external hard drive or cloud storage.
@@ -127,6 +130,7 @@ Backups are stored in `~/deluge-card` by default. The SD card mount point defaul
 | `deluge-backup size` | Check how big your backup is |
 | `deluge-backup remote-init` | Connect to a GitHub repo (one-time) |
 | `deluge-backup push` | Push XML files to GitHub |
+| `deluge-backup open` | Open the GitHub repo in your browser |
 
 ## Other tools included with deluge-quest
 

@@ -121,6 +121,7 @@ export class HomeAudioPlayer {
     this.gainNode = this.audioCtx.createGain();
     this.dryGain = this.audioCtx.createGain();
     this.wetGain = this.audioCtx.createGain();
+    this.wetGain.gain.value = 0;
     this.reverbNode = this.audioCtx.createConvolver();
     this.reverbNode.buffer = this.createImpulse(this.audioCtx);
     this.delayNode = this.audioCtx.createDelay(2.0);
@@ -128,7 +129,7 @@ export class HomeAudioPlayer {
     this.delayFeedback = this.audioCtx.createGain();
     this.delayFeedback.gain.value = 0.35;
     this.delayWet = this.audioCtx.createGain();
-    this.delayWet.gain.value = 0.4;
+    this.delayWet.gain.value = 0;
 
     this.filterNode.connect(this.dryGain);
     this.filterNode.connect(this.reverbNode);
@@ -408,9 +409,11 @@ export class HomeAudioPlayer {
   }
 
   updateDelay(time: number, feedback: number) {
-    if (!this.delayNode || !this.delayFeedback) return;
+    if (!this.delayNode || !this.delayFeedback || !this.delayWet) return;
     this.delayNode.delayTime.value = 0.05 + (time / 127) * 0.75;
     this.delayFeedback.gain.value = (feedback / 127) * 0.85;
+    const active = time > 0 || feedback > 0;
+    this.delayWet.gain.value = active ? 0.4 : 0;
   }
 
   updatePlaybackRate(value: number) {
