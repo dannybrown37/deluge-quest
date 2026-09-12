@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { crossedMarks, percentPlayed, toolForPath, track, trackToolVisit, trackToolAction } from './analytics';
+import { crossedMarks, percentPlayed, toolForPath, track, trackToolVisit, trackToolAction, trackSong } from './analytics';
 
 const trackMock = vi.fn();
 
@@ -39,27 +39,27 @@ describe('percentPlayed', () => {
 });
 
 describe('track', () => {
-  it('forwards event and props to umami', () => {
-    track('song_play', { song: 'demo' });
-    expect(trackMock).toHaveBeenCalledWith('song_play', { song: 'demo' });
+  it('forwards event name to umami', () => {
+    track('play:demo');
+    expect(trackMock).toHaveBeenCalledWith('play:demo');
   });
 
   it('swallows errors thrown by the analytics client', () => {
     trackMock.mockImplementation(() => { throw new Error('blocked by adblock'); });
-    expect(() => track('song_play')).not.toThrow();
+    expect(() => track('play:demo')).not.toThrow();
   });
 
   it('is a no-op outside a browser context', () => {
     vi.stubGlobal('window', undefined);
-    track('song_play');
+    track('play:demo');
     expect(trackMock).not.toHaveBeenCalled();
   });
 });
 
 describe('trackToolVisit', () => {
-  it('tracks tool_visit for a known tool route', () => {
+  it('tracks visit for a known tool route', () => {
     trackToolVisit('/kits');
-    expect(trackMock).toHaveBeenCalledWith('tool_visit', { tool: 'kits' });
+    expect(trackMock).toHaveBeenCalledWith('visit:kits');
   });
 
   it('does not track for a non-tool route', () => {
@@ -69,14 +69,26 @@ describe('trackToolVisit', () => {
 });
 
 describe('trackToolAction', () => {
-  it('tracks tool_action with tool, action, and any extra props merged in', () => {
-    trackToolAction('kits', 'export', { rows: 4 });
-    expect(trackMock).toHaveBeenCalledWith('tool_action', { tool: 'kits', action: 'export', rows: 4 });
+  it('tracks action with tool and action in event name', () => {
+    trackToolAction('kits', 'export');
+    expect(trackMock).toHaveBeenCalledWith('action:kits:export');
+  });
+});
+
+describe('trackSong', () => {
+  it('tracks song event with slug', () => {
+    trackSong('play', 'My Song');
+    expect(trackMock).toHaveBeenCalledWith('play:my-song');
   });
 
-  it('tracks tool_action with no extra props', () => {
-    trackToolAction('preview', 'play');
-    expect(trackMock).toHaveBeenCalledWith('tool_action', { tool: 'preview', action: 'play' });
+  it('includes detail when provided', () => {
+    trackSong('listen', 'My Song', 42);
+    expect(trackMock).toHaveBeenCalledWith('listen:my-song:42');
+  });
+
+  it('includes string detail', () => {
+    trackSong('progress', 'Demo Track', '75');
+    expect(trackMock).toHaveBeenCalledWith('progress:demo-track:75');
   });
 });
 

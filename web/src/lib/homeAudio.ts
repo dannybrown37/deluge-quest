@@ -1,4 +1,4 @@
-import { track, crossedMarks, percentPlayed } from './analytics';
+import { trackSong, crossedMarks, percentPlayed } from './analytics';
 
 interface Song {
   file: string;
@@ -306,7 +306,7 @@ export class HomeAudioPlayer {
     this.initMediaSession();
     if (!this.playReported) {
       this.playReported = true;
-      track('song_play', { song: this.songLabel });
+      trackSong('play', this.songLabel);
     }
     this.installUnloadFlush();
     this.startTimer();
@@ -347,7 +347,7 @@ export class HomeAudioPlayer {
     const marks = crossedMarks(this.trackedPercent, pct);
     this.trackedPercent = Math.max(this.trackedPercent, pct);
     for (const mark of marks) {
-      track('song_progress', { song: this.songLabel, percent: mark });
+      trackSong('progress', this.songLabel, mark);
     }
   }
 
@@ -379,7 +379,7 @@ export class HomeAudioPlayer {
     const unreported = Math.round(this.listenSeconds - this.reportedSeconds);
     if (unreported < 1) return;
     this.reportedSeconds = this.listenSeconds;
-    track('song_listen', { song: this.songLabel, seconds: unreported });
+    trackSong('listen', this.songLabel, unreported);
   }
 
   updateVolume(value: number) {

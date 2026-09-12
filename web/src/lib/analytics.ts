@@ -1,21 +1,18 @@
-export type AnalyticsProps = Record<string, string | number | boolean | null>;
-
 declare global {
   interface Window {
-    umami?: { track: (event: string, props?: AnalyticsProps) => void };
+    umami?: { track: (event: string) => void };
   }
 }
 
 const PROGRESS_MARKS = [25, 50, 75, 100] as const;
 
-export function track(event: string, props?: AnalyticsProps): void {
+export function track(event: string): void {
   if (typeof window === 'undefined') return;
   try {
-    window.umami?.track(event, props);
+    window.umami?.track(event);
   } catch { /* analytics must never break playback */ }
 }
 
-// Vercel counts each event, so only fire on the marks a listener newly crossed.
 export function crossedMarks(prevPercent: number, nowPercent: number): number[] {
   return PROGRESS_MARKS.filter((m) => prevPercent < m && nowPercent >= m);
 }
@@ -43,9 +40,14 @@ export function toolForPath(pathname: string): string | null {
 
 export function trackToolVisit(pathname: string): void {
   const tool = toolForPath(pathname);
-  if (tool) track('tool_visit', { tool });
+  if (tool) track(`visit:${tool}`);
 }
 
-export function trackToolAction(tool: string, action: string, extra?: AnalyticsProps): void {
-  track('tool_action', { tool, action, ...extra });
+export function trackToolAction(tool: string, action: string): void {
+  track(`action:${tool}:${action}`);
+}
+
+export function trackSong(event: string, song: string, detail?: string | number): void {
+  const slug = song.replace(/\s+/g, '-').toLowerCase();
+  track(detail != null ? `${event}:${slug}:${detail}` : `${event}:${slug}`);
 }

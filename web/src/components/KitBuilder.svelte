@@ -411,7 +411,7 @@
     a.click();
     URL.revokeObjectURL(url);
     hasUnsavedChanges = false;
-    trackToolAction("kits", "export", { rows: kit.rows.length });
+    trackToolAction("kits", "export");
   }
 
   async function loadKitFile(file: File) {

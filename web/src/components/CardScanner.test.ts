@@ -169,7 +169,7 @@ describe('CardScanner', () => {
 
     const stats = Array.from(document.querySelectorAll('.stat-value')).map((n) => n.textContent);
     expect(stats).toEqual(['4', '2', '3', '1']);
-    expect(mockTrack).toHaveBeenCalledWith('manage', 'scan', expect.objectContaining({ samples: 4 }));
+    expect(mockTrack).toHaveBeenCalledWith('manage', 'scan');
   });
 
   it('matches sample refs case-insensitively (FAT32)', async () => {
@@ -494,7 +494,7 @@ describe('CardScanner', () => {
     await fireEvent.click(screen.getByText(/^Songs/));
     await fireEvent.click(screen.getByText('Sort all songs'));
 
-    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith('manage', 'sort_songs', expect.objectContaining({ songs: expect.any(Number) })));
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith('manage', 'sort_songs'));
   });
 
   it('sorting a song out of a nested folder removes the now-empty source folders', async () => {
@@ -507,7 +507,7 @@ describe('CardScanner', () => {
     await fireEvent.click(screen.getByText(/^Songs/));
     await fireEvent.click(screen.getByText('Sort all songs'));
 
-    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith('manage', 'sort_songs', expect.anything()));
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith('manage', 'sort_songs'));
     expect(dir.removeEntry).toHaveBeenCalled();
   });
 

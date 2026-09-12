@@ -490,7 +490,7 @@
     };
     state = "done";
     saveToSession();
-    trackToolAction("manage", "scan", { samples: report.totalSamples, unused: report.unusedSamples.length });
+    trackToolAction("manage", "scan");
   }
 
   async function moveSample(samplePath: string) {
@@ -603,7 +603,7 @@
     for (const { path, category } of all) {
       if (!movedSongs.has(path)) await moveSongToCategory(path, category);
     }
-    trackToolAction("manage", "sort_songs", { songs: all.length });
+    trackToolAction("manage", "sort_songs");
   }
 
 
