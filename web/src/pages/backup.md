@@ -6,7 +6,7 @@ description: Back up your Deluge SD card with full history, real diffs, and opti
 
 ## Back up your card, with history
 
-Your Deluge SD card holds songs, kits, synths, and samples. It's got hours of creative work on a tiny chip that could fail, get lost, or just get overwritten by accident. `deluge-backup` gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
+Your Deluge SD card holds songs, kits, synths, and samples. It's got hours of creative work on a tiny chip; disaster could strike at any time. `deluge-backup` gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
 
 This is the most technical tool on [deluge.quest](https://deluge.quest). It runs in a terminal, not a browser. But if you can copy and paste a few commands, you can do this! And once it's set up, keeping backups current is a single command.
 
@@ -76,17 +76,6 @@ That's the whole workflow. `save` copies any changes from the card, records what
 
 For those who want to go a little deeper with these tools...
 
-### Seeing what changed
-
-Curious what's different since your last backup?
-
-```bash
-deluge-backup status    # which files changed
-deluge-backup diff      # what changed inside them
-deluge-backup log       # history of all your backups
-deluge-backup size      # how big your backup is
-```
-
 ### Pushing to GitHub (optional)
 
 Everything above works completely offline. But if you want an offsite backup — or just want to browse your XML changes on the web — you can sync to a GitHub repository.
@@ -102,6 +91,17 @@ deluge-backup push
 ```
 
 If you don't use GitHub, skip this entirely. Your local backup is still fully functional.
+
+### Seeing what changed
+
+Curious what's different since your last backup?
+
+```bash
+deluge-backup status    # which files changed
+deluge-backup diff      # what changed inside them
+deluge-backup log       # history of all your backups
+deluge-backup size      # how big your backup is
+```
 
 ### Configuration
 
@@ -128,12 +128,33 @@ By default, `deluge-backup` looks for your SD card at `/mnt/d` (standard WSL mou
 | `deluge-backup remote-init` | Connect to a GitHub repo (one-time) |
 | `deluge-backup push` | Push XML files to GitHub |
 
+## Other tools included with deluge-quest
+
+When you installed `deluge-quest`, you also got these CLIs. Each one has a browser version on [deluge.quest](https://deluge.quest). Power users may prefer the CLIs.
+
+| Command | What it does | Web version |
+| --- | --- | --- |
+| `deluge-stats` | Batch stats for songs on your card (BPM, key, scale, duration, instrument counts) | [Song Stats](/stats) |
+| `deluge-score` | Convert a song XML to MusicXML sheet music | [Score Converter](/score) |
+| `deluge-import` | Convert a MIDI file into a Deluge song XML | [MIDI Importer](/import) |
+| `deluge-clean` | Scan your SD card for unused samples, broken references, and reclaimable space | [Card Manager](/manage) |
+
+Run any of them with `--help` to see usage, e.g. `deluge-stats --help`.
+
 ### Troubleshooting
 
-"command not found: deluge-backup" — The install didn't add it to your PATH. Try running `pipx ensurepath` and opening a new terminal.
+#### "command not found: deluge-backup"
 
-"SD card not found" — Make sure your card is plugged in and mounted. On WSL, it's usually `/mnt/d` or `/mnt/e` — check with `ls /mnt/`. Set `DELUGE_CARD_MOUNT` if it's somewhere else.
+The install didn't add it to your PATH. Try running `pipx ensurepath` and opening a new terminal.
 
-"not a git repository" — Run `deluge-backup init` first. This only needs to happen once.
+#### "SD card not found"
 
-Still stuck? [Open an issue](https://github.com/dannybrown37/deluge-quest/issues).
+Make sure your card is plugged in and mounted. On WSL, it's usually `/mnt/d` or `/mnt/e` — check with `ls /mnt/`. Set `DELUGE_CARD_MOUNT` if it's somewhere else.
+
+#### "not a git repository"
+
+Run `deluge-backup init` first. This only needs to happen once.
+
+#### Still stuck? Want me to support Windows without the need for WSL?
+
+[Open an issue](https://github.com/dannybrown37/deluge-quest/issues)
