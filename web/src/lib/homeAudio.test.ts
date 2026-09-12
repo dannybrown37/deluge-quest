@@ -472,7 +472,7 @@ describe('HomeAudioPlayer', () => {
       expect(trackSpy).toHaveBeenCalledWith('listen', 'Test', expect.any(Number));
     });
 
-    it('breaks delay loop and reconnects on tab return', async () => {
+    it('resumes a suspended AudioContext on tab return while playing', async () => {
       stubRAF();
       stubPerformance();
       await homeAudio.initAudio();
@@ -480,17 +480,34 @@ describe('HomeAudioPlayer', () => {
       homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
 
       await homeAudio.togglePlay();
-
-      const feedbackDisconnect = vi.spyOn(homeAudio.delayFeedback!, 'disconnect');
-      const feedbackConnect = vi.spyOn(homeAudio.delayFeedback!, 'connect');
+      mockCtx.resume.mockClear();
+      mockCtx.state = 'suspended';
 
       Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
       document.dispatchEvent(new Event('visibilitychange'));
       Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
       document.dispatchEvent(new Event('visibilitychange'));
 
-      expect(feedbackDisconnect).toHaveBeenCalled();
-      expect(feedbackConnect).toHaveBeenCalledWith(homeAudio.delayNode);
+      expect(mockCtx.resume).toHaveBeenCalled();
+    });
+
+    it('does not resume AudioContext on tab return when already running', async () => {
+      stubRAF();
+      stubPerformance();
+      await homeAudio.initAudio();
+      homeAudio.songLoaded = true;
+      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+
+      await homeAudio.togglePlay();
+      mockCtx.resume.mockClear();
+      mockCtx.state = 'running';
+
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(mockCtx.resume).not.toHaveBeenCalled();
     });
 
     it('flushes listen time on pagehide', async () => {

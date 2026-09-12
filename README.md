@@ -159,3 +159,17 @@ Full details in [`docs/web_architecture.md`](docs/web_architecture.md).
 Pre-commit hooks (ruff, eslint, gitleaks, end-of-file-fixer) run on every commit —
 `just pre-commit-install` to wire them up locally. `just check` runs the full lint/type/test
 gate by hand.
+
+## License
+
+Two licenses, split cleanly:
+
+- **Code** — GPL-3.0. All Python, TypeScript, Svelte, Astro, CSS, config, docs, and build
+  scripts. See [`LICENSE`](LICENSE).
+
+- **Creative media** — All Rights Reserved. The `.mp3` demo tracks in
+  [`web/public/audio/`](web/public/audio/) and the site's logo/OG image/favicons are original
+  works by Danny Brown and are **not** covered by the GPL. They ride along so the site can play
+  them, but may not be redistributed, remixed, sampled, used commercially, or used as ML
+  training data without permission. See [`web/public/audio/LICENSE`](web/public/audio/LICENSE)
+  and [`NOTICE`](NOTICE) for the full breakdown.

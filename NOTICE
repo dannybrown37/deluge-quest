@@ -1,0 +1,21 @@
+deluge.quest — Licensing Notice
+
+This repository contains two kinds of work under two different licenses.
+
+1. CODE — GNU General Public License v3.0
+   Everything except the assets listed in (2) below: all Python, TypeScript,
+   Svelte, Astro, CSS, HTML, shell, JSON config, Markdown docs, and build
+   scripts. See LICENSE for the full GPL-3.0 text.
+
+2. CREATIVE MEDIA — All Rights Reserved
+   The following files are original creative works by Danny Brown and are NOT
+   covered by the GPL. They may be viewed/listened to as part of the running
+   deluge.quest site, but may not be redistributed, remixed, sampled, used in
+   other works, used commercially, or used as ML training data without prior
+   written permission:
+
+     - web/public/audio/*.mp3  (see web/public/audio/LICENSE)
+     - web/public/og-image.png
+     - web/public/grid-logo.svg
+     - web/public/favicon.svg
+     - web/public/favicon.ico

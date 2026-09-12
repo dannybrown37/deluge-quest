@@ -1,0 +1,21 @@
+Audio Tracks — All Rights Reserved
+
+Copyright (c) 2019–2026 Danny Brown. All rights reserved.
+
+The `.mp3` files in this directory are original musical works composed and
+produced by Danny Brown on the Synthstrom Deluge. They are hosted here so the
+deluge.quest site can play them as demos, and are made available for personal,
+non-commercial listening in a browser.
+
+They are NOT covered by the GNU GPL v3 that governs the deluge.quest source
+code. In particular, without prior written permission you may not:
+
+  - redistribute, mirror, or re-upload these files;
+  - use them (in whole or in part) in another work, including remixes,
+    samples, background music, or training data for machine-learning models;
+  - use them for any commercial purpose.
+
+The Deluge XML source files that produced these tracks are not published in
+this repository.
+
+For licensing inquiries, contact danny@deluge.quest.
