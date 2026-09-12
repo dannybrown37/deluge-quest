@@ -7,11 +7,6 @@ account.
 
 Live at [deluge.quest](https://deluge.quest).
 
-**Source is public for transparency, not for reuse.** No LICENSE is granted. You're welcome to
-read the code and verify it does what it says (everything runs client-side; nothing you load
-ever leaves your browser), but copying, redistributing, or building on it isn't authorized. If
-that changes, this notice will too.
-
 ## What's here
 
 - **SD card manager**: browse samples, fix broken references, sort songs, reclaim space, back up
