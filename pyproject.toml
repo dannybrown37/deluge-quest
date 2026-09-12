@@ -36,6 +36,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["deluge_tools"]
 
+[tool.hatch.build.targets.sdist]
+include = ["deluge_tools", "tests", "pyproject.toml", "LICENSE"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-n auto"
