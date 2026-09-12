@@ -85,7 +85,7 @@ Prose-only pages are Markdown instead (see `/faq`).
 | Page | Component | What it does |
 |---|---|---|
 | `/` | `DelugeUI.svelte` | Interactive 8×16 pad-grid with drum sounds (velocity gradient per 4×4 block), sidebar tools column, demo audio player |
-| `/manage` | `CardScanner.svelte` | SD card management: sample browser, song sorting, broken ref display, analysis, incremental backup |
+| `/manage` | `CardScanner.svelte` | SD card management: sample browser, song sorting, broken ref display, analysis |
 | `/stats` | `SongAnalyzer.svelte` | Batch song stats table over a card or file selection |
 | `/preview` | `SongPreview.svelte` | Web Audio playback of a song with per-track mute/volume |
 | `/kits` | `KitBuilder.svelte` | Build/edit Deluge kit XML from card samples (vim-style keys) |
@@ -267,7 +267,7 @@ Backward seeks never re-fire a milestone; `trackedPercent` is monotonic.
 
 | Tool | Actions |
 |---|---|
-| `manage` | `scan` (+samples/unused), `delete_sample`, `sort_songs` (+songs), `fix_all_xml`, `backup` (+files), `export_json` |
+| `manage` | `scan` (+samples/unused), `delete_sample`, `sort_songs` (+songs), `fix_all_xml`, `export_json` |
 | `stats` | `analyze_card`, `analyze_drop`, `analyze_error`, `export_csv`, `delete_song`, `convert_score`, `open_in_preview` |
 | `preview` | `inspect`, `inspect_error`, `play` |
 | `kits` | `open_samples`, `load_kit`, `export` (+rows) |
