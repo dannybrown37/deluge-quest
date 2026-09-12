@@ -349,11 +349,10 @@ release increment="":
     echo "Working tree is dirty — commit or stash first."
     exit 1
   fi
-  uv run cz bump {{ if increment != "" { "--increment " + increment } else { "" } }} --yes
+  tag=$(uv run cz bump {{ if increment != "" { "--increment " + increment } else { "" } }} --yes 2>&1 | grep -oP 'tag to create: \K\S+')
   nvim CHANGELOG.md
   git add CHANGELOG.md
   git commit --amend --no-edit
-  tag=$(git describe --tags --abbrev=0)
   git tag -f "$tag"
   echo ""
   echo "Ready to publish. Run:"
