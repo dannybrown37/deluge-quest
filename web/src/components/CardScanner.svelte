@@ -1178,7 +1178,7 @@
       {#if listCategory === "samples"}
         <div class="list-group">
           {#if !canWrite}
-            <p class="list-subtext">Use Chrome or Edge with "Browse for folder" to enable drag-and-drop sample moves.</p>
+            <p class="list-subtext">Use Chrome or Edge with "Browse for folder" to enable sample cleanup.</p>
           {/if}
 
           <div class="sample-toolbar">

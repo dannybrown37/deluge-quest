@@ -15,11 +15,11 @@ import CardScanner from '../components/CardScanner.svelte';
     <div class="info-inner">
       <div class="info-block">
         <h3>How it works</h3>
-        <p>Select your SD card folder. The scanner reads all XML files in SONGS/, KITS/, and SYNTHS/ to map which samples each song uses. View which samples are used where, sort Deluge-only tracks from those requiring external gear, reveal unused/invalid/duplicate files, with more features under develpment.</p>
+        <p>Select your SD card folder. The scanner reads all XML files in SONGS/, KITS/, and SYNTHS/ to map which samples each song uses. View which samples are used where, sort Deluge-only tracks from those requiring external gear, reveal unused/invalid/duplicate files, with more features under development.</p>
       </div>
       <div class="info-block">
         <h3>Safety</h3>
-        <p>Before updating any XML, the original is backed up to MOVE_BACKUP/ on your SD card. Nothing is ever deleted — validate your changes, then clean up the backup folder manually.</p>
+        <p>Nothing is ever deleted. Removed samples go to SOFT_DELETE/ and pre-edit XML copies go to HISTORY_BACKUP/ on your SD card. Validate your changes, then clean up those folders manually when you're satisfied.</p>
       </div>
       <div class="info-block">
         <h3>Privacy</h3>

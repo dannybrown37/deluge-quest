@@ -37,10 +37,10 @@ Don't have `pipx` or `uv`? Install pipx with `pip install --user pipx` (comes wi
 Confirm it worked:
 
 ```bash
-deluge-quest --version
+deluge-backup --version
 ```
 
-You should see `deluge-quest 0.1.0` (or newer). If you do, you're ready.
+You should see `deluge-backup 0.1.0` (or newer). If you do, you're ready.
 
 ## Step 2: First backup
 
@@ -105,13 +105,13 @@ deluge-backup size      # how big your backup is
 
 ### Configuration
 
-By default, `deluge-backup` looks for your SD card at `/mnt/d` (standard WSL mount) and stores backups in `~/deluge-card`. If your setup is different, set these environment variables:
+Backups are stored in `~/deluge-card` by default. The SD card mount point defaults to `/mnt/d` (standard WSL), but macOS and Linux users will need to set `DELUGE_CARD_MOUNT` to wherever their card appears (e.g. `/Volumes/DELUGE` on macOS, `/media/username/DELUGE` on Linux).
 
 | Variable | Default | What it controls |
 | --- | --- | --- |
 | `DELUGE_CARD_DIR` | `~/deluge-card` | Where your backup lives |
 | `DELUGE_CARD_MOUNT` | `/mnt/d` | Where your SD card is mounted |
-| `DELUGE_CARD_DRIVE` | `D:` | Drive letter (WSL auto-mount) |
+| `DELUGE_CARD_DRIVE` | `D:` | Drive letter (WSL only) |
 
 ## All commands
 
