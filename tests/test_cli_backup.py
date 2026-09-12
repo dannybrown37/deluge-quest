@@ -154,6 +154,7 @@ class TestSync:
             monkeypatch.setenv(k, v)
         mount = Path(env_vars["DELUGE_CARD_MOUNT"])
         mount.mkdir(parents=True, exist_ok=True)
+        (mount / "SONGS").mkdir()
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=""))
         with patch("subprocess.run", mock_run):
             _main(["sync"])
@@ -165,6 +166,7 @@ class TestSync:
             monkeypatch.setenv(k, v)
         mount = Path(env_vars["DELUGE_CARD_MOUNT"])
         mount.mkdir(parents=True, exist_ok=True)
+        (mount / "SONGS").mkdir()
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=""))
         with patch("subprocess.run", mock_run):
             _main(["sync", "--go"])
@@ -236,6 +238,7 @@ class TestSave:
             monkeypatch.setenv(k, v)
         mount = Path(env_vars["DELUGE_CARD_MOUNT"])
         mount.mkdir(parents=True, exist_ok=True)
+        (mount / "SONGS").mkdir()
         diff_result = subprocess.CompletedProcess([], 1)
         status_result = subprocess.CompletedProcess([], 0, stdout="M\tSONGS/A.XML\n")
         default_result = subprocess.CompletedProcess([], 0, stdout="")
@@ -317,6 +320,46 @@ class TestPush:
             _main(["push"])
         out = capsys.readouterr().out
         assert "no xml changes" in out.lower()
+
+
+class TestWslMount:
+    def test_attempts_mount_on_wsl_when_empty(self, tmp_path):
+        from deluge_tools.cli_backup import _ensure_mount
+
+        mount = tmp_path / "mnt"
+        mount.mkdir()
+        with (
+            patch("deluge_tools.cli_backup._is_wsl", return_value=True),
+            patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0)) as mock_run,
+        ):
+            _ensure_mount(mount, "D:")
+        mock_run.assert_called_once()
+        assert "drvfs" in mock_run.call_args.args[0]
+
+    def test_skips_mount_on_non_wsl(self, tmp_path):
+        from deluge_tools.cli_backup import _ensure_mount
+
+        mount = tmp_path / "mnt"
+        mount.mkdir()
+        with (
+            patch("deluge_tools.cli_backup._is_wsl", return_value=False),
+            patch("subprocess.run") as mock_run,
+        ):
+            _ensure_mount(mount, "D:")
+        mock_run.assert_not_called()
+
+    def test_skips_mount_when_dir_has_content(self, tmp_path):
+        from deluge_tools.cli_backup import _ensure_mount
+
+        mount = tmp_path / "mnt"
+        mount.mkdir()
+        (mount / "SONGS").mkdir()
+        with (
+            patch("deluge_tools.cli_backup._is_wsl", return_value=True),
+            patch("subprocess.run") as mock_run,
+        ):
+            _ensure_mount(mount, "D:")
+        mock_run.assert_not_called()
 
 
 class TestNoArgs:

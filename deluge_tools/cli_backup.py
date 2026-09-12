@@ -41,6 +41,42 @@ def _require_repo(card_dir: Path) -> None:
         sys.exit(1)
 
 
+def _is_wsl() -> bool:
+    try:
+        return "microsoft" in Path("/proc/version").read_text().lower()
+    except OSError:
+        return False
+
+
+def _mount_needs_help(mount: Path) -> bool:
+    """True if mount point exists as a name but is inaccessible or empty."""
+    try:
+        if mount.is_dir() and any(mount.iterdir()):
+            return False  # mounted and has content
+    except OSError:
+        pass
+    # Check if the name exists in the parent (WSL creates /mnt/d even when unmounted)
+    try:
+        return mount.parent.is_dir() and mount.name in {p.name for p in mount.parent.iterdir()}
+    except OSError:
+        return False
+
+
+def _ensure_mount(mount: Path, drive: str) -> None:
+    """On WSL, try to mount the Windows drive if the mount point is empty."""
+    if not _is_wsl():
+        return
+    if not _mount_needs_help(mount):
+        return
+    print(f"WSL detected — mounting {drive} to {mount} (may need your password)...")
+    result = subprocess.run(["sudo", "mount", "-t", "drvfs", drive, str(mount)])
+    if result.returncode != 0:
+        print(
+            f"warning: mount failed — try running: sudo mount -t drvfs {drive} {mount}",
+            file=sys.stderr,
+        )
+
+
 def _run(cmd: list[str], *, cwd: Path | None = None, **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=cwd, **kwargs)
 
@@ -161,7 +197,12 @@ def cmd_sync(args) -> None:
     _require_repo(card_dir)
 
     mount = _card_mount()
-    if not mount.is_dir():
+    _ensure_mount(mount, _card_drive())
+    try:
+        found = mount.is_dir() and any(mount.iterdir())
+    except OSError:
+        found = False
+    if not found:
         print(f"error: SD card not found at {mount}", file=sys.stderr)
         print("Set DELUGE_CARD_MOUNT or plug in the card", file=sys.stderr)
         sys.exit(1)
