@@ -78,19 +78,19 @@ For those who want to go a little deeper with these tools...
 
 ### Pushing to GitHub (optional)
 
-Everything above works completely offline. But if you want an offsite backup — or just want to browse your XML changes on the web — you can sync to a GitHub repository.
+Everything above works completely offline. But if you want an offsite backup (or just want to browse your XML changes on the web) you can sync to a GitHub repository.
 
 This only pushes your XML files (songs, kits, synths), not your samples. That keeps the GitHub repo small (usually under 50 MB) while you still get full history and diffs online.
 
 ```bash
-# One-time setup — create an empty repo on GitHub first, then:
+# One-time setup. Create an empty repo on GitHub first, then:
 deluge-backup remote-init git@github.com:yourname/deluge-card.git
 
 # After that, push whenever you want:
 deluge-backup push
 ```
 
-If you don't use GitHub, skip this entirely. Your local backup is still fully functional.
+If you don't use GitHub, you can skip this. Your local backup is still fully functional. You may want to copy it to a second place for additional safety, like an external hard drive or cloud storage.
 
 ### Seeing what changed
 
@@ -157,4 +157,4 @@ Run `deluge-backup init` first. This only needs to happen once.
 
 #### Still stuck? Want me to support Windows without the need for WSL?
 
-[Open an issue](https://github.com/dannybrown37/deluge-quest/issues)
+You can try [opening an issue](https://github.com/dannybrown37/deluge-quest/issues), maybe I can help.

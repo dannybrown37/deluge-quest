@@ -59,6 +59,8 @@ deluge-score   path/to/song.XML          # → MusicXML / MIDI / Lilypond
 deluge-import  path/to/song.mid          # MIDI → Deluge XML
 deluge-stats   path/to/card/or/folder    # tempo, key, duration table
 deluge-clean   path/to/sd/card           # find/move unused samples, broken refs
+deluge-backup  init /path/to/card        # git-tracked SD card snapshots (see below)
+deluge-quest                             # meta CLI — links to docs and tools
 ```
 
 Each takes `--version` and `--help`.
@@ -68,35 +70,40 @@ Each takes `--version` and `--help`.
 Git-tracked snapshots of your Deluge SD card. Every song, kit, synth, and sample is versioned —
 you get real diffs, history, and the ability to roll back to any previous state.
 
+Two interfaces: the `deluge-backup` CLI (pip-installable, no repo clone needed) and equivalent
+`just card-*` recipes for contributors who already have the repo.
+
 ### Setup
 
 ```bash
-# One-time: initialize from an existing backup or directly from the SD card
-just card-init /mnt/c/Users/you/path/to/backup
+pip install deluge-quest
+deluge-backup init /mnt/c/Users/you/path/to/backup
 # — or, with the card plugged in (defaults to /mnt/d) —
-just card-init
+deluge-backup init
 ```
+
+Or with just: `just card-init /path/to/backup`
 
 ### Workflow
 
 Plug in the SD card, then:
 
 ```bash
-just card-save "Added drum kit patches"   # sync from card + commit
+deluge-backup save "Added drum kit patches"   # sync from card + commit
 ```
 
 That's the one command you need. For more control:
 
-| Recipe | What it does |
-|---|---|
-| `just card-init` | Copy SD card (or backup path) → `~/deluge-card`, initialize git |
-| `just card-sync` | Dry-run rsync from SD card → local repo (pass `--go` to apply) |
-| `just card-commit "msg"` | Stage everything and commit |
-| `just card-save "msg"` | Sync + commit in one step |
-| `just card-status` | `git status` on the card repo |
-| `just card-diff` | Diff of changed files |
-| `just card-log` | Recent commit history |
-| `just card-size` | Working tree vs `.git` size |
+| CLI command | Just recipe | What it does |
+|---|---|---|
+| `deluge-backup init` | `just card-init` | Copy SD card → `~/deluge-card`, initialize git |
+| `deluge-backup sync` | `just card-sync` | Dry-run rsync from card (pass `--go` to apply) |
+| `deluge-backup commit "msg"` | `just card-commit "msg"` | Stage everything and commit |
+| `deluge-backup save "msg"` | `just card-save "msg"` | Sync + commit in one step |
+| `deluge-backup status` | `just card-status` | `git status` on the card repo |
+| `deluge-backup diff` | `just card-diff` | Diff of changed files |
+| `deluge-backup log` | `just card-log` | Recent commit history |
+| `deluge-backup size` | `just card-size` | Working tree vs `.git` size |
 
 ### Pushing XML to GitHub
 
@@ -106,16 +113,16 @@ the meaningful diffs are anyway.
 
 ```bash
 # One-time: create a GitHub repo and connect it
-just card-remote-init git@github.com:you/deluge-card.git
+deluge-backup remote-init git@github.com:you/deluge-card.git
 
 # After any session:
-just card-push "Added new drum patterns"
+deluge-backup push "Added new drum patterns"
 ```
 
-| Recipe | What it does |
-|---|---|
-| `just card-remote-init <url>` | Set up the GitHub remote (initial XML commit + push) |
-| `just card-push "msg"` | Sync XML/JSON → shadow repo, commit, push |
+| CLI command | Just recipe | What it does |
+|---|---|---|
+| `deluge-backup remote-init <url>` | `just card-remote-init <url>` | Set up GitHub remote (initial XML commit + push) |
+| `deluge-backup push "msg"` | `just card-push "msg"` | Sync XML/JSON → shadow repo, commit, push |
 
 ### Configuration
 
@@ -124,6 +131,28 @@ Set these environment variables to override defaults:
 - `DELUGE_CARD_DIR` — where the git repo lives (default: `~/deluge-card`)
 - `DELUGE_CARD_MOUNT` — where the SD card mounts in WSL (default: `/mnt/d`)
 - `DELUGE_CARD_DRIVE` — Windows drive letter for mount (default: `D:`)
+
+## Web architecture
+
+The site is a static Astro + Svelte app deployed to Vercel. All file processing runs
+client-side — Python logic executes in the browser via Pyodide (CPython compiled to WASM),
+and SD card access uses the File System Access API (Chromium only; Firefox/Safari fall back to
+read-only drag-and-drop).
+
+```
+Browser
+  ├── Astro shell (.astro pages)
+  │     └── Svelte island (one component per tool)
+  ├── cardStore.ts ──── IndexedDB (persisted card handle + song cache)
+  ├── pyodide.ts ────── Pyodide WASM ──── deluge_tools .whl
+  └── Web Audio API
+        ├── homeAudio.ts   (site-wide player + FX chain)
+        ├── songAudio.ts   (song-level synth playback)
+        ├── patchAudio.ts  (subtractive + FM synth engine)
+        └── padSounds.ts   (percussion voices for pad grid)
+```
+
+Full details in [`docs/web_architecture.md`](docs/web_architecture.md).
 
 ## Code quality
 
