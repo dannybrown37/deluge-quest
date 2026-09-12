@@ -4,7 +4,7 @@ title: Card Backup
 description: Back up your Deluge SD card with full history, real diffs, and optional GitHub sync.
 ---
 
-## Back up your card with history
+## Back up your card, with history
 
 Your Deluge SD card holds songs, kits, synths, and samples. It's got hours of creative work on a tiny chip that could fail, get lost, or just get overwritten by accident. `deluge-backup` gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
 
@@ -22,7 +22,7 @@ You do *not* need to know Git, Python, or the command line beyond what's on this
 
 ## Step 1: Install
 
-Open a terminal and run one of these — either one works, pick whichever you have:
+Open a terminal and run one of these. Either one works, pick whichever you have:
 
 ```bash
 pipx install deluge-quest
