@@ -341,6 +341,24 @@ coverage open="" verbose="":
     fi
   fi
 
+# Bump version, review changelog in nvim, commit, tag, and push to trigger PyPI publish
+release increment="":
+  #!/bin/bash
+  set -e
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "Working tree is dirty — commit or stash first."
+    exit 1
+  fi
+  uv run cz bump {{ if increment != "" { "--increment " + increment } else { "" } }} --yes
+  nvim CHANGELOG.md
+  git add CHANGELOG.md
+  git commit --amend --no-edit
+  tag=$(git describe --tags --abbrev=0)
+  git tag -f "$tag"
+  echo ""
+  echo "Ready to publish. Run:"
+  echo "  git push && git push origin $tag"
+
 # Full dev setup + start web server
 dev: setup web-dev
 

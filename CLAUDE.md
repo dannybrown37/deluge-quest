@@ -74,7 +74,6 @@ web/                    — Astro + Svelte, static, deployed to Vercel
   public/audio/         — .mp3 demo tracks served by the home page player
   build-wheel.sh        — packages deluge_tools as the wheel above
   vercel.json           — deploy config
-docs/deluge-backup.md   — single-source CLI docs (rendered on /backup and as repo README)
 docs/handoffs/          — session handoff notes
 ```
 
@@ -93,7 +92,7 @@ Prose-only pages are Markdown instead (see `/faq`).
 | `/patch` | `PatchGenerator.svelte` | Generate synth presets with live Web Audio preview |
 | `/score` | `ScoreConverter.svelte` | Song XML → MusicXML download |
 | `/import` | `MidiImporter.svelte` | MIDI → Deluge song XML |
-| `/backup` | — | Prose page (imports `docs/deluge-backup.md`) documenting the `deluge-backup` CLI |
+| `/backup` | — | Prose tutorial: installing and using `deluge-backup` CLI, written for non-technical users |
 | `/songs` | — | Song index: list of all tracks with links to individual pages |
 | `/songs/[slug]` | `SongPlayer.svelte` | Shareable per-song page with mobile-friendly audio player, OG tags |
 | `/faq` | — | Hand-written prose. It is `src/pages/faq.md` (Markdown), rendered through `ProseLayout.astro` — edit the Markdown, not HTML |

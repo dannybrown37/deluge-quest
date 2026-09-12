@@ -1,6 +1,6 @@
 [project]
 name = "deluge-tools"
-version = "0.1.0"
+version = "0.0.0"
 description = "Utilities for Synthstrom Deluge song files"
 requires-python = ">=3.11"
 dependencies = []
@@ -17,6 +17,7 @@ dev = [
     "pytest-xdist>=3.6",
     "ruff>=0.16",
     "pyright>=1.1",
+    "commitizen>=4.6",
 ]
 
 [project.scripts]
@@ -45,6 +46,13 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.0.0"
+tag_format = "v$version"
+version_files = ["pyproject.toml:^version"]
+update_changelog_on_bump = true
 
 [tool.pyright]
 include = ["deluge_tools", "tests"]
