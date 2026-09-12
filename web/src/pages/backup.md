@@ -6,14 +6,14 @@ description: Back up your Deluge SD card with full history, real diffs, and opti
 
 ## Back up your card with history
 
-Your Deluge SD card holds songs, kits, synths, samples. It's got hours of creative work on a tiny chip that could fail, get lost, or just get overwritten by accident. **deluge-backup** gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
+Your Deluge SD card holds songs, kits, synths, samples. It's got hours of creative work on a tiny chip that could fail, get lost, or just get overwritten by accident. deluge-backup gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
 
-This is the most technical tool on deluge.quest. It runs in a terminal, not a browser. But if you can copy and paste a few commands, you can do this! And once it's set up, keeping backups current is a single command.
+This is the most technical tool on [deluge.quest](https://deluge.quest). It runs in a terminal, not a browser. But if you can copy and paste a few commands, you can do this! And once it's set up, keeping backups current is a single command.
 
 ## What you'll need
 
 - A computer running macOS, Linux, or Windows with WSL. If you're on Windows and haven't set up WSL yet, [Microsoft's guide](https://learn.microsoft.com/en-us/windows/wsl/install) walks you through it. It's a one-time setup.
-- A terminal (macOS Terminal, Linux Terminal, or Windows Terminal running WSL).
+- A terminal (macOS Terminal, Linux Terminal, or Windows Terminal running WSL) to type the below commands into.
 - An SD card reader (or your Deluge connected via USB).
 - About 15 minutes for the first-time setup.
 
@@ -69,7 +69,7 @@ deluge-backup save "new bass patch, reworked drums on SONG042"
 
 The message is optional — skip it and you'll get a timestamped "Session snapshot" instead. But a quick note about what you did makes it much easier to find things later.
 
-**That's the whole workflow.** `save` copies any changes from the card, records what changed, and stores it. One command, done.
+That's the whole workflow. `save` copies any changes from the card, records what changed, and stores it. One command, done.
 
 ## Seeing what changed
 
@@ -103,7 +103,7 @@ If you don't use GitHub, skip this entirely — your local backup is still fully
 By default, `deluge-backup` looks for your SD card at `/mnt/d` (standard WSL mount) and stores backups in `~/deluge-card`. If your setup is different, set these environment variables:
 
 | Variable | Default | What it controls |
-|---|---|---|
+| --- | --- | --- |
 | `DELUGE_CARD_DIR` | `~/deluge-card` | Where your backup lives |
 | `DELUGE_CARD_MOUNT` | `/mnt/d` | Where your SD card is mounted |
 | `DELUGE_CARD_DRIVE` | `D:` | Drive letter (WSL auto-mount) |
@@ -111,7 +111,7 @@ By default, `deluge-backup` looks for your SD card at `/mnt/d` (standard WSL mou
 ## All commands
 
 | Command | What it does |
-|---|---|
+| --- | --- |
 | `deluge-backup init` | First-time setup — copy card, create backup repo |
 | `deluge-backup save` | The everyday command — sync + snapshot in one step |
 | `deluge-backup sync` | Preview what would sync (add `--go` to apply) |
@@ -125,10 +125,10 @@ By default, `deluge-backup` looks for your SD card at `/mnt/d` (standard WSL mou
 
 ## Troubleshooting
 
-**"command not found: deluge-backup"** — The install didn't add it to your PATH. Try running `pipx ensurepath` and opening a new terminal.
+"command not found: deluge-backup" — The install didn't add it to your PATH. Try running `pipx ensurepath` and opening a new terminal.
 
-**"SD card not found"** — Make sure your card is plugged in and mounted. On WSL, it's usually `/mnt/d` or `/mnt/e` — check with `ls /mnt/`. Set `DELUGE_CARD_MOUNT` if it's somewhere else.
+"SD card not found" — Make sure your card is plugged in and mounted. On WSL, it's usually `/mnt/d` or `/mnt/e` — check with `ls /mnt/`. Set `DELUGE_CARD_MOUNT` if it's somewhere else.
 
-**"not a git repository"** — Run `deluge-backup init` first. This only needs to happen once.
+"not a git repository" — Run `deluge-backup init` first. This only needs to happen once.
 
 Still stuck? [Open an issue](https://github.com/dannybrown37/deluge-quest/issues) — we'll help you get it working.
