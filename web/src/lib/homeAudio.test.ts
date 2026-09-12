@@ -3,7 +3,7 @@ import type { HomeAudioPlayer } from './homeAudio';
 
 vi.mock('./analytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./analytics')>();
-  return { ...actual, track: vi.fn() };
+  return { ...actual, track: vi.fn(), trackSong: vi.fn() };
 });
 
 let rafCallbacks: Map<number, FrameRequestCallback>;
@@ -136,7 +136,7 @@ describe('HomeAudioPlayer', () => {
     const mod = await import('./homeAudio');
     homeAudio = mod.homeAudio;
     const analyticsMod = await import('./analytics');
-    trackSpy = analyticsMod.track as unknown as ReturnType<typeof vi.fn>;
+    trackSpy = analyticsMod.trackSong as unknown as ReturnType<typeof vi.fn>;
   });
 
   afterEach(() => {
@@ -384,12 +384,12 @@ describe('HomeAudioPlayer', () => {
       homeAudio.songs = [{ file: 'test.mp3', name: 'Test', slug: 'test-song' }];
 
       await homeAudio.togglePlay();
-      expect(trackSpy).toHaveBeenCalledWith('song_play', { song: 'test-song' });
+      expect(trackSpy).toHaveBeenCalledWith('play', 'test-song');
 
       trackSpy.mockClear();
       await homeAudio.togglePlay(); // pause
       await homeAudio.togglePlay(); // play again
-      expect(trackSpy).not.toHaveBeenCalledWith('song_play', expect.anything());
+      expect(trackSpy).not.toHaveBeenCalledWith('play', expect.anything());
     });
   });
 
@@ -411,7 +411,7 @@ describe('HomeAudioPlayer', () => {
       advancePerf(1000);
       flushRAF();
 
-      expect(trackSpy).toHaveBeenCalledWith('song_progress', { song: 'Test', percent: 25 });
+      expect(trackSpy).toHaveBeenCalledWith('progress', 'Test', 25);
     });
 
     it('flushes unreported listen time on pause, rounded to whole seconds', async () => {
@@ -424,7 +424,7 @@ describe('HomeAudioPlayer', () => {
       flushRAF();
       await homeAudio.togglePlay(); // pause -> flushListenTime
 
-      expect(trackSpy).toHaveBeenCalledWith('song_listen', { song: 'Test', seconds: 3 });
+      expect(trackSpy).toHaveBeenCalledWith('listen', 'Test', 3);
     });
 
     it('does not report listen time under 1 second', async () => {
@@ -437,7 +437,7 @@ describe('HomeAudioPlayer', () => {
       flushRAF();
       await homeAudio.togglePlay();
 
-      expect(trackSpy).not.toHaveBeenCalledWith('song_listen', expect.anything());
+      expect(trackSpy).not.toHaveBeenCalledWith('listen', expect.anything(), expect.anything());
     });
 
     it('the animation-frame tick stops rescheduling once playback stops out from under it', async () => {
@@ -469,7 +469,28 @@ describe('HomeAudioPlayer', () => {
       document.dispatchEvent(new Event('visibilitychange'));
       Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
 
-      expect(trackSpy).toHaveBeenCalledWith('song_listen', { song: 'Test', seconds: expect.any(Number) });
+      expect(trackSpy).toHaveBeenCalledWith('listen', 'Test', expect.any(Number));
+    });
+
+    it('breaks delay loop and reconnects on tab return', async () => {
+      stubRAF();
+      stubPerformance();
+      await homeAudio.initAudio();
+      homeAudio.songLoaded = true;
+      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+
+      await homeAudio.togglePlay();
+
+      const feedbackDisconnect = vi.spyOn(homeAudio.delayFeedback!, 'disconnect');
+      const feedbackConnect = vi.spyOn(homeAudio.delayFeedback!, 'connect');
+
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(feedbackDisconnect).toHaveBeenCalled();
+      expect(feedbackConnect).toHaveBeenCalledWith(homeAudio.delayNode);
     });
 
     it('flushes listen time on pagehide', async () => {
@@ -484,7 +505,7 @@ describe('HomeAudioPlayer', () => {
       flushRAF();
       window.dispatchEvent(new Event('pagehide'));
 
-      expect(trackSpy).toHaveBeenCalledWith('song_listen', { song: 'Test', seconds: expect.any(Number) });
+      expect(trackSpy).toHaveBeenCalledWith('listen', 'Test', expect.any(Number));
     });
   });
 

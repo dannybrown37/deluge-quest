@@ -363,10 +363,15 @@ export class HomeAudioPlayer {
       } else if (this.nativeElement) {
         this.nativeElement.muted = true;
         if (this.isPlaying && this.mediaElement) {
+          // Break the delay feedback loop before resuming so stale delay
+          // buffer doesn't ring out over the resync discontinuity.
+          this.delayFeedback?.disconnect();
           this.audioCtx?.resume();
-          // Elements drift apart while backgrounded (native keeps real time,
-          // the Web Audio path may have been suspended); resync on return.
-          this.nativeElement.currentTime = this.mediaElement.currentTime;
+          // Native kept real time while the AudioContext was suspended —
+          // sync mediaElement to native, not the other way around.
+          this.mediaElement.currentTime = this.nativeElement.currentTime;
+          if (this.delayFeedback && this.delayNode)
+            this.delayFeedback.connect(this.delayNode);
         }
       }
     });
