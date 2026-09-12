@@ -4,19 +4,20 @@ title: Card Backup
 description: Back up your Deluge SD card with full history, real diffs, and optional GitHub sync.
 ---
 
-## Your card is your studio. Back it up.
+## Back up your card with history
 
-Your Deluge SD card holds songs, kits, synths, samples — hours of creative work on a tiny chip that could fail, get lost, or just get overwritten by accident. **deluge-backup** gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
+Your Deluge SD card holds songs, kits, synths, samples. It's got hours of creative work on a tiny chip that could fail, get lost, or just get overwritten by accident. **deluge-backup** gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
 
-This is the most technical tool on deluge.quest. It runs in a terminal, not a browser. But if you can copy and paste a few commands, you can do this — and once it's set up, keeping backups current is a single command.
+This is the most technical tool on deluge.quest. It runs in a terminal, not a browser. But if you can copy and paste a few commands, you can do this! And once it's set up, keeping backups current is a single command.
 
 ## What you'll need
 
-- **A computer running macOS, Linux, or Windows with WSL.** If you're on Windows and haven't set up WSL yet, [Microsoft's guide](https://learn.microsoft.com/en-us/windows/wsl/install) walks you through it. It's a one-time setup.
-- **An SD card reader** (or your Deluge connected via USB).
-- **About 15 minutes** for the first-time setup.
+- A computer running macOS, Linux, or Windows with WSL. If you're on Windows and haven't set up WSL yet, [Microsoft's guide](https://learn.microsoft.com/en-us/windows/wsl/install) walks you through it. It's a one-time setup.
+- A terminal (macOS Terminal, Linux Terminal, or Windows Terminal running WSL).
+- An SD card reader (or your Deluge connected via USB).
+- About 15 minutes for the first-time setup.
 
-You do *not* need to know git, Python, or the command line beyond what's on this page.
+You do *not* need to know Git, Python, or the command line beyond what's on this page.
 
 ## Step 1: Install
 
