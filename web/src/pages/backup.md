@@ -6,7 +6,7 @@ description: Back up your Deluge SD card with full history, real diffs, and opti
 
 ## Back up your card with history
 
-Your Deluge SD card holds songs, kits, synths, samples. It's got hours of creative work on a tiny chip that could fail, get lost, or just get overwritten by accident. deluge-backup gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
+Your Deluge SD card holds songs, kits, synths, and samples. It's got hours of creative work on a tiny chip that could fail, get lost, or just get overwritten by accident. `deluge-backup` gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
 
 This is the most technical tool on [deluge.quest](https://deluge.quest). It runs in a terminal, not a browser. But if you can copy and paste a few commands, you can do this! And once it's set up, keeping backups current is a single command.
 
@@ -14,6 +14,7 @@ This is the most technical tool on [deluge.quest](https://deluge.quest). It runs
 
 - A computer running macOS, Linux, or Windows with WSL. If you're on Windows and haven't set up WSL yet, [Microsoft's guide](https://learn.microsoft.com/en-us/windows/wsl/install) walks you through it. It's a one-time setup.
 - A terminal (macOS Terminal, Linux Terminal, or Windows Terminal running WSL) to type the below commands into.
+- An internet connection for the install and optional GitHub sync (not required for local backups).
 - An SD card reader (or your Deluge connected via USB).
 - About 15 minutes for the first-time setup.
 
@@ -51,7 +52,7 @@ deluge-backup init
 
 This copies your entire SD card into `~/deluge-card` and creates a version history. It might take a few minutes depending on how many samples you have.
 
-That's it — your first backup is done.
+That's it! Your first backup is done.
 
 ## Step 3: After every session
 
@@ -67,11 +68,15 @@ For example:
 deluge-backup save "new bass patch, reworked drums on SONG042"
 ```
 
-The message is optional — skip it and you'll get a timestamped "Session snapshot" instead. But a quick note about what you did makes it much easier to find things later.
+The message is optional. Skip it and you'll get a timestamped "Session snapshot" instead. But a quick note about what you did makes it much easier to find things later.
 
 That's the whole workflow. `save` copies any changes from the card, records what changed, and stores it. One command, done.
 
-## Seeing what changed
+## Advanced Usage
+
+For those who want to go a little deeper with these tools...
+
+### Seeing what changed
 
 Curious what's different since your last backup?
 
@@ -82,7 +87,7 @@ deluge-backup log       # history of all your backups
 deluge-backup size      # how big your backup is
 ```
 
-## Pushing to GitHub (optional)
+### Pushing to GitHub (optional)
 
 Everything above works completely offline. But if you want an offsite backup — or just want to browse your XML changes on the web — you can sync to a GitHub repository.
 
@@ -96,9 +101,9 @@ deluge-backup remote-init git@github.com:yourname/deluge-card.git
 deluge-backup push
 ```
 
-If you don't use GitHub, skip this entirely — your local backup is still fully functional.
+If you don't use GitHub, skip this entirely. Your local backup is still fully functional.
 
-## Configuration
+### Configuration
 
 By default, `deluge-backup` looks for your SD card at `/mnt/d` (standard WSL mount) and stores backups in `~/deluge-card`. If your setup is different, set these environment variables:
 
@@ -123,7 +128,7 @@ By default, `deluge-backup` looks for your SD card at `/mnt/d` (standard WSL mou
 | `deluge-backup remote-init` | Connect to a GitHub repo (one-time) |
 | `deluge-backup push` | Push XML files to GitHub |
 
-## Troubleshooting
+### Troubleshooting
 
 "command not found: deluge-backup" — The install didn't add it to your PATH. Try running `pipx ensurepath` and opening a new terminal.
 
@@ -131,4 +136,4 @@ By default, `deluge-backup` looks for your SD card at `/mnt/d` (standard WSL mou
 
 "not a git repository" — Run `deluge-backup init` first. This only needs to happen once.
 
-Still stuck? [Open an issue](https://github.com/dannybrown37/deluge-quest/issues) — we'll help you get it working.
+Still stuck? [Open an issue](https://github.com/dannybrown37/deluge-quest/issues).
