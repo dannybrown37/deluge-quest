@@ -669,6 +669,21 @@ describe('CardScanner', () => {
     await waitFor(() => expect(screen.getByText('already sorted')).toBeTruthy());
   });
 
+  it('shows the firmware version badge next to a song in the song list', async () => {
+    mockCardStore.songXmls = new Map();
+    mockCardStore.songXmls.set(
+      'SONGS/song1.XML',
+      `<song firmwareVersion="4.1.0"><instruments><sound name="Kick"><osc1 fileName="SAMPLES/kick.wav" /></sound></instruments></song>`,
+    );
+
+    render(CardScanner);
+    await fireEvent.click(screen.getByText('Browse for folder'));
+    await waitFor(() => expect(screen.getByText('Sample Library (4)')).toBeTruthy(), { timeout: 3000 });
+    await fireEvent.click(screen.getByText(/^Songs/));
+
+    expect(screen.getByText('4.1.0')).toBeTruthy();
+  });
+
   it('stops any playing sample audio when resetting to the dropzone', async () => {
     const pauseSpy = vi.fn();
     vi.stubGlobal(

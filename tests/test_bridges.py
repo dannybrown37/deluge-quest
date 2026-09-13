@@ -248,6 +248,12 @@ class TestAnalyzeStatsJson:
         assert r["clipCount"] == 5
         assert r["totalNotes"] == 42
         assert r["durationStr"] == "1:30"
+        assert r["firmwareVersion"] == "4.0.0"
+
+    def test_invalid_xml_firmware_version_empty(self) -> None:
+        files_json = json.dumps([{"name": "BAD.XML", "content": "not xml at all<<<"}])
+        results = json.loads(analyze_stats_json(files_json))
+        assert results[0]["firmwareVersion"] == ""
 
     @pytest.mark.parametrize(
         "bpm,expected_dur",

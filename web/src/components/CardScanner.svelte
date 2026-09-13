@@ -74,6 +74,7 @@
   let playingFile = $state<string | null>(null);
   let currentAudio = $state<HTMLAudioElement | null>(null);
   let songMidiChannels = $state(new Map<string, number[]>());
+  let songFirmwareVersions = $state(new Map<string, string>());
   let filterSongChannels = $state<Set<number>>(new Set());
   let filterSongChannelMode = $state<"or" | "and">("or");
   let showSongChannelLabelEditor = $state(false);
@@ -177,6 +178,12 @@
       if (ch != null) channels.add(parseInt(ch, 10) + 1);
     }
     return [...channels].sort((a, b) => a - b);
+  }
+
+  function extractFirmwareVersion(xmlText: string): string {
+    const doc = parseSongXml(xmlText);
+    if (doc.querySelector("parsererror")) return "";
+    return doc.documentElement.getAttribute("firmwareVersion") ?? "";
   }
 
   function extractPresetRefs(xmlText: string): Set<string> {
@@ -372,6 +379,7 @@
     const invalidXml: InvalidXmlFile[] = [];
     const localXmlTexts = new Map<string, string>();
     const localSongMidiChannels = new Map<string, number[]>();
+    const localSongFirmwareVersions = new Map<string, string>();
 
     for (const [rel, text] of xmlEntries) {
       localXmlTexts.set(rel, text);
@@ -390,6 +398,8 @@
         if (gearType) songsByType[gearType].push(rel);
         const midiChs = extractMidiChannels(text);
         if (midiChs.length > 0) localSongMidiChannels.set(rel, midiChs);
+        const firmwareVersion = extractFirmwareVersion(text);
+        if (firmwareVersion) localSongFirmwareVersions.set(rel, firmwareVersion);
       }
     }
     invalidXml.sort((a, b) => a.path.localeCompare(b.path));
@@ -499,6 +509,7 @@
     allSampleSizes = allSamples;
     xmlTexts = localXmlTexts;
     songMidiChannels = localSongMidiChannels;
+    songFirmwareVersions = localSongFirmwareVersions;
 
     report = {
       totalSamples: allSamples.size,
@@ -862,12 +873,14 @@
   const CACHE_KEY = "deluge-clean-report";
   const CACHE_KEY_NAME = "deluge-clean-name";
   const CACHE_KEY_MIDI_CHS = "deluge-clean-midi-channels";
+  const CACHE_KEY_FIRMWARE = "deluge-clean-firmware-versions";
 
   function saveToSession() {
     try {
       sessionStorage.setItem(CACHE_KEY, JSON.stringify(report));
       sessionStorage.setItem(CACHE_KEY_NAME, cardName);
       sessionStorage.setItem(CACHE_KEY_MIDI_CHS, JSON.stringify([...songMidiChannels.entries()]));
+      sessionStorage.setItem(CACHE_KEY_FIRMWARE, JSON.stringify([...songFirmwareVersions.entries()]));
     } catch {}
   }
 
@@ -886,6 +899,8 @@
       try {
         const chRaw = sessionStorage.getItem(CACHE_KEY_MIDI_CHS);
         if (chRaw) songMidiChannels = new Map(JSON.parse(chRaw));
+        const fwRaw = sessionStorage.getItem(CACHE_KEY_FIRMWARE);
+        if (fwRaw) songFirmwareVersions = new Map(JSON.parse(fwRaw));
       } catch {}
       state = "done";
       return true;
@@ -1518,6 +1533,9 @@
                         {@const isMoving = movingSongs.has(filePath)}
                         <div class="tree-file tree-file--sample" class:tree-file--moved={!!moveResult}>
                           <span class="tree-file-name" title={filePath}>{file.replace(/\.XML$/i, "")}</span>
+                          {#if songFirmwareVersions.get(filePath)}
+                            <span class="tree-file-badge tree-file-badge--firmware" title="Firmware version">{songFirmwareVersions.get(filePath)}</span>
+                          {/if}
                           {#if moveResult}
                             <span class="tree-file-badge">{moveResult}</span>
                           {/if}
@@ -1544,6 +1562,9 @@
                   {@const isMoving = movingSongs.has(song)}
                   <div class="tree-file tree-file--sample" class:tree-file--moved={!!moveResult}>
                     <span class="tree-file-name" title={song}>{song.split("/").pop()?.replace(/\.XML$/i, "") ?? song}</span>
+                    {#if songFirmwareVersions.get(song)}
+                      <span class="tree-file-badge tree-file-badge--firmware" title="Firmware version">{songFirmwareVersions.get(song)}</span>
+                    {/if}
                     {#if moveResult}
                       <span class="tree-file-badge">{moveResult}</span>
                     {:else if canWrite}
@@ -1566,6 +1587,9 @@
                   {@const isMoving = movingSongs.has(song)}
                   <div class="tree-file tree-file--sample" class:tree-file--moved={!!moveResult}>
                     <span class="tree-file-name" title={song}>{song.split("/").pop()?.replace(/\.XML$/i, "") ?? song}</span>
+                    {#if songFirmwareVersions.get(song)}
+                      <span class="tree-file-badge tree-file-badge--firmware" title="Firmware version">{songFirmwareVersions.get(song)}</span>
+                    {/if}
                     {#if moveResult}
                       <span class="tree-file-badge">{moveResult}</span>
                     {:else if canWrite}
@@ -2132,6 +2156,10 @@
   .tree-file-badge--error {
     color: #c47a7a;
     border-color: #c47a7a;
+  }
+  .tree-file-badge--firmware {
+    color: var(--text-muted, #888);
+    border-color: var(--border);
   }
   .list-subtext {
     font-size: 0.78rem;

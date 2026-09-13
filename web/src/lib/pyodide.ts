@@ -57,6 +57,7 @@ export interface SongStats {
   totalNotes: number;
   durationStr: string;
   midiChannels: number[];
+  firmwareVersion: string;
   lastModified?: number;
 }
 

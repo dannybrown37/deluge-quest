@@ -85,6 +85,7 @@ function stat(overrides: Partial<SongStats> = {}): SongStats {
     totalNotes: 100,
     durationStr: '1:30',
     midiChannels: [],
+    firmwareVersion: '4.0.0',
     ...overrides,
   };
 }
@@ -218,6 +219,28 @@ describe('SongAnalyzer', () => {
 
     const rows = Array.from(document.querySelectorAll('.cell-name-text')).map((n) => n.textContent);
     expect(rows).toEqual(['short', 'long']);
+  });
+
+  it('shows firmware version in a sortable column', async () => {
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: 'old.XML', firmwareVersion: '3.1.5' }),
+      stat({ filename: 'new.XML', firmwareVersion: '4.3.0' }),
+    ]);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector('.dropzone') as HTMLElement;
+    await fireEvent.drop(dropzone, dropEvent([xmlFile('old.XML'), xmlFile('new.XML')]));
+    await waitFor(() => expect(screen.getByText('old')).toBeTruthy());
+
+    expect(screen.getByText('3.1.5')).toBeTruthy();
+    expect(screen.getByText('4.3.0')).toBeTruthy();
+
+    const firmwareHeader = Array.from(document.querySelectorAll('.sort-btn')).find(
+      (b) => b.textContent?.trim().startsWith('Firmware'),
+    ) as HTMLElement;
+    await fireEvent.click(firmwareHeader);
+
+    const rows = Array.from(document.querySelectorAll('.cell-name-text')).map((n) => n.textContent);
+    expect(rows).toEqual(['old', 'new']);
   });
 
   it('exports CSV', async () => {

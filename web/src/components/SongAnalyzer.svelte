@@ -65,6 +65,7 @@
     instruments: (a, b) => a.instrumentCount - b.instrumentCount,
     clips: (a, b) => a.clipCount - b.clipCount,
     modified: (a, b) => (a.lastModified ?? 0) - (b.lastModified ?? 0),
+    firmware: (a, b) => a.firmwareVersion.localeCompare(b.firmwareVersion),
   };
 
   function formatDate(ts?: number): string {
@@ -335,7 +336,7 @@
 
   function exportCsv() {
     trackToolAction("stats", "export_csv");
-    const headers = ["Song", "BPM", "Key", "Duration", "Type", "Instruments", "Synths", "Kits", "Clips", "Notes", "Arrangement", "Modified"];
+    const headers = ["Song", "BPM", "Key", "Duration", "Type", "Instruments", "Synths", "Kits", "Clips", "Notes", "Arrangement", "Modified", "Firmware"];
     const rows = sorted.map(s => [
       s.filename.replace(/\.XML$/i, ""),
       s.bpm > 0 ? s.bpm.toFixed(1) : "",
@@ -349,6 +350,7 @@
       s.totalNotes,
       s.hasArrangement ? "yes" : "no",
       s.lastModified ? new Date(s.lastModified).toISOString().split("T")[0] : "",
+      s.firmwareVersion,
     ]);
     const csv = [headers, ...rows].map(r => r.map(c => {
       const str = String(c);
@@ -949,6 +951,7 @@
         <td class="cell-num" title={`${s.clipCount} clips`}>{s.clipCount || '-'}</td>
         <td class="cell-num" title={s.totalNotes.toLocaleString()}>{s.totalNotes > 0 ? s.totalNotes.toLocaleString() : '-'}</td>
         <td class="cell-date col-hide-narrow" title={formatDateFull(s.lastModified)}>{formatDate(s.lastModified)}</td>
+        <td class="cell-date col-hide-narrow" title={s.firmwareVersion}>{s.firmwareVersion || '—'}</td>
       </tr>
     {/snippet}
 
@@ -963,6 +966,7 @@
         <col class="col-clips" />
         <col class="col-notes" />
         <col class="col-modified col-hide-narrow" />
+        <col class="col-firmware col-hide-narrow" />
       </colgroup>
       <thead>
         <tr>
@@ -976,6 +980,7 @@
             { id: 'clips', label: 'Clips' },
             { id: 'notes', label: 'Notes' },
             { id: 'modified', label: 'Modified', hide: 'col-hide-narrow' },
+            { id: 'firmware', label: 'Firmware', hide: 'col-hide-narrow' },
           ] as col}
             <th class={col.hide ?? ''} title={col.id === 'type' ? 'I = Internal synth, K = Kit, M = MIDI out, C = CV out, A = Audio' : undefined}>
               {#if sortFns[col.id] || col.id === 'arr'}
@@ -1377,7 +1382,7 @@
     font-size: 0.82rem;
     white-space: nowrap;
   }
-  .col-name { width: 34%; }
+  .col-name { width: 28%; }
   .col-bpm { width: 7%; }
   .col-key { width: 7%; }
   .col-duration { width: 9%; }
@@ -1385,7 +1390,8 @@
   .col-instruments { width: 7%; }
   .col-clips { width: 7%; }
   .col-notes { width: 9%; }
-  .col-modified { width: 12%; }
+  .col-modified { width: 10%; }
+  .col-firmware { width: 8%; }
   thead {
     background: var(--surface);
     box-shadow: inset 0 -1px 0 var(--border);
