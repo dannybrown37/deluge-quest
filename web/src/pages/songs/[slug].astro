@@ -75,10 +75,10 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
             <svg class="hero-play-icon" id="hero-play-icon" viewBox="0 0 24 24" width="14" height="14"><polygon points="4,0 24,12 4,24" fill="currentColor"/></svg>
             <svg class="hero-pause-icon" id="hero-pause-icon" viewBox="0 0 24 24" width="14" height="14" style="display:none"><rect x="2" y="1" width="7" height="22" fill="currentColor"/><rect x="15" y="1" width="7" height="22" fill="currentColor"/></svg>
           </button>
-          <h1 class="song-title">{song.name}</h1>
+          <h1 class="song-title" id="hero-song-title">{song.name}</h1>
           <span class="hero-play-time" id="hero-play-time"></span>
         </div>
-        <div class="song-meta">
+        <div class="song-meta" id="hero-song-meta">
           {song.genre && <span class="tag">{song.genre}</span>}
           {song.year && <span class="tag">{song.year}</span>}
           {song.duration && <span class="tag">{song.duration}</span>}
@@ -113,8 +113,11 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
     const playIcon = document.getElementById('hero-play-icon');
     const pauseIcon = document.getElementById('hero-pause-icon');
     const timeEl = document.getElementById('hero-play-time');
+    const titleEl = document.getElementById('hero-song-title');
+    const metaEl = document.getElementById('hero-song-meta');
 
     const slug = window.location.pathname.replace(/^\/songs\//, '').replace(/\/$/, '');
+    let displayedSlug = slug;
 
     homeAudio.fetchSongList().then(() => {
       const idx = homeAudio.songs.findIndex(s => s.slug === slug);
@@ -126,9 +129,33 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
 
     homeAudio.onNavigate = (song) => {
       if (song.slug) {
-        navigate(`/songs/${song.slug}`);
+        syncSongMeta(song);
       }
     };
+
+    function syncSongMeta(song: { name: string; slug?: string; year?: string | number; genre?: string; duration?: string }) {
+      const newSlug = song.slug ?? song.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      if (newSlug === displayedSlug) return;
+      displayedSlug = newSlug;
+
+      if (titleEl) titleEl.textContent = song.name;
+      if (metaEl) {
+        const tags = [song.genre, song.year, song.duration].filter(Boolean);
+        metaEl.innerHTML = tags.map(t => `<span class="tag">${t}</span>`).join('');
+      }
+
+      document.title = `${song.name} — deluge.quest`;
+      const newUrl = `/songs/${newSlug}`;
+      if (window.location.pathname !== newUrl) {
+        history.replaceState(null, '', newUrl);
+      }
+
+      const shareBtn = document.getElementById('desktop-share');
+      if (shareBtn) {
+        shareBtn.dataset.url = `https://deluge.quest${newUrl}`;
+        shareBtn.dataset.name = song.name;
+      }
+    }
 
     function syncHeroBtn() {
       if (!playIcon || !pauseIcon || !timeEl) return;
@@ -138,6 +165,9 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
       if (homeAudio.songLoaded) {
         timeEl.textContent = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
       }
+
+      const song = homeAudio.currentSong;
+      if (song) syncSongMeta(song);
     }
 
     heroBtn?.addEventListener('click', async () => {

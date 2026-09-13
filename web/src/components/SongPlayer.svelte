@@ -8,6 +8,12 @@
   export let duration: string | undefined = undefined;
   export let pageUrl: string;
 
+  let displayName = name;
+  let displayYear = year;
+  let displayGenre = genre;
+  let displayDuration = duration;
+  let displayUrl = pageUrl;
+
   let playing = false;
   let currentTime = 0;
   let totalDuration = 0;
@@ -22,11 +28,25 @@
     return `${m}:${String(sec).padStart(2, '0')}`;
   }
 
+  function slugify(s: string): string {
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  }
+
   function sync() {
     playing = homeAudio.isPlaying;
     loaded = homeAudio.songLoaded;
     currentTime = homeAudio.elapsed;
     totalDuration = homeAudio.duration;
+
+    const song = homeAudio.currentSong;
+    if (song && song.name !== displayName) {
+      displayName = song.name;
+      displayYear = typeof song.year === 'number' ? String(song.year) : song.year;
+      displayGenre = song.genre;
+      displayDuration = song.duration;
+      const slug = song.slug ?? slugify(song.name);
+      displayUrl = `https://deluge.quest/songs/${slug}`;
+    }
   }
 
   async function toggle() {
@@ -41,9 +61,9 @@
 
   function share() {
     if (navigator.share) {
-      navigator.share({ title: `${name} — deluge.quest`, url: pageUrl });
+      navigator.share({ title: `${displayName} — deluge.quest`, url: displayUrl });
     } else {
-      navigator.clipboard.writeText(pageUrl);
+      navigator.clipboard.writeText(displayUrl);
       copied = true;
       setTimeout(() => { copied = false; }, 2000);
     }
@@ -80,12 +100,12 @@
 </script>
 
 <div class="player">
-  <h1 class="title">{name}</h1>
+  <h1 class="title">{displayName}</h1>
 
   <div class="meta">
-    {#if genre}<span class="tag">{genre}</span>{/if}
-    {#if year}<span class="tag">{year}</span>{/if}
-    {#if duration}<span class="tag">{duration}</span>{/if}
+    {#if displayGenre}<span class="tag">{displayGenre}</span>{/if}
+    {#if displayYear}<span class="tag">{displayYear}</span>{/if}
+    {#if displayDuration}<span class="tag">{displayDuration}</span>{/if}
   </div>
 
   <button class="play-btn" on:click={toggle} aria-label={playing ? 'Pause' : 'Play'}>
