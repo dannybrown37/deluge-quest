@@ -409,6 +409,9 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://deluge.quest');
     .nav-section-label:first-child {
       padding-top: 0.25rem;
     }
+    .nav-site-group {
+      width: 100%;
+    }
     .nav-site-toggle {
       display: none;
     }
@@ -416,11 +419,25 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://deluge.quest');
       display: flex;
       position: static;
       flex-direction: column;
+      width: 100%;
       min-width: 0;
       padding: 0;
       background: none;
       border: none;
       box-shadow: none;
+    }
+    .nav-site-dropdown .nav-link {
+      padding: 0.6rem 0;
+      margin: 0;
+      font-size: 0.95rem;
+      border-radius: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-site-dropdown .nav-link:last-child {
+      border-bottom: none;
+    }
+    .nav-site-dropdown .nav-link:hover {
+      background: none;
     }
   }
 
