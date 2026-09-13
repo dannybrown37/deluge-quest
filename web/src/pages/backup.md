@@ -10,6 +10,8 @@ Your Deluge SD card holds songs, kits, synths, and samples. It's got hours of cr
 
 This is the most technical tool on [deluge.quest](https://deluge.quest). It runs in a terminal, not a browser. If you've figured out how to use the Deluge effectively, you can handle running a few commands from the terminal. You might even find it fun!
 
+The biggest win here is the speed of backup. Before I started using this system, I just backed up my whole card en masse to a new folder on my computer, sorted by backup date. This took a ton of time and a ton of storage space. By using this [Git](https://git-scm.com/docs)-backed approach, you can back up your card in seconds, and only the changes are stored. You can also see exactly what changed between backups, and roll back to any previous version.
+
 ## What you'll need
 
 - A computer running macOS, Linux, or Windows with [WSL](#wsl-support).
@@ -70,7 +72,7 @@ deluge-backup save "new bass patch, reworked drums on SONG042"
 
 The message is optional. Skip it and you'll get a timestamped "Session snapshot" instead. But a quick note about what you did makes it much easier to find things later.
 
-That's the whole workflow. `save` copies any changes from the card, records what changed, and stores it. One command, done.
+That's it! A little work will be required to roll back to a previous version, but it's well worth digging deeper if you ever need it.
 
 ## Advanced Usage
 
