@@ -8,11 +8,11 @@ description: Back up your Deluge SD card with full history, real diffs, and opti
 
 Your Deluge SD card holds songs, kits, synths, and samples. It's got hours of creative work on a tiny chip; disaster could strike at any time. `deluge-backup` gives you a safety net: a full copy of your card with version history, so you can always get back to where you were.
 
-This is the most technical tool on [deluge.quest](https://deluge.quest). It runs in a terminal, not a browser. But if you can copy and paste a few commands, you can do this! And once it's set up, keeping backups current is a single command.
+This is the most technical tool on [deluge.quest](https://deluge.quest). It runs in a terminal, not a browser. If you've figured out how to use the Deluge effectively, you can handle running a few commands from the terminal. You might even find it fun!
 
 ## What you'll need
 
-- A computer running macOS, Linux, or Windows with WSL. If you're on Windows and haven't set up WSL yet, [Microsoft's guide](https://learn.microsoft.com/en-us/windows/wsl/install) walks you through it. It's a one-time setup.
+- A computer running macOS, Linux, or Windows with [WSL](#wsl-support).
 - A terminal (macOS Terminal, Linux Terminal, or Windows Terminal running WSL) to type the below commands into.
 - An internet connection for the install and optional GitHub sync (not required for local backups).
 - An SD card reader (or your Deluge connected via USB).
@@ -159,6 +159,12 @@ Make sure your card is plugged in and mounted. On WSL, it's usually `/mnt/d` or 
 
 Run `deluge-backup init` first. This only needs to happen once.
 
-#### Still stuck? Want me to support Windows without the need for WSL?
+#### WSL Support
+
+If you're on Windows and haven't set up WSL yet, [Microsoft's guide](https://learn.microsoft.com/en-us/windows/wsl/install) walks you through it. It's a one-time setup.
+
+I'm not totally opposed to supporting Windows tbh, but it's a fair amount of work for something that I don't know will be used. [Open an issue](https://github.com/dannybrown37/deluge-quest/issues) or [email me](mailto:danny@deluge.quest) if you're interested in Windows support.
+
+#### Still stuck?
 
 You can try [opening an issue](https://github.com/dannybrown37/deluge-quest/issues), maybe I can help.
