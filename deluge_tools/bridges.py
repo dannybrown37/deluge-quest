@@ -36,6 +36,7 @@ def analyze_stats_json(files_json: str) -> str:
                     "clipCount": stats.clip_count,
                     "totalNotes": stats.total_notes,
                     "durationStr": stats.duration_str if stats.has_arrangement else "-",
+                    "midiChannels": stats.midi_channels,
                 }
             )
         except Exception as e:
@@ -54,6 +55,7 @@ def analyze_stats_json(files_json: str) -> str:
                     "clipCount": 0,
                     "totalNotes": 0,
                     "durationStr": "-",
+                    "midiChannels": [],
                 }
             )
 

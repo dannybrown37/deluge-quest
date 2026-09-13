@@ -332,6 +332,7 @@ def _parse_song_root(root: ET.Element) -> Song:
         "sound": "synth",
         "kit": "kit",
         "midiChannel": "midi",
+        "midi": "midi",
         "cv": "cv",
         "audioOutput": "audio",
     }

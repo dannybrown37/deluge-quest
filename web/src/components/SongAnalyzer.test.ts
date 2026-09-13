@@ -17,6 +17,16 @@ vi.mock('../lib/analytics', () => ({
   trackToolAction: vi.fn(),
 }));
 
+vi.mock('../lib/channelLabels', () => ({
+  getChannelLabels: vi.fn().mockReturnValue({}),
+  setChannelLabel: vi.fn(),
+  removeChannelLabel: vi.fn(),
+  formatChannel: vi.fn((ch: number, labels?: Record<number, string>) => {
+    const resolved = labels ?? {};
+    return resolved[ch] || `Ch ${ch}`;
+  }),
+}));
+
 vi.mock('../lib/cardStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/cardStore')>();
   return {
@@ -74,6 +84,7 @@ function stat(overrides: Partial<SongStats> = {}): SongStats {
     clipCount: 4,
     totalNotes: 100,
     durationStr: '1:30',
+    midiChannels: [],
     ...overrides,
   };
 }

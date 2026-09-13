@@ -56,6 +56,7 @@ export interface SongStats {
   clipCount: number;
   totalNotes: number;
   durationStr: string;
+  midiChannels: number[];
   lastModified?: number;
 }
 

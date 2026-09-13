@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from deluge_tools.parser import TICKS_PER_QUARTER, Song
 
@@ -59,6 +59,7 @@ class SongStats:
     arrangement_length_ticks: int = 0
     duration_str: str = ""
     firmware_version: str = ""
+    midi_channels: list[int] = field(default_factory=list)
 
 
 def analyze_song(song: Song) -> SongStats:
@@ -71,6 +72,14 @@ def analyze_song(song: Song) -> SongStats:
     midi_count = sum(1 for i in song.instruments if i.instrument_type == "midi")
     cv_count = sum(1 for i in song.instruments if i.instrument_type == "cv")
     audio_count = sum(1 for i in song.instruments if i.instrument_type == "audio")
+
+    midi_channels = sorted(
+        {
+            i.midi_channel + 1
+            for i in song.instruments
+            if i.instrument_type == "midi" and i.midi_channel is not None
+        }
+    )
 
     total_notes = sum(len(row.notes) for clip in song.clips for row in clip.rows)
 
@@ -98,4 +107,5 @@ def analyze_song(song: Song) -> SongStats:
         arrangement_length_ticks=arr_end,
         duration_str=ticks_to_duration_str(arr_end, song.bpm),
         firmware_version=song.firmware_version,
+        midi_channels=midi_channels,
     )

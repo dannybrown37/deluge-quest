@@ -223,6 +223,30 @@ class TestInstrumentTypes:
         assert cv.cv_channel == 0
 
 
+class TestNewFirmwareMidiTag:
+    @pytest.fixture
+    def song_with_new_midi_tag(self, tmp_path):
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<song firmwareVersion="5.0.0" timePerTimerTick="917" timerTickFraction="3006477107"
+      rootNote="0" inArrangementView="1">
+  <instruments>
+    <midi presetSlot="0" presetSubSlot="-1" channel="11" />
+  </instruments>
+  <sessionClips></sessionClips>
+</song>"""
+        p = tmp_path / "test.XML"
+        p.write_text(xml)
+        return parse_song(p)
+
+    def test_midi_tag_detected(self, song_with_new_midi_tag):
+        matched = [i for i in song_with_new_midi_tag.instruments if i.instrument_type == "midi"]
+        assert len(matched) == 1
+
+    def test_midi_tag_channel_stored(self, song_with_new_midi_tag):
+        midi = [i for i in song_with_new_midi_tag.instruments if i.instrument_type == "midi"][0]
+        assert midi.midi_channel == 11
+
+
 class TestAudioClips:
     @pytest.fixture
     def song_with_audio(self, tmp_path):

@@ -2,6 +2,7 @@
   import { TRASH_DIR, getOrCreateDir, moveToTrash } from "../lib/softDelete";
   import { cardStore, walkHandle } from "../lib/cardStore";
   import { trackToolAction } from "../lib/analytics";
+  import { getChannelLabels, setChannelLabel, removeChannelLabel, formatChannel } from "../lib/channelLabels";
 
   type State = "idle" | "indexing" | "processing" | "done" | "error";
 
@@ -72,6 +73,15 @@
   let reconnectAvailable = $state(false);
   let playingFile = $state<string | null>(null);
   let currentAudio = $state<HTMLAudioElement | null>(null);
+  let songMidiChannels = $state(new Map<string, number[]>());
+  let filterSongChannels = $state<Set<number>>(new Set());
+  let filterSongChannelMode = $state<"or" | "and">("or");
+  let showSongChannelLabelEditor = $state(false);
+  let songChannelLabels = $state<Record<number, string>>(getChannelLabels());
+  let customSongFolders = $state<string[]>(loadCustomSongFolders());
+  let showMoveToFolderPanel = $state(false);
+  let moveToFolderName = $state("");
+  let movingToFolder = $state(false);
 
   let refSources = $state(new Map<string, Set<string>>());
   let allSamplePaths = $state<string[]>([]);
@@ -156,6 +166,17 @@
     // No external-gear signal at all — native to the Deluge, whether it's synths/kits,
     // audio-only clips (audioTrack/audioOutput), or an empty song.
     return "delugeOnly";
+  }
+
+  function extractMidiChannels(xmlText: string): number[] {
+    const doc = parseSongXml(xmlText);
+    if (doc.querySelector("parsererror")) return [];
+    const channels = new Set<number>();
+    for (const el of doc.querySelectorAll("midi, midiChannel")) {
+      const ch = el.getAttribute("channel");
+      if (ch != null) channels.add(parseInt(ch, 10) + 1);
+    }
+    return [...channels].sort((a, b) => a - b);
   }
 
   function extractPresetRefs(xmlText: string): Set<string> {
@@ -350,6 +371,7 @@
     const songsByType = { delugeOnly: [] as string[], mixed: [] as string[], externalOnly: [] as string[] };
     const invalidXml: InvalidXmlFile[] = [];
     const localXmlTexts = new Map<string, string>();
+    const localSongMidiChannels = new Map<string, number[]>();
 
     for (const [rel, text] of xmlEntries) {
       localXmlTexts.set(rel, text);
@@ -366,6 +388,8 @@
       if (topDir(rel).toUpperCase() === "SONGS") {
         const gearType = classifyInstrumentGear(text);
         if (gearType) songsByType[gearType].push(rel);
+        const midiChs = extractMidiChannels(text);
+        if (midiChs.length > 0) localSongMidiChannels.set(rel, midiChs);
       }
     }
     invalidXml.sort((a, b) => a.path.localeCompare(b.path));
@@ -474,6 +498,7 @@
     allSamplePaths = [...allSamples.keys()].sort();
     allSampleSizes = allSamples;
     xmlTexts = localXmlTexts;
+    songMidiChannels = localSongMidiChannels;
 
     report = {
       totalSamples: allSamples.size,
@@ -517,6 +542,29 @@
   }
 
   const SONG_CATEGORY_DIRS = ["DELUGE_ONLY", "EXTERNAL_GEAR"];
+  const CUSTOM_FOLDERS_KEY = "deluge-song-folders";
+
+  function loadCustomSongFolders(): string[] {
+    try {
+      const raw = localStorage.getItem(CUSTOM_FOLDERS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveCustomSongFolder(name: string) {
+    if (customSongFolders.includes(name)) return;
+    const next = [...customSongFolders, name];
+    customSongFolders = next;
+    try {
+      localStorage.setItem(CUSTOM_FOLDERS_KEY, JSON.stringify(next));
+    } catch {}
+  }
+
+  function sanitizeFolderName(name: string): string {
+    return name.toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+  }
 
   /** Removes dirPath and any now-empty ancestors, stopping at (not including) stopAt. */
   async function removeEmptyDirsUpTo(root: FileSystemDirectoryHandle, dirPath: string, stopAt: string) {
@@ -540,7 +588,7 @@
     }
   }
 
-  async function moveSongToCategory(songPath: string, category: "DELUGE_ONLY" | "EXTERNAL_GEAR") {
+  async function moveSongToCategory(songPath: string, category: string) {
     if (!rootHandle || movedSongs.has(songPath) || movingSongs.has(songPath)) return;
 
     const next = new Set(movingSongs);
@@ -550,7 +598,7 @@
     try {
       const parts = songPath.split("/");
       parts.shift(); // drop leading "SONGS"
-      if (SONG_CATEGORY_DIRS.includes(parts[0])) parts.shift();
+      if (SONG_CATEGORY_DIRS.includes(parts[0]) || customSongFolders.includes(parts[0])) parts.shift();
       const fileName = parts.pop()!;
       const relDir = parts.join("/");
 
@@ -606,6 +654,31 @@
     trackToolAction("manage", "sort_songs");
   }
 
+  let filteredSongsForMove = $derived([...filteredDelugeOnlySongs, ...filteredExternalSongs]);
+
+  let defaultMoveToFolderName = $derived.by(() => {
+    if (filterSongChannels.size !== 1) return "";
+    const ch = [...filterSongChannels][0];
+    return sanitizeFolderName(formatChannel(ch, songChannelLabels));
+  });
+
+  async function moveFilteredSongsToFolder() {
+    const folderName = sanitizeFolderName(moveToFolderName);
+    if (!rootHandle || !folderName || filteredSongsForMove.length === 0) return;
+
+    movingToFolder = true;
+    try {
+      for (const path of filteredSongsForMove) {
+        if (!movedSongs.has(path)) await moveSongToCategory(path, folderName);
+      }
+      saveCustomSongFolder(folderName);
+      trackToolAction("manage", "sort_songs");
+    } finally {
+      movingToFolder = false;
+      showMoveToFolderPanel = false;
+      moveToFolderName = "";
+    }
+  }
 
   function toggleRefExpand(path: string) {
     const next = new Set(expandedRefs);
@@ -788,11 +861,13 @@
 
   const CACHE_KEY = "deluge-clean-report";
   const CACHE_KEY_NAME = "deluge-clean-name";
+  const CACHE_KEY_MIDI_CHS = "deluge-clean-midi-channels";
 
   function saveToSession() {
     try {
       sessionStorage.setItem(CACHE_KEY, JSON.stringify(report));
       sessionStorage.setItem(CACHE_KEY_NAME, cardName);
+      sessionStorage.setItem(CACHE_KEY_MIDI_CHS, JSON.stringify([...songMidiChannels.entries()]));
     } catch {}
   }
 
@@ -808,6 +883,10 @@
       cached.invalidXml ??= [];
       report = cached;
       cardName = sessionStorage.getItem(CACHE_KEY_NAME) ?? "";
+      try {
+        const chRaw = sessionStorage.getItem(CACHE_KEY_MIDI_CHS);
+        if (chRaw) songMidiChannels = new Map(JSON.parse(chRaw));
+      } catch {}
       state = "done";
       return true;
     } catch {
@@ -857,12 +936,28 @@
 
   let unusedSet = $derived(new Set(report?.unusedSamples ?? []));
 
+  function filterByChannels(paths: string[]): string[] {
+    if (filterSongChannels.size === 0) return paths;
+    return paths.filter(p => {
+      const chs = songMidiChannels.get(p) ?? [];
+      return filterSongChannelMode === "or"
+        ? chs.some(ch => filterSongChannels.has(ch))
+        : [...filterSongChannels].every(ch => chs.includes(ch));
+    });
+  }
+
   let filteredDelugeOnlySongs = $derived(
-    [...(report?.songsByType.delugeOnly ?? [])].sort()
+    filterByChannels([...(report?.songsByType.delugeOnly ?? [])]).sort()
   );
   let filteredExternalSongs = $derived(
-    [...(report?.songsByType.mixed ?? []), ...(report?.songsByType.externalOnly ?? [])].sort()
+    filterByChannels([...(report?.songsByType.mixed ?? []), ...(report?.songsByType.externalOnly ?? [])]).sort()
   );
+
+  let allSongMidiChannels = $derived.by(() => {
+    const chs = new Set<number>();
+    for (const chList of songMidiChannels.values()) for (const ch of chList) chs.add(ch);
+    return [...chs].sort((a, b) => a - b);
+  });
 
   interface SampleFile {
     name: string;
@@ -1029,6 +1124,22 @@
 
   let allSongPaths = $derived([...filteredDelugeOnlySongs, ...filteredExternalSongs]);
   let songTree = $derived(buildTree(allSongPaths));
+
+  function toggleSongChannel(ch: number) {
+    const next = new Set(filterSongChannels);
+    if (next.has(ch)) next.delete(ch);
+    else next.add(ch);
+    filterSongChannels = next;
+  }
+
+  function handleSongLabelChange(ch: number, value: string) {
+    if (value.trim()) {
+      setChannelLabel(ch, value);
+    } else {
+      removeChannelLabel(ch);
+    }
+    songChannelLabels = getChannelLabels();
+  }
 
   async function playSample(samplePath: string) {
     if (currentAudio) {
@@ -1305,6 +1416,87 @@
               {/if}
             </div>
           </div>
+          {#if allSongMidiChannels.length > 0}
+            <div class="channel-filter-row">
+              <span class="filter-label">MIDI</span>
+              <div class="channel-chips">
+                {#each allSongMidiChannels as ch}
+                  <button
+                    class="channel-chip"
+                    class:channel-chip--active={filterSongChannels.has(ch)}
+                    aria-pressed={filterSongChannels.has(ch)}
+                    onclick={() => toggleSongChannel(ch)}
+                  >{formatChannel(ch, songChannelLabels)}</button>
+                {/each}
+              </div>
+              {#if allSongMidiChannels.length > 1}
+                <button
+                  class="mode-toggle"
+                  role="switch"
+                  aria-checked={filterSongChannelMode === "and"}
+                  title={filterSongChannelMode === "or" ? "Showing songs with ANY selected channel — click for ALL" : "Showing songs with ALL selected channels — click for ANY"}
+                  onclick={() => { filterSongChannelMode = filterSongChannelMode === "or" ? "and" : "or"; }}
+                >{filterSongChannelMode.toUpperCase()}</button>
+              {/if}
+              <button
+                class="gear-btn"
+                title="Edit channel labels"
+                aria-pressed={showSongChannelLabelEditor}
+                onclick={() => { showSongChannelLabelEditor = !showSongChannelLabelEditor; }}
+              >&#9881;</button>
+              {#if filterSongChannels.size > 0}
+                <button class="btn btn-ghost btn-sm" onclick={() => { filterSongChannels = new Set(); }}>Clear</button>
+              {/if}
+            </div>
+            {#if filterSongChannels.size > 0 && canWrite}
+              <div class="move-to-folder-row">
+                {#if !showMoveToFolderPanel}
+                  <button
+                    class="btn btn-secondary btn-sm"
+                    onclick={() => { moveToFolderName = defaultMoveToFolderName; showMoveToFolderPanel = true; }}
+                  >Move {filteredSongsForMove.length} songs to folder…</button>
+                {:else}
+                  <input
+                    class="folder-name-input"
+                    type="text"
+                    aria-label="Destination folder name"
+                    placeholder="FOLDER_NAME"
+                    value={moveToFolderName}
+                    oninput={(e) => { moveToFolderName = sanitizeFolderName((e.target as HTMLInputElement).value); }}
+                    onkeydown={(e) => {
+                      if (e.key === "Enter" && moveToFolderName && !movingToFolder) moveFilteredSongsToFolder();
+                      if (e.key === "Escape") { showMoveToFolderPanel = false; moveToFolderName = ""; }
+                    }}
+                  />
+                  <button
+                    class="btn btn-primary btn-sm"
+                    disabled={!moveToFolderName || movingToFolder}
+                    onclick={moveFilteredSongsToFolder}
+                  >{movingToFolder ? "Moving…" : `Move ${filteredSongsForMove.length} songs`}</button>
+                  <button
+                    class="btn btn-ghost btn-sm"
+                    onclick={() => { showMoveToFolderPanel = false; moveToFolderName = ""; }}
+                  >Cancel</button>
+                {/if}
+              </div>
+            {/if}
+            {#if showSongChannelLabelEditor}
+              <div class="label-editor">
+                {#each allSongMidiChannels as ch}
+                  <div class="label-row">
+                    <span class="label-ch">Ch {ch}</span>
+                    <input
+                      class="label-input"
+                      type="text"
+                      placeholder="e.g. Peak"
+                      value={songChannelLabels[ch] ?? ""}
+                      onchange={(e) => handleSongLabelChange(ch, (e.target as HTMLInputElement).value)}
+                    />
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          {/if}
 
           {#if songViewMode === "folders"}
             {#snippet songFolderChildren(node: FolderNode, path: string)}
@@ -2089,6 +2281,14 @@
     border: 1px solid var(--border);
   }
   .btn-secondary:hover { background: var(--surface); }
+  .btn-ghost {
+    background: none;
+    color: var(--accent);
+    border: none;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.75rem;
+    text-decoration: underline;
+  }
   .btn-accent {
     background: var(--accent);
     color: var(--bg);
@@ -2174,5 +2374,133 @@
   .stat--changed {
     color: var(--accent);
     border-color: var(--accent);
+  }
+
+  .channel-filter-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+  .channel-chips {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+  }
+  .channel-chip {
+    background: none;
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 0.78rem;
+    color: inherit;
+    cursor: pointer;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    transition: border-color 0.05s, background 0.05s;
+  }
+  .channel-chip:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .channel-chip--active {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+  .filter-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  .mode-toggle {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    letter-spacing: 0.04em;
+  }
+  .mode-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .gear-btn {
+    background: none;
+    border: 1px solid transparent;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    color: var(--text-secondary);
+    line-height: 1;
+  }
+  .gear-btn:hover,
+  .gear-btn[aria-pressed="true"] {
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .label-editor {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0 0 0.5rem;
+  }
+  .label-row {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .label-ch {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    min-width: 2.5rem;
+  }
+  .label-input {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    width: 8rem;
+  }
+  .label-input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .label-input::placeholder {
+    color: var(--text-secondary);
+  }
+  .move-to-folder-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+  .folder-name-input {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    width: 10rem;
+    text-transform: uppercase;
+  }
+  .folder-name-input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .folder-name-input::placeholder {
+    color: var(--text-secondary);
   }
 </style>

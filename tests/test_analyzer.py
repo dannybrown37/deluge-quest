@@ -184,3 +184,54 @@ class TestAnalyzeSong:
         assert stats.clip_count == 0
         assert stats.total_notes == 0
         assert stats.key == "C Chromatic"
+        assert stats.midi_channels == []
+
+
+class TestMidiChannels:
+    def test_midi_channels_extracted(self):
+        instruments = [
+            Instrument(
+                name="MIDI Ch 1", instrument_type="midi", midi_channel=0, slot=-1, sub_slot=-1
+            ),
+            Instrument(
+                name="MIDI Ch 9", instrument_type="midi", midi_channel=8, slot=-1, sub_slot=-1
+            ),
+        ]
+        song = _make_song(instruments=instruments)
+        stats = analyze_song(song)
+        assert stats.midi_channels == [1, 9]
+
+    def test_midi_channels_collapsed(self):
+        instruments = [
+            Instrument(
+                name="MIDI Ch 9", instrument_type="midi", midi_channel=8, slot=-1, sub_slot=0
+            ),
+            Instrument(
+                name="MIDI Ch 9B", instrument_type="midi", midi_channel=8, slot=-1, sub_slot=1
+            ),
+        ]
+        song = _make_song(instruments=instruments)
+        stats = analyze_song(song)
+        assert stats.midi_channels == [9]
+
+    def test_midi_channels_empty_when_no_midi(self):
+        instruments = [
+            Instrument(name="Synth 0", slot=0, sub_slot=-1),
+            Instrument(name="Kit", is_kit=True, instrument_type="kit", slot=1, sub_slot=-1),
+        ]
+        song = _make_song(instruments=instruments)
+        stats = analyze_song(song)
+        assert stats.midi_channels == []
+
+    def test_midi_channels_mixed_instrument_types(self):
+        instruments = [
+            Instrument(name="Synth 0", slot=0, sub_slot=-1),
+            Instrument(
+                name="MIDI Ch 10", instrument_type="midi", midi_channel=9, slot=-1, sub_slot=-1
+            ),
+            Instrument(name="CV 1", instrument_type="cv", cv_channel=0, slot=-1, sub_slot=-1),
+        ]
+        song = _make_song(instruments=instruments)
+        stats = analyze_song(song)
+        assert stats.midi_channels == [10]
+        assert stats.midi_count == 1

@@ -3,6 +3,7 @@
   import { moveToTrash } from "../lib/softDelete";
   import { cardStore, basename, topDir } from "../lib/cardStore";
   import { trackToolAction } from "../lib/analytics";
+  import { getChannelLabels, setChannelLabel, removeChannelLabel, formatChannel } from "../lib/channelLabels";
 
   interface DroppedFile {
     file: File;
@@ -41,6 +42,10 @@
   let filterBpmMax = $state("");
   let filterNotesMin = $state("");
   let searchQuery = $state("");
+  let filterMidiChannels = $state<Set<number>>(new Set());
+  let filterMidiMode = $state<"or" | "and">("or");
+  let showChannelLabelEditor = $state(false);
+  let channelLabels = $state<Record<number, string>>(getChannelLabels());
 
   const ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
@@ -89,6 +94,14 @@
       const q = searchQuery.toLowerCase();
       items = items.filter(s => s.filename.toLowerCase().includes(q));
     }
+    if (filterMidiChannels.size > 0) {
+      items = items.filter(s => {
+        const channels = s.midiChannels ?? [];
+        return filterMidiMode === "or"
+          ? channels.some(ch => filterMidiChannels.has(ch))
+          : [...filterMidiChannels].every(ch => channels.includes(ch));
+      });
+    }
     return items;
   });
 
@@ -130,6 +143,12 @@
       collapsedFolders = [...collapsedFolders, folder];
     }
   }
+
+  let allMidiChannels = $derived.by(() => {
+    const chs = new Set<number>();
+    for (const s of results) for (const ch of s.midiChannels ?? []) chs.add(ch);
+    return [...chs].sort((a, b) => a - b);
+  });
 
   let allKeys = $derived.by(() => {
     const keys: Record<string, number> = {};
@@ -179,7 +198,7 @@
 
   let hasActiveFilters = $derived(
     filterArr !== "all" || filterGear !== "all" || filterKey !== "" || filterBpmMin !== "" ||
-    filterBpmMax !== "" || filterNotesMin !== "" || searchQuery !== ""
+    filterBpmMax !== "" || filterNotesMin !== "" || searchQuery !== "" || filterMidiChannels.size > 0
   );
 
   const CACHE_KEY_RESULTS = "deluge-stats-results";
@@ -630,6 +649,23 @@
     filterBpmMax = "";
     filterNotesMin = "";
     searchQuery = "";
+    filterMidiChannels = new Set();
+  }
+
+  function toggleMidiChannel(ch: number) {
+    const next = new Set(filterMidiChannels);
+    if (next.has(ch)) next.delete(ch);
+    else next.add(ch);
+    filterMidiChannels = next;
+  }
+
+  function handleLabelChange(ch: number, value: string) {
+    if (value.trim()) {
+      setChannelLabel(ch, value);
+    } else {
+      removeChannelLabel(ch);
+    }
+    channelLabels = getChannelLabels();
   }
 
   function filterByKey(key: string) {
@@ -813,6 +849,52 @@
         <button class="btn btn-secondary btn-sm" onclick={exportCsv}>Export CSV</button>
         <button class="btn btn-secondary btn-sm" onclick={reset}>Analyze more</button>
       </div>
+      {#if allMidiChannels.length > 0}
+        <div class="filter-row filter-row--channels">
+          <span class="filter-label">MIDI</span>
+          <div class="channel-chips">
+            {#each allMidiChannels as ch}
+              <button
+                class="key-chip"
+                class:key-chip--active={filterMidiChannels.has(ch)}
+                aria-pressed={filterMidiChannels.has(ch)}
+                onclick={() => toggleMidiChannel(ch)}
+              >{formatChannel(ch, channelLabels)}</button>
+            {/each}
+          </div>
+          {#if allMidiChannels.length > 1}
+            <button
+              class="mode-toggle"
+              role="switch"
+              aria-checked={filterMidiMode === "and"}
+              title={filterMidiMode === "or" ? "Showing songs with ANY selected channel — click for ALL" : "Showing songs with ALL selected channels — click for ANY"}
+              onclick={() => { filterMidiMode = filterMidiMode === "or" ? "and" : "or"; }}
+            >{filterMidiMode.toUpperCase()}</button>
+          {/if}
+          <button
+            class="gear-btn"
+            title="Edit channel labels"
+            aria-pressed={showChannelLabelEditor}
+            onclick={() => { showChannelLabelEditor = !showChannelLabelEditor; }}
+          >&#9881;</button>
+        </div>
+        {#if showChannelLabelEditor}
+          <div class="label-editor">
+            {#each allMidiChannels as ch}
+              <div class="label-row">
+                <span class="label-ch">Ch {ch}</span>
+                <input
+                  class="label-input"
+                  type="text"
+                  placeholder="e.g. Peak"
+                  value={channelLabels[ch] ?? ""}
+                  onchange={(e) => handleLabelChange(ch, (e.target as HTMLInputElement).value)}
+                />
+              </div>
+            {/each}
+          </div>
+        {/if}
+      {/if}
     </div>
 
     <!-- Table -->
@@ -1503,6 +1585,80 @@
     border-color: var(--accent);
     background: var(--accent-dim);
     color: var(--accent);
+  }
+
+  .filter-row--channels {
+    align-items: center;
+  }
+  .channel-chips {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+  }
+  .mode-toggle {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    letter-spacing: 0.04em;
+  }
+  .mode-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .gear-btn {
+    background: none;
+    border: 1px solid transparent;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    color: var(--text-secondary);
+    line-height: 1;
+  }
+  .gear-btn:hover,
+  .gear-btn[aria-pressed="true"] {
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .label-editor {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.5rem 0 0;
+  }
+  .label-row {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .label-ch {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    min-width: 2.5rem;
+  }
+  .label-input {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    width: 8rem;
+  }
+  .label-input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .label-input::placeholder {
+    color: var(--text-secondary);
   }
 
   /* Summary */
