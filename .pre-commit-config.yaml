@@ -55,3 +55,10 @@ repos:
         language: system
         files: ^web/.*\.(ts|svelte|astro)$
         pass_filenames: false
+
+      - id: changelog-reminder
+        name: changelog reminder
+        entry: bash -c 'if ! git diff --cached --name-only | grep -q "^web/src/content/changelog/"; then echo "⚠  No changelog entry. Add one in web/src/content/changelog/ or bypass with --no-verify"; exit 1; fi'
+        language: system
+        always_run: true
+        pass_filenames: false
