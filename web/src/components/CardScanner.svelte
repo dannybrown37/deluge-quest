@@ -1939,11 +1939,6 @@
     font-size: 0.78rem;
     color: var(--text-secondary);
   }
-  .clean-msg {
-    margin-top: 1rem;
-    font-size: 0.88rem;
-    color: var(--teal);
-  }
   .actions {
     display: flex;
     gap: 0.5rem;
@@ -1990,22 +1985,6 @@
     font-weight: 500;
     color: var(--text-secondary);
     margin-bottom: 0.4rem;
-  }
-  .file-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.78rem;
-    max-height: 400px;
-    overflow-y: auto;
-  }
-  .file-list li {
-    padding: 0.2rem 0;
-    color: var(--text);
-  }
-  .missing-sample {
-    color: var(--text);
   }
   .missing-source {
     color: var(--text-secondary);
@@ -2274,17 +2253,6 @@
     color: var(--text-secondary);
   }
 
-  .list-note {
-    padding: 0.75rem 1rem;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    border-bottom: 1px solid var(--border);
-  }
-  .list-note a {
-    color: var(--accent);
-  }
-
   .error-card { border-color: #c47a7a; }
   .error-msg {
     color: #c47a7a;
@@ -2317,17 +2285,6 @@
     font-size: 0.75rem;
     text-decoration: underline;
   }
-  .btn-accent {
-    background: var(--accent);
-    color: var(--bg);
-    border: 1px solid var(--accent);
-  }
-  .btn-accent:hover { opacity: 0.9; }
-  .btn-accent:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-
   .ref-count-btn {
     flex-shrink: 0;
     font-family: 'DM Mono', monospace;
@@ -2352,23 +2309,6 @@
     padding: 0.05rem 0;
   }
 
-  .fix-all-result {
-    margin: 0.5rem 0;
-    padding: 0.4rem 0.6rem;
-    border-radius: 4px;
-    background: rgba(196, 122, 122, 0.12);
-    font-size: 0.82rem;
-  }
-  .fix-all-result p { margin: 0; }
-  .fix-all-result--success {
-    background: rgba(90, 171, 172, 0.12);
-  }
-  .fix-all-details {
-    margin: 0.25rem 0 0;
-    padding-left: 1.2rem;
-    font-size: 0.78rem;
-    opacity: 0.85;
-  }
   .analysis-section {
     padding-bottom: 1rem;
     margin-bottom: 1rem;
@@ -2393,15 +2333,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .stat--new {
-    color: var(--teal);
-    border-color: var(--teal);
-  }
-  .stat--changed {
-    color: var(--accent);
-    border-color: var(--accent);
   }
 
   .channel-filter-row {

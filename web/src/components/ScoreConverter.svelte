@@ -416,12 +416,6 @@
     color: var(--text-secondary);
     opacity: 0.7;
   }
-  .card-reconnect {
-    width: 100%;
-    border: none;
-    font-family: inherit;
-    cursor: pointer;
-  }
 
   .dropzone {
     border: 2px dashed var(--border);
