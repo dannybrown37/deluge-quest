@@ -65,7 +65,6 @@
   let selectedCategory: Category = $state('lead');
   let patch: Patch | null = $state(null);
   let history: Patch[] = $state([]);
-  let locked: Set<string> = $state(new Set());
   let bulkCount: number = $state(10);
 
   function hex(value: number): string {
@@ -322,19 +321,6 @@
     stopPreview();
     playing = false;
     const p = generatePatch(selectedCategory);
-    if (patch && locked.size > 0) {
-      for (const key of locked) {
-        if (key in patch.params && key in p.params) {
-          p.params[key] = patch.params[key];
-        }
-        if (key === 'envelope1') Object.assign(p.envelope1, patch.envelope1);
-        if (key === 'envelope2') Object.assign(p.envelope2, patch.envelope2);
-        if (key === 'osc1') Object.assign(p.osc1, patch.osc1);
-        if (key === 'osc2') Object.assign(p.osc2, patch.osc2);
-        if (key === 'mode') { p.mode = patch.mode; }
-        if (key === 'unison') { p.unisonNum = patch.unisonNum; p.unisonDetune = patch.unisonDetune; }
-      }
-    }
     patch = p;
     history = [p, ...history.slice(0, 19)];
     trackToolAction('patch', 'generate');
@@ -519,13 +505,6 @@ ${cables}
     URL.revokeObjectURL(url);
   }
 
-  function toggleLock(key: string) {
-    const next = new Set(locked);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    locked = next;
-  }
-
   function hexToPercent(h: string): number {
     const n = parseInt(h, 16);
     const signed = n > 0x7FFFFFFF ? n - 0x100000000 : n;
@@ -654,7 +633,6 @@ ${cables}
         <div class="patch-section">
           <h3 class="section-title">
             Oscillators
-            <button class="lock-btn" class:locked={locked.has('osc1')} onclick={() => toggleLock('osc1')} title="Lock Osc 1">&#x1F512;</button>
           </h3>
           <div class="osc-row">
             <span class="osc-label">OSC 1</span>
@@ -683,7 +661,6 @@ ${cables}
         <div class="patch-section">
           <h3 class="section-title">
             Envelope 1 (Amp)
-            <button class="lock-btn" class:locked={locked.has('envelope1')} onclick={() => toggleLock('envelope1')} title="Lock Envelope 1">&#x1F512;</button>
           </h3>
           <div class="env-display">
             <div class="env-bar-group">
@@ -708,7 +685,6 @@ ${cables}
         <div class="patch-section">
           <h3 class="section-title">
             Envelope 2 (Mod)
-            <button class="lock-btn" class:locked={locked.has('envelope2')} onclick={() => toggleLock('envelope2')} title="Lock Envelope 2">&#x1F512;</button>
           </h3>
           <div class="env-display">
             <div class="env-bar-group">
@@ -971,18 +947,6 @@ ${cables}
     align-items: center;
     gap: 0.4rem;
   }
-
-  .lock-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 0.7rem;
-    opacity: 0.3;
-    padding: 0;
-    transition: opacity 0.08s;
-  }
-  .lock-btn:hover { opacity: 0.7; }
-  .lock-btn.locked { opacity: 1; }
 
   .osc-row {
     display: flex;

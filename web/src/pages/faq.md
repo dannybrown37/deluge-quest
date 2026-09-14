@@ -1,7 +1,7 @@
 ---
 layout: ../layouts/ProseLayout.astro
-title: Frugally Anticipated Questions
-description: About deluge.quest — open source utilities for the Synthstrom Deluge.
+title: Frugally Anticipated Queries
+description: About deluge.quest's open source utilities for the Synthstrom Deluge.
 ---
 
 ## What is deluge.quest?
@@ -12,7 +12,7 @@ deluge.quest is a love letter to the [Synthstrom Deluge](https://synthstrom.com/
 
 This website represents a personal quest to compile disparate tools into an incredibly ergonomic, secure, easy-to-use interface, available on any device with a web browser.
 
-As I built out the "Deluge" UI, I also realized that having Deluge-derived tracks to make the knobs and buttons responsive would be fun, so I compiled a number of Deluge-only tracks I've made over the years and loaded them on the site. Thus, it's also become a music distribution platform for my own Deluge tracks.
+As I built out the "Deluge" UI, I also realized that having Deluge-derived tracks to make the knobs and buttons responsive would be fun, so I compiled a number of Deluge-only tracks I've made over the years and loaded them on the site. Thus, it's also become a music distribution platform of sorts for my own Deluge tracks.
 
 ## Who are you?
 
@@ -26,7 +26,7 @@ I have been writing scripts to help manage my Deluge files for years. This websi
 
 The website is lots of things: an easy way to use and access my tools, a fun project to hone my skills, and a way to share music made with the Deluge.
 
-The Deluge stores songs as XML files on an SD card. These can be difficult to work with on the Deluge itself. On the flipside, there are numerous pain points to manually managing one's SD card on a computer.
+The Deluge stores songs as XML files on an SD card. These can be difficult to work with on the Deluge itself. On the flipside, there are numerous pain points to manually managing one's SD card on a computer. The difficulties lead to a mess of files on the SD card, which makes it hard to find what I need, and thus less likely to use the Deluge. This is a true bummer.
 
 This website provides a number of tools to improve the Deluge SD card management experience, to help translate between the Deluge and other music software and back, and to help enhance the creative process of making music with the Deluge.
 
@@ -38,13 +38,23 @@ You are right to be skeptical! I've made great efforts to make them as safe to u
 
 That said! I personally always run these tools on a backup of my SD card, not on the real thing. (Or sometimes on the real thing if I have a really recent backup.) I recommend you do the same. I cannot be responsible for any data loss, so please follow precautions and use these tools at your own risk.
 
+Here's a workflow I use and enjoy:
+
+1. Set up the [Backup](/backup) tool if you feel up to running a CLI.
+
+2. Once you have your local backup, any time you pop up in your SD card, immediately run `deluge-backup save`.
+
+3. Since you backed up, you can freely and safely make changes on the SD card itself at this point. If you mess something up, just restore from your local backup to your card.
+
+4. Run `deluge-backup save` one more time. Now you have a backup of the SD card both before and after your changes. You can always revert to a previous state if you really need to.
+
 ## Is this secure?  Are you uploading my files?
 
 Yes, it's secure!
 
 No data you load onto the site is sent to a server. All of the tools run directly in the browser, i.e., your files never leave your machine. No server, no account, no upload.
 
-I jokingly toyed with the idea of a "donate patches to the site author" button, but the [Card Management](/manage) tool has revealed the sheer number of unused patches and samples I already have. I can't manage even more of them! (Unless you've got really good ones, in which case, please [reach out](mailto:danny@deluge.quest) to me.)
+I jokingly toyed with the idea of a "donate patches to the site author" button, but the [Card Management](/manage) tool has revealed the sheer number of unused patches and samples I already have. I can't manage even more of them! (Unless you've got really good ones, in which case, please [reach out](mailto:danny@deluge.quest) to me. I legit would appreciate some great Deluge patches.)
 
 ## What *are* you tracking?
 
