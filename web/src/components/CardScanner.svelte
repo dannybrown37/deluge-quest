@@ -76,7 +76,7 @@
   let songMidiChannels = $state(new Map<string, number[]>());
   let songFirmwareVersions = $state(new Map<string, string>());
   let filterSongChannels = $state<Set<number>>(new Set());
-  let filterSongChannelMode = $state<"or" | "and">("or");
+  let filterSongChannelMode = $state<"or" | "and" | "only">("or");
   let showSongChannelLabelEditor = $state(false);
   let songChannelLabels = $state<Record<number, string>>(getChannelLabels());
   let customSongFolders = $state<string[]>(loadCustomSongFolders());
@@ -957,7 +957,9 @@
       const chs = songMidiChannels.get(p) ?? [];
       return filterSongChannelMode === "or"
         ? chs.some(ch => filterSongChannels.has(ch))
-        : [...filterSongChannels].every(ch => chs.includes(ch));
+        : filterSongChannelMode === "and"
+        ? [...filterSongChannels].every(ch => chs.includes(ch))
+        : chs.length > 0 && chs.every(ch => filterSongChannels.has(ch));
     });
   }
 
@@ -1447,10 +1449,8 @@
               {#if allSongMidiChannels.length > 1}
                 <button
                   class="mode-toggle"
-                  role="switch"
-                  aria-checked={filterSongChannelMode === "and"}
-                  title={filterSongChannelMode === "or" ? "Showing songs with ANY selected channel — click for ALL" : "Showing songs with ALL selected channels — click for ANY"}
-                  onclick={() => { filterSongChannelMode = filterSongChannelMode === "or" ? "and" : "or"; }}
+                  title={filterSongChannelMode === "or" ? "ANY selected channel — click for ALL" : filterSongChannelMode === "and" ? "ALL selected channels — click for ONLY" : "ONLY these channels, no other external gear — click for ANY"}
+                  onclick={() => { filterSongChannelMode = filterSongChannelMode === "or" ? "and" : filterSongChannelMode === "and" ? "only" : "or"; }}
                 >{filterSongChannelMode.toUpperCase()}</button>
               {/if}
               <button
@@ -2060,6 +2060,7 @@
     font-size: 0.78rem;
     max-height: 70vh;
     overflow-y: auto;
+    padding-right: 0.5rem;
   }
   .tree-item {
     margin: 0;

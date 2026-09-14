@@ -43,7 +43,7 @@
   let filterNotesMin = $state("");
   let searchQuery = $state("");
   let filterMidiChannels = $state<Set<number>>(new Set());
-  let filterMidiMode = $state<"or" | "and">("or");
+  let filterMidiMode = $state<"or" | "and" | "only">("or");
   let showChannelLabelEditor = $state(false);
   let channelLabels = $state<Record<number, string>>(getChannelLabels());
 
@@ -100,7 +100,9 @@
         const channels = s.midiChannels ?? [];
         return filterMidiMode === "or"
           ? channels.some(ch => filterMidiChannels.has(ch))
-          : [...filterMidiChannels].every(ch => channels.includes(ch));
+          : filterMidiMode === "and"
+          ? [...filterMidiChannels].every(ch => channels.includes(ch))
+          : channels.length > 0 && channels.every(ch => filterMidiChannels.has(ch));
       });
     }
     return items;
@@ -867,10 +869,8 @@
           {#if allMidiChannels.length > 1}
             <button
               class="mode-toggle"
-              role="switch"
-              aria-checked={filterMidiMode === "and"}
-              title={filterMidiMode === "or" ? "Showing songs with ANY selected channel — click for ALL" : "Showing songs with ALL selected channels — click for ANY"}
-              onclick={() => { filterMidiMode = filterMidiMode === "or" ? "and" : "or"; }}
+              title={filterMidiMode === "or" ? "ANY selected channel — click for ALL" : filterMidiMode === "and" ? "ALL selected channels — click for ONLY" : "ONLY these channels, no other external gear — click for ANY"}
+              onclick={() => { filterMidiMode = filterMidiMode === "or" ? "and" : filterMidiMode === "and" ? "only" : "or"; }}
             >{filterMidiMode.toUpperCase()}</button>
           {/if}
           <button
