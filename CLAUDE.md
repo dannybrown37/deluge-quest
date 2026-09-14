@@ -95,6 +95,7 @@ Prose-only pages are Markdown instead (see `/faq`).
 | `/backup` | — | Prose tutorial: installing and using `deluge-backup` CLI, written for non-technical users |
 | `/songs` | — | Song index: list of all tracks with links to individual pages |
 | `/songs/[slug]` | `SongPlayer.svelte` | Shareable per-song page with mobile-friendly audio player, OG tags |
+| `/changelog` | — | Content collection (`src/content/changelog/*.md`) rendered by `src/pages/changelog.astro`. Drop a `.md` with `title`, `date`, `tag` (feature/fix/improvement) frontmatter |
 | `/faq` | — | Hand-written prose. It is `src/pages/faq.md` (Markdown), rendered through `ProseLayout.astro` — edit the Markdown, not HTML |
 
 **Prose pages are Markdown.** Drop a `.md` file in `src/pages/` with
