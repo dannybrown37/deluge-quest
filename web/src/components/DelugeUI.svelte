@@ -26,6 +26,7 @@
   const GOLD = '#D4A847';
   const TEAL = '#5AABAC';
   const GREEN = '#40A060';
+  const RED = '#CC3030';
   const PURPLE = '#8050B0';
   const WHITE = '#E0DDD6';
   const OFF = 'transparent';
@@ -212,9 +213,10 @@
   }
 
   const SIDEBAR_LEFT: { rows: number[]; color: string; link: string; label: string; group: string; subtext: string }[] = [
-    { rows: [0, 1], color: GREEN,   link: 'https://github.com/dannybrown37/deluge', label: 'GitHub', group: 'github', subtext: 'view source code' },
-    { rows: [2, 3], color: '#CC3030', link: '/songs', label: 'Songs', group: 'songs', subtext: 'browse all tracks' },
-    { rows: [4, 5, 6, 7],    color: GREEN,   link: '/faq', label: 'FAQ', group: 'faq', subtext: 'open source / community' },
+    { rows: [0, 1], color: GREEN,   link: '/faq', label: 'FAQ', group: 'faq', subtext: 'open source / community' },
+    { rows: [2, 3], color: RED, link: '/songs', label: 'Songs', group: 'songs', subtext: 'browse all tracks' },
+    { rows: [4, 5], color: GREEN, link: '/changelog', label: 'Changelog', group: 'changelog', subtext: 'view updates & changes' },
+    { rows: [6, 7], color: RED,   link: 'https://github.com/dannybrown37/deluge', label: 'GitHub', group: 'github', subtext: 'view source code' },
   ];
 
   function sidebarLeftAt(r: number): typeof SIDEBAR_LEFT[number] {
