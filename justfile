@@ -358,6 +358,11 @@ release increment="":
   echo "Ready to publish. Run:"
   echo "  git push && git push origin $tag"
 
+# Remove old Vercel deployment artifacts (keeps active alias)
+vercel-clean:
+  npx vercel rm deluge-quest --safe --yes
+  npx vercel rm hamilhamilhamil --safe --yes
+
 # Full dev setup + start web server
 dev: setup web-dev
 
