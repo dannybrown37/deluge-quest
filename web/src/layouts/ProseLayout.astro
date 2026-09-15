@@ -52,9 +52,12 @@ const { title, description } = Astro.props.frontmatter ?? Astro.props;
     color: var(--text-secondary);
     padding: 0.25rem 0;
   }
-  .prose li::before {
+  .prose ul > li::before {
     content: "→ ";
     color: var(--accent);
+  }
+  .prose ol {
+    padding-left: 1.5rem;
   }
   .prose h3 {
     font-family: 'DM Mono', monospace;

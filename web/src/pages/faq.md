@@ -72,3 +72,9 @@ The site is tracking song plays and tool usage counts: basic analytics to unders
 [I did](#who-are-you)! Check out the load/play buttons on the [home page's "Deluge"](/) or the [Songs](/songs) page to see what I've made.
 
 This is a Deluge site, so all tracks here were made with sounds generated entirely from the Deluge at recording time. Other than compressing from WAV to MP3, no post-processing was done to any tracks.
+
+## How can I support the site?
+
+If you enjoy the site, a couple bucks [supporting me on Buy Me a Coffee](https://buymeacoffee.com/dannybuilds) would not go unappreciated.
+
+If that's not feasible, you can send me an [email](mailto:danny@deluge.quest) to say hi!
