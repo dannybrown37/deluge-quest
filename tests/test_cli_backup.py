@@ -301,9 +301,100 @@ class TestRemoteInit:
         ):
             _main(["remote-init", "https://github.com/user/repo.git"])
         calls_str = str(mock_run.call_args_list)
+        assert "ls-remote" in calls_str
         assert "git init" in calls_str or "'git', 'init'" in calls_str
         assert "remote" in calls_str
         assert "rsync" in calls_str
+
+    def test_remote_init_clones_when_remote_has_history(
+        self, env_vars, card_dir, monkeypatch, capsys
+    ):
+        for k, v in env_vars.items():
+            monkeypatch.setenv(k, v)
+
+        def side_effect(cmd, **kw):
+            if "ls-remote" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, stdout="abc123\tHEAD\n")
+            return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+        mock_run = MagicMock(side_effect=side_effect)
+        with patch("subprocess.run", mock_run):
+            _main(["remote-init", "https://github.com/user/repo.git"])
+        calls_str = str(mock_run.call_args_list)
+        assert "clone" in calls_str
+        assert "'git', 'init'" not in calls_str
+        assert "cloned" in capsys.readouterr().out.lower()
+
+    def test_remote_init_fails_if_remote_unreachable(self, env_vars, card_dir, monkeypatch, capsys):
+        for k, v in env_vars.items():
+            monkeypatch.setenv(k, v)
+
+        def side_effect(cmd, **kw):
+            if "ls-remote" in cmd:
+                return subprocess.CompletedProcess(cmd, 128, stdout="", stderr="fatal: not found")
+            return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+        mock_run = MagicMock(side_effect=side_effect)
+        with patch("subprocess.run", mock_run):
+            with pytest.raises(SystemExit):
+                _main(["remote-init", "https://github.com/user/repo.git"])
+        calls_str = str(mock_run.call_args_list)
+        assert "'git', 'init'" not in calls_str
+        assert "'git', 'push'" not in calls_str
+        assert "reach" in capsys.readouterr().err.lower()
+
+
+class TestChangelogAppendOnly:
+    def test_readme_excluded_from_xml_sync_patterns(self):
+        from deluge_tools.cli_backup import XML_INCLUDE_GLOBS, XML_INCLUDE_PATTERNS
+
+        assert not any("README" in p for p in XML_INCLUDE_PATTERNS)
+        assert "README.md" not in XML_INCLUDE_GLOBS
+
+    def test_append_changelog_entry_preserves_existing_history(self, tmp_path):
+        from deluge_tools.cli_backup import _append_changelog_entry
+
+        readme = tmp_path / "README.md"
+        readme.write_text("# Header\n\n## Changelog\n\n### old entry\n- x\n")
+        _append_changelog_entry(readme, "### new entry\n- y", header="# Header")
+        text = readme.read_text()
+        assert "old entry" in text
+        assert "new entry" in text
+        assert text.index("new entry") < text.index("old entry")
+
+    def test_push_appends_without_overwriting_remote_readme(self, env_vars, card_dir, monkeypatch):
+        for k, v in env_vars.items():
+            monkeypatch.setenv(k, v)
+        remote_dir = card_dir / ".xml-remote"
+        (remote_dir / ".git").mkdir(parents=True)
+        readme = remote_dir / "README.md"
+        readme.write_text(
+            "# Deluge Card XML Backup\n\n## Changelog\n\n### 2026-09-14 — old entry\n- something\n"
+        )
+        (card_dir / "README.md").write_text("# a completely different local readme\n")
+
+        diff_check = subprocess.CompletedProcess([], 1)
+        name_status = subprocess.CompletedProcess([], 0, stdout="M\tSONGS/foo.XML\n")
+        default_result = subprocess.CompletedProcess([], 0, stdout="")
+
+        def side_effect(cmd, **kw):
+            if "diff" in cmd and "--cached" in cmd and "--quiet" in cmd:
+                return diff_check
+            if "diff" in cmd and "--cached" in cmd and "--name-status" in cmd:
+                return name_status
+            return default_result
+
+        mock_run = MagicMock(side_effect=side_effect)
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=True),
+        ):
+            _main(["push", "add a song"])
+
+        text = readme.read_text()
+        assert "old entry" in text
+        assert "add a song" in text
+        assert "a completely different local readme" not in text
 
 
 class TestPush:
@@ -335,6 +426,8 @@ class TestPush:
         calls_str = str(mock_run.call_args_list)
         assert "rsync" in calls_str
         assert "push" in calls_str
+        assert "-u" in calls_str
+        assert "origin" in calls_str
 
     def test_push_no_changes_exits_clean(self, env_vars, card_dir, monkeypatch, capsys):
         for k, v in env_vars.items():

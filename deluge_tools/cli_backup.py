@@ -18,11 +18,10 @@ XML_INCLUDE_PATTERNS = [
     "--include=*.xml",
     "--include=*.JSON",
     "--include=*.json",
-    "--include=README.md",
     "--exclude=*",
 ]
 
-XML_INCLUDE_GLOBS = ["*.XML", "*.xml", "*.JSON", "*.json", "README.md"]
+XML_INCLUDE_GLOBS = ["*.XML", "*.xml", "*.JSON", "*.json"]
 
 
 def _card_dir() -> Path:
@@ -327,6 +326,22 @@ def _build_changelog_entry(changes_output: str, msg: str) -> str:
     return "\n".join(parts)
 
 
+def _append_changelog_entry(readme: Path, entry: str, header: str) -> None:
+    """Append `entry` under the `## Changelog` heading, creating the file if needed.
+
+    Never overwrites existing changelog content — history only grows.
+    """
+    if readme.exists() and "## Changelog" in readme.read_text():
+        text = readme.read_text()
+        text = text.replace("## Changelog\n", f"## Changelog\n\n{entry}\n", 1)
+        readme.write_text(text)
+    elif readme.exists():
+        with open(readme, "a") as f:
+            f.write(f"\n## Changelog\n\n{entry}\n")
+    else:
+        readme.write_text(f"{header}\n\n## Changelog\n\n{entry}\n")
+
+
 def cmd_commit(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
@@ -388,13 +403,7 @@ def cmd_commit(args: argparse.Namespace) -> None:
     )
 
     entry = _build_changelog_entry(changes.stdout, msg)
-
-    if readme.exists() and "## Changelog" in readme.read_text():
-        text = readme.read_text()
-        text = text.replace("## Changelog\n", f"## Changelog\n\n{entry}\n", 1)
-        readme.write_text(text)
-    else:
-        readme.write_text(f"# Deluge Card Backup\n\n## Changelog\n\n{entry}\n")
+    _append_changelog_entry(readme, entry, header="# Deluge Card Backup")
 
     _run(["git", "add", "README.md"], cwd=card_dir, check=True)
     _run(["git", "status", "--short"], cwd=card_dir, check=False)
@@ -404,6 +413,13 @@ def cmd_commit(args: argparse.Namespace) -> None:
 def cmd_save(args: argparse.Namespace) -> None:
     cmd_sync(argparse.Namespace(go=True))
     cmd_commit(args)
+
+
+def _add_xml_remote_gitignore(card_dir: Path) -> None:
+    gitignore = card_dir / ".gitignore"
+    if not gitignore.exists() or ".xml-remote" not in gitignore.read_text():
+        with open(gitignore, "a") as f:
+            f.write(".xml-remote\n")
 
 
 def cmd_remote_init(args: argparse.Namespace) -> None:
@@ -426,6 +442,29 @@ def cmd_remote_init(args: argparse.Namespace) -> None:
         if current.returncode == 0:
             print(f"Current remote: {current.stdout.strip()}", file=sys.stderr)
         sys.exit(1)
+
+    ls_remote = _run(
+        ["git", "ls-remote", args.url],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if ls_remote.returncode != 0:
+        print(
+            f"error: could not reach remote {args.url} — "
+            "create the empty repo on GitHub first, or check the URL",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if ls_remote.stdout.strip():
+        _run(["git", "clone", args.url, str(remote_dir)], check=True)
+        _add_xml_remote_gitignore(card_dir)
+        print(
+            "XML remote already has history — cloned into .xml-remote. "
+            "Use 'deluge-backup push' to sync and push"
+        )
+        return
 
     remote_dir.mkdir(parents=True, exist_ok=True)
     _run(["git", "init"], cwd=remote_dir, check=True)
@@ -454,13 +493,22 @@ def cmd_remote_init(args: argparse.Namespace) -> None:
         )
 
     _run(["git", "add", "-A"], cwd=remote_dir, check=True)
+
+    changes = _run(
+        ["git", "diff", "--cached", "--name-status"],
+        cwd=remote_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    entry = _build_changelog_entry(changes.stdout, "Initial XML snapshot")
+    _append_changelog_entry(remote_dir / "README.md", entry, header="# Deluge Card XML Backup")
+    _run(["git", "add", "README.md"], cwd=remote_dir, check=True)
+
     _run(["git", "commit", "-m", "Initial XML snapshot"], cwd=remote_dir, check=True)
     _run(["git", "push", "-u", "origin", "main"], cwd=remote_dir, check=True)
 
-    gitignore = card_dir / ".gitignore"
-    if not gitignore.exists() or ".xml-remote" not in gitignore.read_text():
-        with open(gitignore, "a") as f:
-            f.write(".xml-remote\n")
+    _add_xml_remote_gitignore(card_dir)
 
     print("XML remote initialized — use 'deluge-backup push' to sync and push")
 
@@ -558,9 +606,21 @@ def cmd_push(args: argparse.Namespace) -> None:
         return
 
     commit_msg = args.msg if args.msg else f"XML sync {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+
+    changes = _run(
+        ["git", "diff", "--cached", "--name-status"],
+        cwd=remote_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    entry = _build_changelog_entry(changes.stdout, commit_msg)
+    _append_changelog_entry(remote_dir / "README.md", entry, header="# Deluge Card XML Backup")
+    _run(["git", "add", "README.md"], cwd=remote_dir, check=True)
+
     _run(["git", "status", "--short"], cwd=remote_dir, check=False)
     _run(["git", "commit", "-m", commit_msg], cwd=remote_dir, check=True)
-    _run(["git", "push"], cwd=remote_dir, check=True)
+    _run(["git", "push", "-u", "origin", "main"], cwd=remote_dir, check=True)
 
 
 def main(argv: list[str] | None = None) -> None:

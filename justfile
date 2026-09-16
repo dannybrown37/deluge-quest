@@ -197,7 +197,7 @@ card-push msg="":
 
 # Run deluge-backup on the Windows side via PowerShell (bypasses WSL filesystem boundary)
 deluge-backup-win +args:
-  powershell.exe -Command "deluge-backup {{args}}"
+  powershell.exe -Command "& \"\$env:APPDATA\uv\tools\deluge-quest\Scripts\deluge-backup.exe\" {{args}}"
 
 # ============================================================================
 # Development Workflow
