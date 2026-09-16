@@ -319,29 +319,21 @@ def parse_song(path: Path | str) -> Song:
     return _parse_song_root(root)
 
 
-def _parse_song_root(root: ET.Element) -> Song:
+_INSTRUMENT_TAG_TO_TYPE = {
+    "sound": "synth",
+    "kit": "kit",
+    "midiChannel": "midi",
+    "midi": "midi",
+    "cv": "cv",
+    "audioOutput": "audio",
+}
 
-    song = Song()
-    song.firmware_version = root.get("firmwareVersion", "")
-    song.root_note = int(root.get("rootNote", "0"))
-    song.mode_notes = [int(mn.text) for mn in root.findall("modeNotes/modeNote") if mn.text]
-    song.bpm = _parse_bpm(root)
-    song.in_arrangement_view = root.get("inArrangementView", "0") == "1"
 
-    _TAG_TO_TYPE = {
-        "sound": "synth",
-        "kit": "kit",
-        "midiChannel": "midi",
-        "midi": "midi",
-        "cv": "cv",
-        "audioOutput": "audio",
-    }
-
+def _parse_instruments(root: ET.Element) -> dict[tuple, Instrument]:
     instrument_map: dict[tuple, Instrument] = {}
     audio_output_count = 0
     for inst_el in root.findall("instruments/*"):
-        tag = inst_el.tag
-        inst_type = _TAG_TO_TYPE.get(tag)
+        inst_type = _INSTRUMENT_TAG_TO_TYPE.get(inst_el.tag)
         if inst_type is None:
             continue
 
@@ -361,8 +353,7 @@ def _parse_song_root(root: ET.Element) -> Song:
         if inst_type == "audio":
             audio_output_count += 1
             instrument.name = f"Audio {audio_output_count}"
-            audio_key = ("audio", audio_output_count)
-            instrument_map[audio_key] = instrument
+            instrument_map[("audio", audio_output_count)] = instrument
             continue
         elif inst_type == "kit":
             instrument.name = "Kit"
@@ -387,67 +378,70 @@ def _parse_song_root(root: ET.Element) -> Song:
 
         instrument_map[_instrument_key(slot, sub, preset_name, preset_folder)] = instrument
 
-    song.instruments = list(instrument_map.values())
+    return instrument_map
 
+
+def _parse_audio_clips(root: ET.Element) -> list[AudioClip]:
     session_clips_el = root.find("sessionClips")
     all_session_clips = list(session_clips_el) if session_clips_el is not None else []
-    for global_idx, el in enumerate(all_session_clips):
-        if el.tag == "audioClip":
-            song.audio_clips.append(
-                AudioClip(
-                    index=global_idx,
-                    file_path=el.get("filePath", ""),
-                    length=int(el.get("length", "0")),
-                )
-            )
+    return [
+        AudioClip(
+            index=global_idx,
+            file_path=el.get("filePath", ""),
+            length=int(el.get("length", "0")),
+        )
+        for global_idx, el in enumerate(all_session_clips)
+        if el.tag == "audioClip"
+    ]
+
+
+def _parse_instrument_clip(
+    clip_el: ET.Element, index: int, instrument_map: dict[tuple, Instrument]
+) -> Clip:
+    slot = int(clip_el.get("instrumentPresetSlot", "-1"))
+    sub = int(clip_el.get("instrumentPresetSubSlot", "-1"))
+    preset_name = clip_el.get("instrumentPresetName")
+    preset_folder = clip_el.get("instrumentPresetFolder")
+    key = _instrument_key(slot, sub, preset_name, preset_folder)
+    inst = instrument_map.get(key)
+
+    return Clip(
+        index=index,
+        instrument_slot=slot,
+        instrument_sub_slot=sub,
+        is_kit=inst.is_kit if inst else False,
+        length=int(clip_el.get("length", "0")),
+        rows=_parse_clip_note_rows(
+            clip_el,
+            inst.drum_names if inst and inst.is_kit else None,
+            inst.drum_sample_paths if inst and inst.is_kit else None,
+        ),
+        sound_params=_parse_clip_sound_params(clip_el),
+    )
+
+
+def _parse_song_root(root: ET.Element) -> Song:
+    song = Song()
+    song.firmware_version = root.get("firmwareVersion", "")
+    song.root_note = int(root.get("rootNote", "0"))
+    song.mode_notes = [int(mn.text) for mn in root.findall("modeNotes/modeNote") if mn.text]
+    song.bpm = _parse_bpm(root)
+    song.in_arrangement_view = root.get("inArrangementView", "0") == "1"
+
+    instrument_map = _parse_instruments(root)
+    song.instruments = list(instrument_map.values())
+
+    song.audio_clips = _parse_audio_clips(root)
 
     session_instrument_clips = root.findall("sessionClips/instrumentClip")
     for clip_idx, clip_el in enumerate(session_instrument_clips):
-        slot = int(clip_el.get("instrumentPresetSlot", "-1"))
-        sub = int(clip_el.get("instrumentPresetSubSlot", "-1"))
-        preset_name = clip_el.get("instrumentPresetName")
-        preset_folder = clip_el.get("instrumentPresetFolder")
-        key = _instrument_key(slot, sub, preset_name, preset_folder)
-        inst = instrument_map.get(key)
-
-        clip = Clip(
-            index=clip_idx,
-            instrument_slot=slot,
-            instrument_sub_slot=sub,
-            is_kit=inst.is_kit if inst else False,
-            length=int(clip_el.get("length", "0")),
-            rows=_parse_clip_note_rows(
-                clip_el,
-                inst.drum_names if inst and inst.is_kit else None,
-                inst.drum_sample_paths if inst and inst.is_kit else None,
-            ),
-            sound_params=_parse_clip_sound_params(clip_el),
-        )
-        song.clips.append(clip)
+        song.clips.append(_parse_instrument_clip(clip_el, clip_idx, instrument_map))
 
     num_session_clips = len(session_instrument_clips)
     for local_idx, clip_el in enumerate(root.findall("arrangementOnlyTracks/instrumentClip")):
-        slot = int(clip_el.get("instrumentPresetSlot", "-1"))
-        sub = int(clip_el.get("instrumentPresetSubSlot", "-1"))
-        preset_name = clip_el.get("instrumentPresetName")
-        preset_folder = clip_el.get("instrumentPresetFolder")
-        key = _instrument_key(slot, sub, preset_name, preset_folder)
-        inst = instrument_map.get(key)
-
-        clip = Clip(
-            index=num_session_clips + local_idx,
-            instrument_slot=slot,
-            instrument_sub_slot=sub,
-            is_kit=inst.is_kit if inst else False,
-            length=int(clip_el.get("length", "0")),
-            rows=_parse_clip_note_rows(
-                clip_el,
-                inst.drum_names if inst and inst.is_kit else None,
-                inst.drum_sample_paths if inst and inst.is_kit else None,
-            ),
-            sound_params=_parse_clip_sound_params(clip_el),
+        song.clips.append(
+            _parse_instrument_clip(clip_el, num_session_clips + local_idx, instrument_map)
         )
-        song.clips.append(clip)
 
     for inst in song.instruments:
         for ci in inst.clip_instances:

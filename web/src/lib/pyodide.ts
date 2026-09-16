@@ -21,6 +21,10 @@ export async function loadPyodide(onProgress?: ProgressCallback): Promise<Pyodid
     onProgress?.("Loading deluge_tools", 70);
     await pyodide.loadPackage("micropip");
     const micropip = pyodide.pyimport("micropip");
+    // Wheel filename embeds the package version (build-wheel.sh), which drifts
+    // out of sync with a hardcoded literal every version bump — read it from
+    // the manifest build-wheel.sh writes alongside the wheel instead.
+    const manifest = await (await fetch("/py/manifest.json")).json();
     // deps=False: the wheel's METADATA lists music21/mido as unconditional
     // dependencies (pyproject.toml `dependencies`), but the browser-loaded
     // modules (parser/converter/musicxml_writer/analyzer/card_scanner) are
@@ -30,10 +34,7 @@ export async function loadPyodide(onProgress?: ProgressCallback): Promise<Pyodid
     // callKwargs (not a plain trailing object) is required: a normal call
     // passes {deps: false} as the positional `keep_going` arg instead,
     // which silently leaves deps at its default of True.
-    await micropip.install.callKwargs(
-      "/py/deluge_quest-0.1.0-py3-none-any.whl",
-      { deps: false }
-    );
+    await micropip.install.callKwargs(`/py/${manifest.wheel}`, { deps: false });
 
     onProgress?.("Ready", 100);
     return pyodide;

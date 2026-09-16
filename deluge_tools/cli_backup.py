@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 import sys
@@ -102,19 +103,19 @@ def _run(cmd: list[str], *, cwd: Path | None = None, **kwargs) -> subprocess.Com
     return subprocess.run(cmd, cwd=cwd, **kwargs)
 
 
-def cmd_status(args) -> None:
+def cmd_status(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
     _run(["git", "status"], cwd=card_dir, check=False)
 
 
-def cmd_diff(args) -> None:
+def cmd_diff(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
     _run(["git", "diff"], cwd=card_dir, check=False)
 
 
-def cmd_log(args) -> None:
+def cmd_log(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
     _run(["git", "log", "--oneline", "--graph", "-20"], cwd=card_dir, check=False)
@@ -132,7 +133,7 @@ def _get_dir_size(path: Path, excludes: list[str] | None = None) -> str:
     return format_size(dir_size(path, excludes=excludes))
 
 
-def cmd_size(args) -> None:
+def cmd_size(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
 
@@ -164,7 +165,7 @@ def cmd_size(args) -> None:
         print(f"XML remote:   {remote_size} ({remote_commits.stdout.strip()} commits)")
 
 
-def cmd_init(args) -> None:
+def cmd_init(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     if (card_dir / ".git").is_dir():
         print(f"error: card repo already exists at {card_dir}", file=sys.stderr)
@@ -201,7 +202,7 @@ def cmd_init(args) -> None:
     print(f"Card repo initialized at {card_dir} ({commits.stdout.strip()} commit, {tree_size})")
 
 
-def cmd_sync(args) -> None:
+def cmd_sync(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
 
@@ -326,7 +327,7 @@ def _build_changelog_entry(changes_output: str, msg: str) -> str:
     return "\n".join(parts)
 
 
-def cmd_commit(args) -> None:
+def cmd_commit(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
     msg = args.msg
@@ -400,15 +401,12 @@ def cmd_commit(args) -> None:
     _run(["git", "commit", "-m", msg], cwd=card_dir, check=True)
 
 
-def cmd_save(args) -> None:
-    class SyncArgs:
-        go = True
-
-    cmd_sync(SyncArgs())
+def cmd_save(args: argparse.Namespace) -> None:
+    cmd_sync(argparse.Namespace(go=True))
     cmd_commit(args)
 
 
-def cmd_remote_init(args) -> None:
+def cmd_remote_init(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
 
@@ -485,7 +483,7 @@ def _open_browser(url: str) -> None:
         webbrowser.open(url)
 
 
-def cmd_open(args) -> None:
+def cmd_open(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
 
@@ -513,7 +511,7 @@ def cmd_open(args) -> None:
     _open_browser(web_url)
 
 
-def cmd_push(args) -> None:
+def cmd_push(args: argparse.Namespace) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
 

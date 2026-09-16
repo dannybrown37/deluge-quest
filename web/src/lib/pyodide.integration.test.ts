@@ -17,10 +17,9 @@ import {
 // package set over the network (cached in node_modules after that).
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const WHEEL_PATH = path.resolve(
-  __dirname,
-  "../../public/py/deluge_quest-0.1.0-py3-none-any.whl"
-);
+const PY_DIR = path.resolve(__dirname, "../../public/py");
+const manifest = JSON.parse(fs.readFileSync(path.join(PY_DIR, "manifest.json"), "utf-8"));
+const WHEEL_PATH = path.join(PY_DIR, manifest.wheel);
 const FIXTURE_XML_PATH = path.resolve(
   __dirname,
   "../../../tests/fixtures/square_spelunking.XML"

@@ -57,11 +57,15 @@ deluge_tools/           — pure-stdlib format logic (except music21/mido, CLI-o
   analyzer.py           — Song → SongStats (BPM, key, scale, duration, instrument/note counts)
   card_scanner.py       — SD card tree → CardReport (unused samples, missing refs, reclaimable)
   midi_to_deluge.py     — MIDI → Deluge XML (reverse direction; needs mido)
+  bridges.py            — JSON-in/JSON-out wrappers around analyzer/parser for pyodide.ts to call
+  filesync.py           — pure-Python directory sync (rsync equivalent), used by cli_backup.py
+                          when `rsync` isn't on PATH
   cli.py                — `deluge-score`   (argparse, MuseScore WSL launcher)
   cli_import.py         — `deluge-import`
   cli_stats.py          — `deluge-stats`   (directory scanner, table output)
   cli_clean.py          — `deluge-clean`   (card scan/cleanup)
   cli_backup.py         — `deluge-backup`  (git-based SD card backup)
+  cli_quest.py          — `deluge-quest`   (lists all CLI entrypoints; discovery/help command)
 tests/                  — test_parser, test_converter, test_analyzer, test_card_scanner,
                           test_cli_clean, test_cli_stats, test_cli_backup, test_midi_to_deluge
 web/                    — Astro + Svelte, static, deployed to Vercel
@@ -97,6 +101,7 @@ Prose-only pages are Markdown instead (see `/faq`).
 | `/songs/[slug]` | `SongPlayer.svelte` | Shareable per-song page with mobile-friendly audio player, OG tags |
 | `/changelog` | — | Content collection (`src/content/changelog/*.md`) rendered by `src/pages/changelog.astro`. Drop a `.md` with `title`, `date`, `tag` (feature/fix/improvement) frontmatter |
 | `/faq` | — | Hand-written prose. It is `src/pages/faq.md` (Markdown), rendered through `ProseLayout.astro` — edit the Markdown, not HTML |
+| `404` | — | `src/pages/404.astro`. Static not-found page, plain `BaseLayout` wrapper, no Svelte island |
 
 **Prose pages are Markdown.** Drop a `.md` file in `src/pages/` with
 `layout: ../layouts/ProseLayout.astro` plus `title` and `description` frontmatter — the title
@@ -125,6 +130,7 @@ per audio file for shareable song links.
 | `homeAudio.ts` | Singleton `homeAudio` — the site-wide `<audio>` player + Web Audio FX chain (filter, reverb, delay, analyser), song list, MediaSession wiring. Shared by the home page, the mini-player in `BaseLayout`, and `/songs/[slug]`. Also emits the song analytics events |
 | `screenGuard.ts` | `shouldSyncScreen(state)` — decides whether the DelugeUI screen may revert to song info, or is currently claimed by a held knob value or a hovered pad |
 | `analytics.ts` | Vercel Web Analytics wrapper. `track()` (never throws), `trackToolVisit()`, `trackToolAction()`, plus pure `crossedMarks()`/`percentPlayed()` for listen milestones |
+| `channelLabels.ts` | `getChannelLabels()`/setter, `localStorage`-backed custom names for MIDI/CV channel numbers |
 
 ## Key Design Decisions
 
@@ -242,11 +248,19 @@ npx vercel               # Deploy to Vercel
 
 **⚠️ The site loads `deluge_tools` from the checked-in wheel, not live source.** Any change to
 `deluge_tools/*.py` (parser, converter, analyzer, card_scanner, musicxml_writer) is invisible in
-the browser — including `npm run dev` — until you run `bash build-wheel.sh` to regenerate
-`web/public/py/deluge_tools-0.1.0-py3-none-any.whl`. `git status` will show the `.whl` as
-modified; commit it alongside the source change. Symptom of forgetting: preview/converter
+the browser — including `npm run dev` — until you run `bash build-wheel.sh` to regenerate the
+wheel in `web/public/py/`. `git status` will show the `.whl` (and `manifest.json`, see below)
+as modified; commit both alongside the source change. Symptom of forgetting: preview/converter
 behaves as if the old bug is still there even though `pytest` passes and the fix is correct —
 always rebuild the wheel before trusting a browser repro of a `deluge_tools` change.
+
+The wheel's filename embeds the `pyproject.toml` version, so it changes on every version bump.
+`build-wheel.sh` deletes any old `.whl` before building (so `public/py/` never accumulates
+stale versions) and writes `web/public/py/manifest.json` (`{"wheel": "<filename>"}`) alongside
+it. `pyodide.ts`'s `loadPyodide()` fetches that manifest to find the wheel to install, rather
+than hardcoding the filename — a hardcoded literal previously went stale across two version
+bumps unnoticed, because the old wheel file was never deleted and kept the hardcoded path
+"working" (loading old code) until `build-wheel.sh` started cleaning up after itself.
 
 ### Analytics
 
@@ -325,7 +339,7 @@ No existing tool does Deluge → sheet music. Nearest peers:
 
 ## Style
 
-- Python 3.10+, type hints everywhere.
+- Python 3.11+, type hints everywhere.
 - `pytest` + `pytest.mark.parametrize` for tests.
 - `uv` for venv/package management; `just` for tasks.
 - No comments unless explaining a non-obvious "why".
