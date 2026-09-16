@@ -354,11 +354,12 @@ coverage open="" verbose="":
 release increment="":
   #!/bin/bash
   set -e
+  export SKIP=changelog-reminder
   if [ -n "$(git status --porcelain)" ]; then
     echo "Working tree is dirty — commit or stash first."
     exit 1
   fi
-  tag=$(SKIP=changelog-reminder uv run cz bump {{ if increment != "" { "--increment " + increment } else { "" } }} --yes 2>&1 | grep -oP 'tag to create: \K\S+')
+  tag=$(uv run cz bump {{ if increment != "" { "--increment " + increment } else { "" } }} --yes 2>&1 | grep -oP 'tag to create: \K\S+')
   nvim CHANGELOG.md
   git add CHANGELOG.md
   git commit --amend --no-edit
