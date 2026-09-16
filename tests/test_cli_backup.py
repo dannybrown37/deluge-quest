@@ -100,7 +100,10 @@ class TestSize:
         for k, v in env_vars.items():
             monkeypatch.setenv(k, v)
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout="100M\t.\n"))
-        with patch("subprocess.run", mock_run):
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._has_du", return_value=True),
+        ):
             _main(["size"])
         calls = mock_run.call_args_list
         assert any("du" in str(c) for c in calls)
@@ -111,7 +114,10 @@ class TestSize:
             monkeypatch.setenv(k, v)
         (card_dir / ".xml-remote" / ".git").mkdir(parents=True)
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout="50M\t.\n"))
-        with patch("subprocess.run", mock_run):
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._has_du", return_value=True),
+        ):
             _main(["size"])
         calls_str = str(mock_run.call_args_list)
         assert ".xml-remote" in calls_str
@@ -141,7 +147,11 @@ class TestInit:
         monkeypatch.setenv("DELUGE_CARD_DIR", str(card_dir))
         monkeypatch.setenv("DELUGE_CARD_MOUNT", str(tmp_path / "no-mount"))
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=""))
-        with patch("subprocess.run", mock_run):
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=True),
+            patch("deluge_tools.cli_backup._has_du", return_value=True),
+        ):
             _main(["init", str(source)])
         calls_str = str(mock_run.call_args_list)
         assert "rsync" in calls_str
@@ -156,7 +166,10 @@ class TestSync:
         mount.mkdir(parents=True, exist_ok=True)
         (mount / "SONGS").mkdir()
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=""))
-        with patch("subprocess.run", mock_run):
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=True),
+        ):
             _main(["sync"])
         rsync_call = mock_run.call_args_list[0]
         assert "-avn" in rsync_call.args[0] or any("-avn" in str(a) for a in rsync_call.args[0])
@@ -168,7 +181,10 @@ class TestSync:
         mount.mkdir(parents=True, exist_ok=True)
         (mount / "SONGS").mkdir()
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=""))
-        with patch("subprocess.run", mock_run):
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=True),
+        ):
             _main(["sync", "--go"])
         rsync_call = mock_run.call_args_list[0]
         cmd = rsync_call.args[0]
@@ -251,7 +267,10 @@ class TestSave:
             return default_result
 
         mock_run = MagicMock(side_effect=side_effect)
-        with patch("subprocess.run", mock_run):
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=True),
+        ):
             _main(["save", "session save"])
         calls_str = str(mock_run.call_args_list)
         assert "rsync" in calls_str
@@ -275,7 +294,10 @@ class TestRemoteInit:
         for k, v in env_vars.items():
             monkeypatch.setenv(k, v)
         mock_run = MagicMock(return_value=subprocess.CompletedProcess([], 0, stdout=""))
-        with patch("subprocess.run", mock_run):
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=True),
+        ):
             _main(["remote-init", "https://github.com/user/repo.git"])
         calls_str = str(mock_run.call_args_list)
         assert "git init" in calls_str or "'git', 'init'" in calls_str
@@ -304,7 +326,10 @@ class TestPush:
             return default_result
 
         mock_run = MagicMock(side_effect=side_effect)
-        with patch("subprocess.run", mock_run):
+        with (
+            patch("subprocess.run", mock_run),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=True),
+        ):
             _main(["push", "xml update"])
         calls_str = str(mock_run.call_args_list)
         assert "rsync" in calls_str

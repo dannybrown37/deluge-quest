@@ -7,6 +7,8 @@ from datetime import datetime
 from importlib.metadata import version
 from pathlib import Path
 
+from deluge_tools.filesync import dir_size, format_size, sync_tree
+
 CARD_ONLY_EXCLUDES = [".git", ".xml-remote", ".gitignore", "README.md"]
 
 XML_INCLUDE_PATTERNS = [
@@ -19,13 +21,16 @@ XML_INCLUDE_PATTERNS = [
     "--exclude=*",
 ]
 
+XML_INCLUDE_GLOBS = ["*.XML", "*.xml", "*.JSON", "*.json", "README.md"]
+
 
 def _card_dir() -> Path:
     return Path(os.environ.get("DELUGE_CARD_DIR", Path.home() / "deluge-card"))
 
 
 def _card_mount() -> Path:
-    return Path(os.environ.get("DELUGE_CARD_MOUNT", "/mnt/d"))
+    default = "/mnt/d" if (sys.platform != "win32") else "D:\\"
+    return Path(os.environ.get("DELUGE_CARD_MOUNT", default))
 
 
 def _card_drive() -> str:
@@ -77,6 +82,22 @@ def _ensure_mount(mount: Path, drive: str) -> None:
         )
 
 
+def _has_rsync() -> bool:
+    try:
+        subprocess.run(["rsync", "--version"], capture_output=True, check=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
+
+
+def _has_du() -> bool:
+    try:
+        subprocess.run(["du", "--version"], capture_output=True, check=False)
+        return True
+    except FileNotFoundError:
+        return False
+
+
 def _run(cmd: list[str], *, cwd: Path | None = None, **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=cwd, **kwargs)
 
@@ -99,28 +120,26 @@ def cmd_log(args) -> None:
     _run(["git", "log", "--oneline", "--graph", "-20"], cwd=card_dir, check=False)
 
 
+def _get_dir_size(path: Path, excludes: list[str] | None = None) -> str:
+    excludes = excludes or []
+    if _has_du():
+        args = ["du", "-sh"]
+        for ex in excludes:
+            args.append(f"--exclude={ex}")
+        args.append(".")
+        result = _run(args, cwd=path, capture_output=True, text=True, check=False)
+        return result.stdout.strip().split("\t")[0] if result.stdout.strip() else "?"
+    return format_size(dir_size(path, excludes=excludes))
+
+
 def cmd_size(args) -> None:
     card_dir = _card_dir()
     _require_repo(card_dir)
 
-    tree = _run(
-        ["du", "-sh", "--exclude=.git", "--exclude=.xml-remote", "."],
-        cwd=card_dir,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    tree_size = tree.stdout.strip().split("\t")[0] if tree.stdout.strip() else "?"
+    tree_size = _get_dir_size(card_dir, excludes=[".git", ".xml-remote"])
     print(f"Working tree: {tree_size}")
 
-    git_obj = _run(
-        ["du", "-sh", ".git"],
-        cwd=card_dir,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    git_size = git_obj.stdout.strip().split("\t")[0] if git_obj.stdout.strip() else "?"
+    git_size = _get_dir_size(card_dir / ".git")
     print(f"Git objects:  {git_size}")
 
     commits = _run(
@@ -134,14 +153,7 @@ def cmd_size(args) -> None:
 
     xml_remote = card_dir / ".xml-remote" / ".git"
     if xml_remote.is_dir():
-        remote_obj = _run(
-            ["du", "-sh", ".xml-remote/.git"],
-            cwd=card_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        remote_size = remote_obj.stdout.strip().split("\t")[0] if remote_obj.stdout.strip() else "?"
+        remote_size = _get_dir_size(xml_remote)
         remote_commits = _run(
             ["git", "rev-list", "--count", "HEAD"],
             cwd=card_dir / ".xml-remote",
@@ -168,7 +180,10 @@ def cmd_init(args) -> None:
     print(f"Copying {source} → {card_dir} ...")
     card_dir.mkdir(parents=True, exist_ok=True)
 
-    _run(["rsync", "-a", f"{source}/", f"{card_dir}/"], check=True)
+    if _has_rsync():
+        _run(["rsync", "-a", f"{source}/", f"{card_dir}/"], check=True)
+    else:
+        sync_tree(source, card_dir)
     _run(["git", "init"], cwd=card_dir, check=True)
     _run(["git", "config", "core.fileMode", "false"], cwd=card_dir, check=True)
     _run(["git", "add", "-A"], cwd=card_dir, check=True)
@@ -181,14 +196,7 @@ def cmd_init(args) -> None:
         text=True,
         check=False,
     )
-    tree = _run(
-        ["du", "-sh", ".", "--exclude=.git"],
-        cwd=card_dir,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    tree_size = tree.stdout.strip().split("\t")[0] if tree.stdout.strip() else "?"
+    tree_size = _get_dir_size(card_dir, excludes=[".git"])
     print(f"Card repo initialized at {card_dir} ({commits.stdout.strip()} commit, {tree_size})")
 
 
@@ -207,34 +215,65 @@ def cmd_sync(args) -> None:
         print("Set DELUGE_CARD_MOUNT or plug in the card", file=sys.stderr)
         sys.exit(1)
 
-    excludes = [f"--exclude={p}" for p in CARD_ONLY_EXCLUDES]
+    if _has_rsync():
+        excludes = [f"--exclude={p}" for p in CARD_ONLY_EXCLUDES]
 
-    if args.go:
-        _run(
-            ["rsync", "-av", "--delete", *excludes, f"{mount}/", f"{card_dir}/"],
-            check=True,
-        )
-        result = _run(
-            ["git", "status", "--short"],
-            cwd=card_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        lines = [line for line in result.stdout.strip().splitlines() if line.strip()]
-        if not lines:
-            print("No changes")
-        elif len(lines) <= 12:
-            print(result.stdout.strip())
+        if args.go:
+            _run(
+                ["rsync", "-av", "--delete", *excludes, f"{mount}/", f"{card_dir}/"],
+                check=True,
+            )
+            result = _run(
+                ["git", "status", "--short"],
+                cwd=card_dir,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            lines = [line for line in result.stdout.strip().splitlines() if line.strip()]
+            if not lines:
+                print("No changes")
+            elif len(lines) <= 12:
+                print(result.stdout.strip())
+            else:
+                print(f"{len(lines)} files changed")
         else:
-            print(f"{len(lines)} files changed")
+            print("=== DRY RUN (pass --go to apply) ===")
+            _run(
+                ["rsync", "-avn", "--delete", *excludes, f"{mount}/", f"{card_dir}/"],
+                check=False,
+            )
+            print("\nRun 'deluge-backup sync --go' to apply")
     else:
-        print("=== DRY RUN (pass --go to apply) ===")
-        _run(
-            ["rsync", "-avn", "--delete", *excludes, f"{mount}/", f"{card_dir}/"],
-            check=False,
-        )
-        print("\nRun 'deluge-backup sync --go' to apply")
+        if args.go:
+            changes = sync_tree(
+                mount,
+                card_dir,
+                delete=True,
+                excludes=CARD_ONLY_EXCLUDES,
+                verbose=True,
+            )
+            if not changes:
+                print("No changes")
+            elif len(changes) <= 12:
+                for c in changes:
+                    print(c)
+            else:
+                print(f"{len(changes)} files changed")
+        else:
+            print("=== DRY RUN (pass --go to apply) ===")
+            changes = sync_tree(
+                mount,
+                card_dir,
+                delete=True,
+                excludes=CARD_ONLY_EXCLUDES,
+                dry_run=True,
+            )
+            for c in changes:
+                print(c)
+            if not changes:
+                print("No changes")
+            print("\nRun 'deluge-backup sync --go' to apply")
 
 
 def _format_change(status: str, f1: str, f2: str, prefix: str = "") -> str:
@@ -394,18 +433,26 @@ def cmd_remote_init(args) -> None:
     _run(["git", "config", "core.fileMode", "false"], cwd=remote_dir, check=True)
     _run(["git", "remote", "add", "origin", args.url], cwd=remote_dir, check=True)
 
-    _run(
-        [
-            "rsync",
-            "-a",
-            "--exclude=.git",
-            "--exclude=.xml-remote",
-            *XML_INCLUDE_PATTERNS,
-            f"{card_dir}/",
-            f"{remote_dir}/",
-        ],
-        check=True,
-    )
+    if _has_rsync():
+        _run(
+            [
+                "rsync",
+                "-a",
+                "--exclude=.git",
+                "--exclude=.xml-remote",
+                *XML_INCLUDE_PATTERNS,
+                f"{card_dir}/",
+                f"{remote_dir}/",
+            ],
+            check=True,
+        )
+    else:
+        sync_tree(
+            card_dir,
+            remote_dir,
+            excludes=[".git", ".xml-remote"],
+            includes=XML_INCLUDE_GLOBS,
+        )
 
     _run(["git", "add", "-A"], cwd=remote_dir, check=True)
     _run(["git", "commit", "-m", "Initial XML snapshot"], cwd=remote_dir, check=True)
@@ -477,19 +524,28 @@ def cmd_push(args) -> None:
         )
         sys.exit(1)
 
-    _run(
-        [
-            "rsync",
-            "-a",
-            "--delete",
-            "--exclude=.git",
-            "--exclude=.xml-remote",
-            *XML_INCLUDE_PATTERNS,
-            f"{card_dir}/",
-            f"{remote_dir}/",
-        ],
-        check=True,
-    )
+    if _has_rsync():
+        _run(
+            [
+                "rsync",
+                "-a",
+                "--delete",
+                "--exclude=.git",
+                "--exclude=.xml-remote",
+                *XML_INCLUDE_PATTERNS,
+                f"{card_dir}/",
+                f"{remote_dir}/",
+            ],
+            check=True,
+        )
+    else:
+        sync_tree(
+            card_dir,
+            remote_dir,
+            delete=True,
+            excludes=[".git", ".xml-remote"],
+            includes=XML_INCLUDE_GLOBS,
+        )
 
     _run(["git", "add", "-A"], cwd=remote_dir, check=True)
 
