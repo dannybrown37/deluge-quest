@@ -1,6 +1,6 @@
 [project]
 name = "deluge-quest"
-version = "0.3.0"
+version = "0.3.1"
 description = "Utilities for Synthstrom Deluge song files"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
@@ -56,7 +56,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.3.0"
+version = "0.3.1"
 tag_format = "v$version"
 version_files = ["pyproject.toml:^version"]
 update_changelog_on_bump = true
