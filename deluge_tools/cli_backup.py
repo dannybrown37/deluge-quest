@@ -184,6 +184,7 @@ def cmd_init(args) -> None:
         _run(["rsync", "-a", f"{source}/", f"{card_dir}/"], check=True)
     else:
         sync_tree(source, card_dir)
+    (card_dir / ".gitattributes").write_text("* -text\n")
     _run(["git", "init"], cwd=card_dir, check=True)
     _run(["git", "config", "core.fileMode", "false"], cwd=card_dir, check=True)
     _run(["git", "add", "-A"], cwd=card_dir, check=True)
