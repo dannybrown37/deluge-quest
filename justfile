@@ -195,6 +195,14 @@ card-remote-init url:
 card-push msg="":
   deluge-backup push {{ if msg != "" { "\"" + msg + "\"" } else { "" } }}
 
+# Run deluge-backup on the Windows side via PowerShell (bypasses WSL filesystem boundary)
+card-win +args:
+  powershell.exe -Command "deluge-backup {{args}}"
+
+# Sync and commit from Windows side (the fast path)
+card-win-save msg="Session snapshot":
+  powershell.exe -Command "deluge-backup save '{{msg}}'"
+
 # ============================================================================
 # Development Workflow
 # ============================================================================
@@ -341,7 +349,8 @@ coverage open="" verbose="":
     fi
   fi
 
-# Bump version, review changelog in nvim, commit, tag, and push to trigger PyPI publish
+# Bump version, review changelog in nvim, commit, tag, and push to trigger PyPI publish.
+# increment: MAJOR, MINOR, or PATCH (default: auto-detected from commit messages)
 release increment="":
   #!/bin/bash
   set -e

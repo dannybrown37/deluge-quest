@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {version('deluge-tools')}",
+        version=f"%(prog)s {version('deluge-quest')}",
     )
     parser.add_argument(
         "paths",

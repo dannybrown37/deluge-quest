@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {version('deluge-tools')}",
+        version=f"%(prog)s {version('deluge-quest')}",
     )
     parser.add_argument("input", nargs="?", type=Path, help="Deluge .XML song file")
     parser.add_argument(

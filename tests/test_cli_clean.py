@@ -39,7 +39,7 @@ class TestCliClean:
     def test_version(self, capsys):
         with pytest.raises(SystemExit, match="0"):
             main(["--version"])
-        assert "0.1.0" in capsys.readouterr().out
+        assert "0.2.0" in capsys.readouterr().out
 
     def test_summary_default(self, card_root: Path, capsys):
         _setup_card_with_unused(card_root)

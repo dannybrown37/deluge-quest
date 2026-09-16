@@ -14,8 +14,8 @@ The biggest win here is the speed of backup. Before I started using this system,
 
 ## What you'll need
 
-- A computer running macOS, Linux, or Windows with [WSL](#wsl-support).
-- A terminal (macOS Terminal, Linux Terminal, or Windows Terminal running WSL) to type the below commands into.
+- A computer running macOS, Linux, or Windows.
+- A terminal (macOS Terminal, Linux Terminal, PowerShell, or Windows Terminal) to type the below commands into.
 - An internet connection for the install and optional GitHub sync (not required for local backups).
 - An SD card reader (or your Deluge connected via USB).
 - About 15 minutes for the first-time setup.
@@ -42,7 +42,9 @@ Confirm it worked:
 deluge-backup --version
 ```
 
-You should see `deluge-backup 0.1.0` (or newer). If you do, you're ready.
+You should see `deluge-backup 0.2.0` (or newer). If you do, you're ready.
+
+**Windows note:** If `deluge-backup` isn't recognized after install, run `uv tool update-shell` (or `pipx ensurepath`), then restart your terminal. This adds the tool's install directory to your PATH.
 
 ## Step 2: First backup
 
@@ -110,12 +112,12 @@ deluge-backup size      # how big your backup is
 
 ### Configuration
 
-Backups are stored in `~/deluge-card` by default. The SD card mount point defaults to `/mnt/d` (standard WSL), but macOS and Linux users will need to set `DELUGE_CARD_MOUNT` to wherever their card appears (e.g. `/Volumes/DELUGE` on macOS, `/media/username/DELUGE` on Linux).
+Backups are stored in `~/deluge-card` by default. The SD card mount point defaults to `/mnt/d` on Linux/WSL and `D:\` on Windows. macOS users will need to set `DELUGE_CARD_MOUNT` to wherever their card appears (e.g. `/Volumes/DELUGE`).
 
 | Variable | Default | What it controls |
 | --- | --- | --- |
 | `DELUGE_CARD_DIR` | `~/deluge-card` | Where your backup lives |
-| `DELUGE_CARD_MOUNT` | `/mnt/d` | Where your SD card is mounted |
+| `DELUGE_CARD_MOUNT` | `/mnt/d` (Linux/WSL), `D:\` (Windows) | Where your SD card is mounted |
 | `DELUGE_CARD_DRIVE` | `D:` | Drive letter (WSL only) |
 
 ## All commands
@@ -149,23 +151,29 @@ Run any of them with `--help` to see usage, e.g. `deluge-stats --help`.
 
 ### Troubleshooting
 
-#### "command not found: deluge-backup"
+#### "command not found" / "is not recognized"
 
-The install didn't add it to your PATH. Try running `pipx ensurepath` and opening a new terminal.
+The install didn't add the tool directory to your PATH.
+
+- **pipx:** run `pipx ensurepath` and restart your terminal.
+- **uv:** run `uv tool update-shell` and restart your terminal.
 
 #### "SD card not found"
 
-Make sure your card is plugged in and mounted. On WSL, it's usually `/mnt/d` or `/mnt/e` — check with `ls /mnt/`. Set `DELUGE_CARD_MOUNT` if it's somewhere else.
+Make sure your card is plugged in and mounted.
+
+- **Windows:** it's usually `D:\` — set `DELUGE_CARD_MOUNT` if it's a different drive letter.
+- **WSL:** usually `/mnt/d` or `/mnt/e` — check with `ls /mnt/`.
+- **macOS:** usually `/Volumes/DELUGE` — set `DELUGE_CARD_MOUNT` accordingly.
+- **Linux:** usually `/media/username/DELUGE` — set `DELUGE_CARD_MOUNT` accordingly.
 
 #### "not a git repository"
 
 Run `deluge-backup init` first. This only needs to happen once.
 
-#### WSL Support
+#### Windows notes
 
-If you're on Windows and haven't set up WSL yet, [Microsoft's guide](https://learn.microsoft.com/en-us/windows/wsl/install) walks you through it. It's a one-time setup.
-
-I'm not totally opposed to supporting Windows tbh, but it's a fair amount of work for something that I don't know will be used. [Open an issue](https://github.com/dannybrown37/deluge-quest/issues) or [email me](mailto:danny@deluge.quest) if you're interested in Windows support.
+`deluge-backup` runs natively on Windows — no WSL required. You'll need [Git for Windows](https://gitforwindows.org/) installed, since the backup tool uses git for version history.
 
 #### Still stuck?
 

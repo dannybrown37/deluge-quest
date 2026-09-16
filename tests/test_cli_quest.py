@@ -10,13 +10,13 @@ from deluge_tools.cli_quest import main
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit, match="0"):
         main(["--version"])
-    assert "deluge-quest 0.1.0" in capsys.readouterr().out
+    assert "deluge-quest 0.2.0" in capsys.readouterr().out
 
 
 def test_version_short(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit, match="0"):
         main(["-V"])
-    assert "deluge-quest 0.1.0" in capsys.readouterr().out
+    assert "deluge-quest 0.2.0" in capsys.readouterr().out
 
 
 def test_help_lists_all_tools(capsys: pytest.CaptureFixture[str]) -> None:

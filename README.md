@@ -129,8 +129,8 @@ deluge-backup push "Added new drum patterns"
 Set these environment variables to override defaults:
 
 - `DELUGE_CARD_DIR` — where the git repo lives (default: `~/deluge-card`)
-- `DELUGE_CARD_MOUNT` — where the SD card mounts in WSL (default: `/mnt/d`)
-- `DELUGE_CARD_DRIVE` — Windows drive letter for mount (default: `D:`)
+- `DELUGE_CARD_MOUNT` — where the SD card is (default: `/mnt/d` on Linux/WSL, `D:\` on Windows)
+- `DELUGE_CARD_DRIVE` — Windows drive letter for WSL mount (default: `D:`)
 
 ## Web architecture
 

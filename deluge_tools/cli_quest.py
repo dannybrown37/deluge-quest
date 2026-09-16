@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import sys
+from importlib.metadata import version
 
-VERSION = "0.1.0"
+VERSION = version("deluge-quest")
 
 TOOLS = [
     ("deluge-backup", "Git-based SD card backup and sync"),
