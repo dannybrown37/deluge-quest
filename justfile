@@ -196,12 +196,8 @@ card-push msg="":
   deluge-backup push {{ if msg != "" { "\"" + msg + "\"" } else { "" } }}
 
 # Run deluge-backup on the Windows side via PowerShell (bypasses WSL filesystem boundary)
-card-win +args:
+deluge-backup-win +args:
   powershell.exe -Command "deluge-backup {{args}}"
-
-# Sync and commit from Windows side (the fast path)
-card-win-save msg="Session snapshot":
-  powershell.exe -Command "deluge-backup save '{{msg}}'"
 
 # ============================================================================
 # Development Workflow
