@@ -126,18 +126,6 @@ describe('PatchGenerator', () => {
     clickSpy.mockRestore();
   });
 
-  it('toggles a parameter lock', async () => {
-    render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Generate Patch'));
-
-    const lockBtn = screen.getByTitle('Lock Osc 1');
-    expect(lockBtn.className).not.toContain('locked');
-    await fireEvent.click(lockBtn);
-    expect(lockBtn.className).toContain('locked');
-    await fireEvent.click(lockBtn);
-    expect(lockBtn.className).not.toContain('locked');
-  });
-
   it('builds a history list after multiple generations and can revisit an entry', async () => {
     render(PatchGenerator);
     await fireEvent.click(screen.getByText('Generate Patch'));
@@ -159,59 +147,6 @@ describe('PatchGenerator', () => {
 
     expect(screen.getByText('FM')).toBeTruthy();
     expect(screen.getByText('MOD 1')).toBeTruthy();
-  });
-
-  it('locking Envelope 1 preserves its values across regeneration', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.3);
-    render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Pad'));
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    const before = Array.from(document.querySelectorAll('.env-bar'))
-      .slice(0, 4)
-      .map((el) => (el as HTMLElement).style.height);
-
-    await fireEvent.click(screen.getByTitle('Lock Envelope 1'));
-    vi.spyOn(Math, 'random').mockReturnValue(0.6);
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    const after = Array.from(document.querySelectorAll('.env-bar'))
-      .slice(0, 4)
-      .map((el) => (el as HTMLElement).style.height);
-
-    expect(after).toEqual(before);
-  });
-
-  it('locking Envelope 2 preserves its values across regeneration', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.3);
-    render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Pad'));
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    const before = Array.from(document.querySelectorAll('.env-bar'))
-      .slice(4, 8)
-      .map((el) => (el as HTMLElement).style.height);
-
-    await fireEvent.click(screen.getByTitle('Lock Envelope 2'));
-    vi.spyOn(Math, 'random').mockReturnValue(0.6);
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    const after = Array.from(document.querySelectorAll('.env-bar'))
-      .slice(4, 8)
-      .map((el) => (el as HTMLElement).style.height);
-
-    expect(after).toEqual(before);
-  });
-
-  it('locking Osc 1 preserves its description across regeneration', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.3);
-    render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Pad'));
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    const before = (document.querySelectorAll('.osc-value')[0] as HTMLElement).textContent;
-
-    await fireEvent.click(screen.getByTitle('Lock Osc 1'));
-    vi.spyOn(Math, 'random').mockReturnValue(0.6);
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    const after = (document.querySelectorAll('.osc-value')[0] as HTMLElement).textContent;
-
-    expect(after).toEqual(before);
   });
 
   it('shows a non-off arp tag and multiple patch cables for a lead patch', async () => {

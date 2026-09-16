@@ -267,17 +267,6 @@ describe('draw()', () => {
     expect(ctx.fillRect).toHaveBeenCalledTimes(64 * 2);
   });
 
-  it('logs a signal transition exactly once when signal state flips', () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const { viz } = setup('bars');
-    viz.connect(makeAnalyser(64, (arr) => arr.fill(255)));
-    internals(viz).draw();
-    internals(viz).draw();
-    const signalLogs = logSpy.mock.calls.filter((c) => c[0] === '[viz] signal:');
-    expect(signalLogs).toHaveLength(1);
-    logSpy.mockRestore();
-  });
-
   it('draws the idle circuit grid when no signal is present', () => {
     const { ctx, viz } = setup('circuit');
     internals(viz).draw();

@@ -106,7 +106,6 @@ const description = [song.genre, song.year, song.duration].filter(Boolean).join(
 
 <script>
   import { homeAudio } from '../../lib/homeAudio';
-  import { navigate } from 'astro:transitions/client';
 
   document.addEventListener('astro:page-load', () => {
     const heroBtn = document.getElementById('hero-play');

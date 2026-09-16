@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -34,7 +35,7 @@ class TestVersion:
     def test_version_flag(self, capsys):
         with pytest.raises(SystemExit, match="0"):
             _main(["--version"])
-        assert "0.2.0" in capsys.readouterr().out
+        assert _pkg_version("deluge-quest") in capsys.readouterr().out
 
     def test_help_flag(self, capsys):
         with pytest.raises(SystemExit, match="0"):

@@ -705,7 +705,7 @@ describe('SongPreview', () => {
           {
             name: 'Custom Track',
             isKit: false,
-            instrumentType: 'custom',
+            instrumentType: 'synth',
             midiChannel: null,
             cvChannel: null,
             patch: null,
@@ -861,7 +861,7 @@ describe('SongPreview', () => {
       previewData({
         tracks: [
           {
-            name: 'Kit Track', isKit: true, instrumentType: undefined as unknown as string, midiChannel: null, cvChannel: null, patch: null,
+            name: 'Kit Track', isKit: true, instrumentType: undefined as unknown as "synth" | "kit" | "midi" | "cv" | "audio", midiChannel: null, cvChannel: null, patch: null,
             clips: [{ positionTicks: 0, lengthTicks: 192, clipLengthTicks: 192, clipIndex: 0, noteCount: 1, rowCount: 1, noteRows: [] }],
           },
         ],

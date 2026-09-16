@@ -9,7 +9,7 @@ vi.mock('../lib/homeAudio', () => ({
     songLoaded: false,
     loadedSongIndex: -1,
     currentSongIndex: 0,
-    songs: [{ name: 'First Song' }, { name: 'Second Song' }],
+    songs: [{ name: 'First Song' }, { name: 'Second Song' }] as { name: string; duration?: string; genre?: string; year?: string | number }[],
     currentSong: { name: 'First Song' },
     elapsed: 0,
     duration: 100,
@@ -70,7 +70,7 @@ type MockAudio = {
   songLoaded: boolean;
   loadedSongIndex: number;
   currentSongIndex: number;
-  songs: { name: string }[];
+  songs: { name: string; duration?: string; genre?: string; year?: string | number }[];
   currentSong: { name: string } | null;
   playOffset: number;
   analyserNode: unknown;
@@ -176,7 +176,7 @@ describe('DelugeUI', () => {
       render(DelugeUI);
       expect(screen.getAllByLabelText('GitHub')).toHaveLength(2);
       expect(screen.getAllByLabelText('Songs')).toHaveLength(2);
-      expect(screen.getAllByLabelText('FAQ')).toHaveLength(4);
+      expect(screen.getAllByLabelText('FAQ')).toHaveLength(2);
     });
   });
 

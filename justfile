@@ -272,7 +272,23 @@ coverage open="" verbose="":
   fi
 
   if [ "$py_status" -ne 0 ] || [ "$web_status" -ne 0 ] || [ "$pyodide_status" -ne 0 ]; then
-    printf "\nTests failed — full logs: coverage/python.log, coverage/web.log, coverage/pyodide.log\n" >&2
+    printf "\n\033[1;31m=== Test failures ===\033[0m\n" >&2
+    if [ "$py_status" -ne 0 ]; then
+      printf "\n\033[1m--- Python (pytest) ---\033[0m\n" >&2
+      sed -n '/^FAILED\|^ERROR\|^=.*FAILURES\|^=.*ERRORS/,/^=.*=/p' coverage/python.log >&2
+      grep -E "passed|failed|error" coverage/python.log | tail -1 >&2
+    fi
+    if [ "$web_status" -ne 0 ]; then
+      printf "\n\033[1m--- Web (vitest) ---\033[0m\n" >&2
+      sed -n '/Failed Tests/,/⎯⎯⎯⎯/p' coverage/web.log >&2
+      grep -E "Test Files|Tests " coverage/web.log >&2
+    fi
+    if [ "$pyodide_status" -ne 0 ]; then
+      printf "\n\033[1m--- Pyodide ---\033[0m\n" >&2
+      sed -n '/Failed Tests/,/⎯⎯⎯⎯/p' coverage/pyodide.log >&2
+      grep -E "Test Files|Tests " coverage/pyodide.log >&2
+    fi
+    printf "\nFull logs: coverage/python.log, coverage/web.log, coverage/pyodide.log\n" >&2
     exit 1
   fi
 

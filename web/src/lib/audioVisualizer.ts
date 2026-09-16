@@ -145,7 +145,7 @@ export class AudioVisualizer {
 
     if (hasSignal !== this.lastSignal) {
       this.lastSignal = hasSignal;
-      console.log('[viz] signal:', hasSignal, 'analyser:', !!this.analyser, 'ctxState:', this.analyser?.context.state);
+
     }
 
     if (this._mode === 'bars') {
