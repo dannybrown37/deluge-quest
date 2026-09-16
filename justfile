@@ -365,17 +365,38 @@ coverage open="" verbose="":
 # increment: MAJOR, MINOR, or PATCH (default: auto-detected from commit messages)
 release increment="":
   #!/bin/bash
-  set -e
+  set -euo pipefail
   export SKIP=changelog-reminder
   if [ -n "$(git status --porcelain)" ]; then
     echo "Working tree is dirty — commit or stash first."
     exit 1
   fi
-  tag=$(uv run cz bump {{ if increment != "" { "--increment " + increment } else { "" } }} --yes 2>&1 | grep -oP 'tag to create: \K\S+')
+  start_sha=$(git rev-parse HEAD)
+  tag=""
+  rollback() {
+    echo "release failed — rolling back to $start_sha" >&2
+    [ -n "$tag" ] && git tag -d "$tag" >/dev/null 2>&1 || true
+    git reset --hard "$start_sha" >/dev/null
+  }
+  trap rollback ERR
+
+  bump_output=$(uv run cz bump {{ if increment != "" { "--increment " + increment } else { "" } }} --yes 2>&1) || {
+    echo "$bump_output" >&2
+    exit 1
+  }
+  tag=$(echo "$bump_output" | grep -oP 'tag to create: \K\S+')
+  if [ -z "$tag" ]; then
+    echo "$bump_output" >&2
+    echo "Could not find a tag name in cz bump's output — aborting." >&2
+    exit 1
+  fi
+
   nvim CHANGELOG.md
   git add CHANGELOG.md
   git commit --amend --no-edit
   git tag -f "$tag"
+
+  trap - ERR
   echo ""
   echo "Ready to publish. Run:"
   echo "  git push && git push origin $tag"
