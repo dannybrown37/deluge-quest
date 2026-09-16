@@ -3,9 +3,7 @@
 ### Fix
 
 - ensure deluge-backup CLI appends to existing README rather than overwriting on new machine
-- clean stale wheels, typehints, claude.md drift, pyodide test hardcoding
-- version test hard-coding; ts type errors; conole.log debug command in loop; make 'just coverage' show error output
-- ignore line endings in the backup repo
+- ignore line endings in the backup repo (for Windows)
 
 ## v0.3.0 (2026-09-15)
 

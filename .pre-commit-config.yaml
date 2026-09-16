@@ -18,6 +18,8 @@ repos:
       - id: commitizen-early
       - id: block-private-terms
       - id: zizmor
+      - id: ruff-check
+      - id: ruff-format
 
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.17.0
@@ -34,13 +36,6 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=1024"]
         exclude: '^web/public/audio/'
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.6
-    hooks:
-      - id: ruff-check
-        args: ["--fix"]
-      - id: ruff-format
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
