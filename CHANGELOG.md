@@ -1,8 +1,10 @@
-## v0.2.0 (2026-09-15)
+## v0.3.0 (2026-09-15)
 
 ### Feat
 
 - support Windows with deluge-backup CLI, crossing the boundary is too slow
+- skip changelog reminder on CLI release
+- debug CLI updates for Windows
 
 ## v0.1.0 (2026-09-11)
 
