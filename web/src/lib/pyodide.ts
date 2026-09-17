@@ -60,6 +60,7 @@ export interface SongStats {
   midiChannels: number[];
   firmwareVersion: string;
   lastModified?: number;
+  path?: string;
 }
 
 export async function analyzeStats(

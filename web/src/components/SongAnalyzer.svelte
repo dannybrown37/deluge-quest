@@ -119,14 +119,10 @@
     songs: SongStats[];
   }
 
-  let filePathsSnapshot = $derived([...filePaths.entries()]);
-
   let folderGroups = $derived.by(() => {
-    const lookup = new Map(filePathsSnapshot);
     const groups = new Map<string, SongStats[]>();
     for (const s of sorted) {
-      const path = lookup.get(s.filename) ?? s.filename;
-      const parts = path.split("/");
+      const parts = (s.path ?? s.filename).split("/");
       parts.pop();
       const folder = parts.length > 0 ? parts.join("/") : "(root)";
       if (!groups.has(folder)) groups.set(folder, []);
@@ -205,7 +201,6 @@
   );
 
   const CACHE_KEY_RESULTS = "deluge-stats-results";
-  const CACHE_KEY_PATHS = "deluge-stats-paths";
   const IDB_NAME = "deluge-stats";
   const IDB_STORE = "files";
 
@@ -261,7 +256,6 @@
   async function saveToSession() {
     try {
       sessionStorage.setItem(CACHE_KEY_RESULTS, JSON.stringify(results));
-      sessionStorage.setItem(CACHE_KEY_PATHS, JSON.stringify([...filePaths.entries()]));
     } catch {}
     try {
       const db = await openIdb();
@@ -288,8 +282,6 @@
       results = cached;
       fileCount = results.length;
       state = "done";
-      const rawPaths = sessionStorage.getItem(CACHE_KEY_PATHS);
-      if (rawPaths) filePaths = new Map(JSON.parse(rawPaths));
     } catch {
       return false;
     }
@@ -464,11 +456,12 @@
       progress = `Analyzing ${entries.length} file${entries.length > 1 ? "s" : ""}`;
       progressPct = 85;
 
-      const fileData = entries.map(([path, content]) => ({ name: basename(path), content }));
+      const pathByName = new Map(entries.map(([p]) => [basename(p), p]));
+      const fileData = entries.map(([p, content]) => ({ name: basename(p), content }));
       const stats = await analyzeStats(fileData, pyodide);
       results = stats.map(s => {
-        const path = filePaths.get(s.filename);
-        return { ...s, lastModified: path ? cardStore.songLastModified.get(path) : undefined };
+        const p = pathByName.get(s.filename);
+        return { ...s, path: p, lastModified: p ? cardStore.songLastModified.get(p) : undefined };
       });
       state = "done";
       progressPct = 100;
@@ -540,8 +533,9 @@
       fileContents = new Map(fileData.map(f => [f.name, f.content]));
       filePaths = new Map(entries.map(e => [e.file.name, e.path]));
 
+      const pathByName = new Map(entries.map(e => [e.file.name, e.path]));
       const stats = await analyzeStats(fileData, pyodide);
-      results = stats.map(s => ({ ...s, lastModified: timestamps.get(s.filename) }));
+      results = stats.map(s => ({ ...s, path: pathByName.get(s.filename), lastModified: timestamps.get(s.filename) }));
       state = "done";
       progressPct = 100;
       saveToSession();
@@ -733,7 +727,6 @@
     clearFilters();
     try {
       sessionStorage.removeItem(CACHE_KEY_RESULTS);
-      sessionStorage.removeItem(CACHE_KEY_PATHS);
     } catch {}
     openIdb().then(db => idbClear(db).then(() => db.close())).catch(() => {});
   }
@@ -909,7 +902,7 @@
       {@const name = s.filename.replace(/\.XML$/i, '')}
       <tr class:row--error={s.key.startsWith('Error')}>
         <td class="cell-name">
-          <span class="cell-name-text" title={filePaths.get(s.filename) ?? name}>{name}</span>
+          <span class="cell-name-text" title={s.path ?? name}>{name}</span>
           {#if ((s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)) || (rootHandle && filePaths.has(s.filename))}
             <span class="cell-name-actions">
               {#if (s.hasArrangement || s.totalNotes > 0) && fileContents.has(s.filename)}
