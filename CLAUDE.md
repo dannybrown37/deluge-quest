@@ -92,7 +92,7 @@ Prose-only pages are Markdown instead (see `/faq`).
 | `/manage` | `CardScanner.svelte` | SD card management: sample browser, song sorting, broken ref display, analysis |
 | `/stats` | `SongAnalyzer.svelte` | Batch song stats table over a card or file selection |
 | `/preview` | `SongPreview.svelte` | Web Audio playback of a song with per-track mute/volume |
-| `/kits` | `KitBuilder.svelte` | Build/edit Deluge kit XML from card samples (vim-style keys) |
+| `/kits` | `KitBuilder.svelte` | Build/edit Deluge kit XML from card samples (vim-style keys), 16-step drum sequencer |
 | `/patch` | `PatchGenerator.svelte` | Generate synth presets with live Web Audio preview |
 | `/score` | `ScoreConverter.svelte` | Song XML → MusicXML download |
 | `/import` | `MidiImporter.svelte` | MIDI → Deluge song XML |
@@ -125,6 +125,7 @@ per audio file for shareable song links.
 | `patchAudio.ts` | Web Audio synth engine (subtractive + FM voices, envelopes) for `/patch` |
 | `songAudio.ts` | Song-level scheduler over `patchAudio` voices + card samples for `/preview` |
 | `kitXml.ts` | `Kit`/`KitRow` model and Deluge kit XML serialization for `/kits` |
+| `sequencerAudio.ts` | 16-step drum sequencer engine for `/kits`. `SequencerEngine` class: pattern state (toggle/clear/add/remove rows), Web Audio lookahead scheduling, sample loading via `FileSystemFileHandle`, RAF-driven playhead. Persists pattern + BPM in `kit-builder-seq` localStorage |
 | `padSounds.ts` | 8 Web Audio synth percussion sounds (kick, snare, hat, clap, tom, zap, blip, sweep) for the DelugeUI pad grid on `/songs/[slug]` pages. Velocity-to-glow mapping |
 | `audioVisualizer.ts` | Canvas-based audio visualizer using `AnalyserNode` — frequency bars (gold/teal) when music plays, ambient wave when idle. Used on home page below the Deluge grid |
 | `homeAudio.ts` | Singleton `homeAudio` — the site-wide `<audio>` player + Web Audio FX chain (filter, reverb, delay, analyser), song list, MediaSession wiring. Shared by the home page, the mini-player in `BaseLayout`, and `/songs/[slug]`. Also emits the song analytics events |

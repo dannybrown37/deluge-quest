@@ -9,6 +9,7 @@
   } from "../lib/kitXml";
   import { cardStore } from "../lib/cardStore";
   import { trackToolAction } from "../lib/analytics";
+  import { SequencerEngine, NUM_STEPS } from "../lib/sequencerAudio";
   import { tick } from "svelte";
 
   type Pane = "browser" | "kit";
@@ -49,6 +50,14 @@
   }
 
   let newRowIndex = $state(-1);
+
+  let sequencerOpen = $state(false);
+  let sequencerPlaying = $state(false);
+  let currentStep = $state(-1);
+  let seqBpm = $state(120);
+  let engine: SequencerEngine | null = $state(null);
+  let seqFocusRow = $state(0);
+  let seqFocusStep = $state(0);
 
   let selectedRow = $derived(
     kit.selectedIndex >= 0 && kit.selectedIndex < kit.rows.length
@@ -98,13 +107,13 @@
     localStorage.removeItem("kit-builder-cache");
   }
 
-  // Auto-load cached kit on init
   (() => {
     const cached = loadKitFromCache();
     if (cached && cached.rows.length > 0) {
       kit = cached;
       hasUnsavedChanges = false;
     }
+    loadSeqFromCache();
   })();
 
   // Auto-save to cache whenever kit changes
@@ -117,6 +126,110 @@
       hasUnsavedChanges = true;
     }
   });
+
+  function getOrCreateEngine(): SequencerEngine {
+    if (!engine) {
+      engine = new SequencerEngine({
+        bpm: seqBpm,
+        onStep: (step: number) => { currentStep = step; },
+        onStop: () => { sequencerPlaying = false; currentStep = -1; },
+      });
+      for (let i = 0; i < kit.rows.length; i++) engine.addRow();
+    }
+    return engine;
+  }
+
+  function toggleSequencer() {
+    sequencerOpen = !sequencerOpen;
+    if (sequencerOpen) getOrCreateEngine();
+  }
+
+  async function seqPlay() {
+    const eng = getOrCreateEngine();
+    if (sequencerPlaying) {
+      eng.stop();
+      sequencerPlaying = false;
+      currentStep = -1;
+    } else {
+      eng.setBpm(seqBpm);
+      await loadSequencerSamples();
+      eng.play();
+      sequencerPlaying = true;
+    }
+  }
+
+  let seqVersion = $state(0);
+
+  function seqToggleStep(row: number, step: number) {
+    const eng = getOrCreateEngine();
+    eng.toggleStep(row, step);
+    seqVersion++;
+    saveSeqToCache();
+  }
+
+  function seqClearRow(row: number) {
+    const eng = getOrCreateEngine();
+    eng.clearRow(row);
+    seqVersion++;
+    saveSeqToCache();
+  }
+
+  function seqClearAll() {
+    const eng = getOrCreateEngine();
+    eng.clearAll();
+    seqVersion++;
+    saveSeqToCache();
+  }
+
+  function seqUpdateBpm(newBpm: number) {
+    seqBpm = Math.max(40, Math.min(300, newBpm));
+    engine?.setBpm(seqBpm);
+  }
+
+  function syncEngineRows() {
+    if (!engine) return;
+    const engRows = engine.pattern.length;
+    const kitRows = kit.rows.length;
+    if (engRows < kitRows) {
+      for (let i = engRows; i < kitRows; i++) engine.addRow();
+    } else if (engRows > kitRows) {
+      for (let i = engRows - 1; i >= kitRows; i--) engine.removeRow(i);
+    }
+  }
+
+  async function loadSequencerSamples() {
+    if (!engine) return;
+    for (let i = 0; i < kit.rows.length; i++) {
+      const fh = kit.rows[i].fileHandle;
+      if (fh) await engine.loadSample(i, fh);
+    }
+  }
+
+  $effect(() => {
+    void kit.rows.length;
+    syncEngineRows();
+  });
+
+  function saveSeqToCache() {
+    if (!engine) return;
+    localStorage.setItem("kit-builder-seq", JSON.stringify({
+      pattern: engine.getPattern(),
+      bpm: seqBpm,
+    }));
+  }
+
+  function loadSeqFromCache() {
+    try {
+      const raw = localStorage.getItem("kit-builder-seq");
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (data.pattern) {
+        const eng = getOrCreateEngine();
+        eng.setPattern(data.pattern);
+      }
+      if (data.bpm) seqBpm = data.bpm;
+    } catch { /* ignore */ }
+  }
 
   $effect(() => { containerEl?.focus(); });
 
@@ -144,6 +257,26 @@
     browseIndex = 0;
     activePane = "browser";
     trackToolAction("kits", "open_samples");
+    await resolveFileHandles();
+  }
+
+  async function resolveFileHandles() {
+    if (!samplesDir) return;
+    const dirName = samplesDir.name;
+    for (const row of kit.rows) {
+      if (row.fileHandle || !row.samplePath) continue;
+      const prefix = dirName + "/";
+      if (!row.samplePath.startsWith(prefix)) continue;
+      const relPath = row.samplePath.slice(prefix.length);
+      const parts = relPath.split("/");
+      try {
+        let dir: FileSystemDirectoryHandle = samplesDir;
+        for (let i = 0; i < parts.length - 1; i++) {
+          dir = await dir.getDirectoryHandle(parts[i]);
+        }
+        row.fileHandle = await dir.getFileHandle(parts[parts.length - 1]);
+      } catch { /* file not found — leave row without handle */ }
+    }
   }
 
   /** Loads the SAMPLES/ dir from an already-picked SD card root (from /stats or /manage) instead of prompting again. */
@@ -155,6 +288,7 @@
     rebuildFlat();
     browseIndex = 0;
     activePane = "browser";
+    await resolveFileHandles();
   }
 
   async function tryAutoLoadFromCardStore() {
@@ -325,6 +459,15 @@
     pushUndo();
     [kit.rows[i], kit.rows[j]] = [kit.rows[j], kit.rows[i]];
     kit.selectedIndex = j;
+    if (engine) {
+      const p = engine.getPattern();
+      if (p[i] && p[j]) {
+        [p[i], p[j]] = [p[j], p[i]];
+        engine.setPattern(p);
+        seqVersion++;
+        saveSeqToCache();
+      }
+    }
   }
 
   function pushUndo() {
@@ -345,8 +488,11 @@
   function deleteRow() {
     if (kit.selectedIndex < 0 || kit.rows.length === 0) return;
     pushUndo();
+    engine?.removeRow(kit.selectedIndex);
     kit.rows.splice(kit.selectedIndex, 1);
     if (kit.selectedIndex >= kit.rows.length) kit.selectedIndex = kit.rows.length - 1;
+    seqVersion++;
+    saveSeqToCache();
   }
 
   function deduplicateRows() {
@@ -442,6 +588,12 @@
     hasUnsavedChanges = false;
     clearKitCache();
     showNewKitModal = false;
+    engine?.dispose();
+    engine = null;
+    sequencerPlaying = false;
+    currentStep = -1;
+    seqVersion++;
+    localStorage.removeItem("kit-builder-seq");
   }
 
   function handleFileInput(e: Event) {
@@ -476,6 +628,11 @@
     }
 
     if (e.key === "?") { mode = "help"; e.preventDefault(); return; }
+    if (e.key === "s" && !e.ctrlKey && !e.metaKey) {
+      toggleSequencer();
+      e.preventDefault();
+      return;
+    }
     if (e.key === "Tab") {
       activePane = activePane === "browser" ? "kit" : "browser";
       e.preventDefault();
@@ -483,6 +640,7 @@
     }
 
     if (e.key === "u") { undo(); e.preventDefault(); return; }
+
 
     if (activePane === "browser") handleBrowserKey(e);
     else handleKitKey(e);
@@ -628,6 +786,11 @@
           <input type="file" accept=".xml,.XML" hidden onchange={handleFileInput} />
         </label>
         <button class="btn btn-sm btn-primary" onclick={exportKit}>Export</button>
+        <button
+          class="btn btn-sm {sequencerOpen ? 'btn-seq-active' : 'btn-secondary'}"
+          onclick={toggleSequencer}
+          title="Toggle step sequencer (s)"
+        >Seq</button>
       </div>
     </div>
 
@@ -794,6 +957,59 @@
       </div>
     </div>
 
+    <!-- Sequencer panel -->
+    {#if sequencerOpen}
+      <div class="sequencer-panel">
+        <div class="seq-toolbar">
+          <div class="seq-toolbar-left">
+            <button
+              class="btn btn-sm {sequencerPlaying ? 'btn-playing' : 'btn-primary'}"
+              onclick={seqPlay}
+            >{sequencerPlaying ? "Stop" : "Play"}</button>
+            <label class="seq-bpm-label">
+              <span class="seq-bpm-tag">BPM</span>
+              <input
+                type="number"
+                class="seq-bpm-input"
+                min="40"
+                max="300"
+                value={seqBpm}
+                oninput={(e) => seqUpdateBpm(parseInt((e.target as HTMLInputElement).value) || 120)}
+                onclick={(e) => e.stopPropagation()}
+              />
+            </label>
+          </div>
+          <div class="seq-toolbar-right">
+            <button class="btn btn-sm btn-secondary" onclick={seqClearAll}>Clear All</button>
+            <button class="btn btn-sm btn-secondary" onclick={() => { loadSequencerSamples(); }}>Load Samples</button>
+          </div>
+        </div>
+        <div class="seq-grid">
+          {#each kit.rows as row, ri}
+            <div class="seq-row">
+              <div class="seq-row-label" title={row.samplePath}>
+                <span class="seq-row-name">{row.name}</span>
+                <button class="seq-row-clear" onclick={() => seqClearRow(ri)} title="Clear row">×</button>
+              </div>
+              {#each { length: NUM_STEPS } as _, si}
+                {@const _v = seqVersion}
+                <button
+                  class="step-cell"
+                  class:step-on={engine?.pattern[ri]?.[si] ?? false}
+                  class:step-active={si === currentStep && sequencerPlaying}
+                  class:step-beat={si % 4 === 0}
+                  onclick={() => seqToggleStep(ri, si)}
+                ></button>
+              {/each}
+            </div>
+          {/each}
+          {#if kit.rows.length === 0}
+            <div class="seq-empty">Add rows to the kit to start sequencing.</div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
     <!-- Status bar -->
     <div class="statusbar">
       <span class="status-pane">{activePane === "browser" ? "BROWSER" : "KIT"}</span>
@@ -803,7 +1019,10 @@
       {#if playingAudio}
         <span class="status-playing">▶ playing</span>
       {/if}
-      <span class="status-hint">Tab to switch · ? for help</span>
+      {#if sequencerOpen}
+        <span class="status-seq">{sequencerPlaying ? `▶ ${seqBpm}bpm` : "SEQ"}</span>
+      {/if}
+      <span class="status-hint">Tab to switch · s seq · ? for help</span>
     </div>
   {/if}
 
@@ -861,11 +1080,20 @@
             <h4>Global</h4>
             <dl>
               <dt><kbd>Tab</kbd></dt><dd>Switch pane</dd>
+              <dt><kbd>s</kbd></dt><dd>Toggle sequencer</dd>
               <dt><kbd>u</kbd></dt><dd>Undo</dd>
               <dt><kbd>?</kbd></dt><dd>This help</dd>
               <dt><kbd>Esc</kbd></dt><dd>Close / clear</dd>
             </dl>
           </div>
+          {#if sequencerOpen}
+            <div class="help-section">
+              <h4>Sequencer</h4>
+              <dl>
+                <dt><kbd>s</kbd></dt><dd>Toggle panel</dd>
+              </dl>
+            </div>
+          {/if}
         </div>
       </div>
     </div>
@@ -1350,6 +1578,134 @@
     white-space: nowrap;
   }
 
+  /* Sequencer panel */
+  .sequencer-panel {
+    border: 1px solid var(--border);
+    border-top: none;
+    overflow-x: auto;
+  }
+  .seq-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.4rem 0.6rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    gap: 0.5rem;
+  }
+  .seq-toolbar-left, .seq-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .btn-playing {
+    background: var(--teal);
+    color: var(--ground);
+    border-color: var(--teal);
+  }
+  .btn-playing:hover { opacity: 0.9; }
+  .btn-seq-active {
+    background: var(--teal);
+    color: var(--ground);
+    border-color: var(--teal);
+  }
+  .seq-bpm-label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .seq-bpm-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.03em;
+  }
+  .seq-bpm-input {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    width: 3.5rem;
+    background: var(--ground);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.15rem 0.3rem;
+    color: var(--text);
+    text-align: center;
+  }
+  .seq-bpm-input:focus-visible { border-color: var(--accent); outline: none; }
+  .seq-grid {
+    padding: 0.3rem 0.4rem;
+  }
+  .seq-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-bottom: 2px;
+  }
+  .seq-row-label {
+    width: 80px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    overflow: hidden;
+  }
+  .seq-row-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  .seq-row-clear {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 0;
+    line-height: 1;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+  .seq-row:hover .seq-row-clear { opacity: 1; }
+  .seq-row-clear:hover { color: var(--accent); }
+  .step-cell {
+    width: 28px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--ground);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.08s, border-color 0.08s;
+    padding: 0;
+  }
+  .step-cell:hover { border-color: var(--text-secondary); }
+  .step-cell.step-on {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .step-cell.step-active {
+    border-color: var(--teal);
+    box-shadow: 0 0 4px var(--teal);
+  }
+  .step-cell.step-on.step-active {
+    background: var(--teal);
+    border-color: var(--teal);
+  }
+  .step-cell.step-beat { margin-left: 4px; }
+  .step-cell:first-of-type.step-beat { margin-left: 0; }
+  .seq-empty {
+    padding: 1rem;
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+  }
+  .status-seq { color: var(--teal); }
+
   @media (max-width: 700px) {
     .panes { grid-template-columns: 1fr; min-height: auto; max-height: none; }
     .pane-browser { border-right: none; border-bottom: 1px solid var(--border); max-height: 40vh; }
@@ -1357,5 +1713,8 @@
     .help-grid { grid-template-columns: 1fr; }
     .toolbar { flex-direction: column; align-items: stretch; }
     .toolbar-right { justify-content: flex-end; }
+    .step-cell { width: 24px; height: 22px; }
+    .seq-row-label { width: 60px; }
+    .seq-toolbar { flex-direction: column; align-items: stretch; }
   }
 </style>
