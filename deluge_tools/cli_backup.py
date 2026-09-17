@@ -326,20 +326,27 @@ def _build_changelog_entry(changes_output: str, msg: str) -> str:
     return "\n".join(parts)
 
 
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="cp1252")
+
+
 def _append_changelog_entry(readme: Path, entry: str, header: str) -> None:
     """Append `entry` under the `## Changelog` heading, creating the file if needed.
 
     Never overwrites existing changelog content — history only grows.
     """
-    if readme.exists() and "## Changelog" in readme.read_text():
-        text = readme.read_text()
+    if readme.exists() and "## Changelog" in _read_text(readme):
+        text = _read_text(readme)
         text = text.replace("## Changelog\n", f"## Changelog\n\n{entry}\n", 1)
-        readme.write_text(text)
+        readme.write_text(text, encoding="utf-8")
     elif readme.exists():
-        with open(readme, "a") as f:
+        with open(readme, "a", encoding="utf-8") as f:
             f.write(f"\n## Changelog\n\n{entry}\n")
     else:
-        readme.write_text(f"{header}\n\n## Changelog\n\n{entry}\n")
+        readme.write_text(f"{header}\n\n## Changelog\n\n{entry}\n", encoding="utf-8")
 
 
 def cmd_commit(args: argparse.Namespace) -> None:
@@ -392,7 +399,7 @@ def cmd_commit(args: argparse.Namespace) -> None:
                 text=True,
                 check=False,
             )
-            readme.write_text(content.stdout)
+            readme.write_text(content.stdout, encoding="utf-8")
 
     changes = _run(
         ["git", "diff", "--cached", "--name-status"],
@@ -620,6 +627,7 @@ def cmd_push(args: argparse.Namespace) -> None:
 
     _run(["git", "status", "--short"], cwd=remote_dir, check=False)
     _run(["git", "commit", "-m", commit_msg], cwd=remote_dir, check=True)
+    _run(["git", "pull", "--rebase", "origin", "main"], cwd=remote_dir, check=True)
     _run(["git", "push", "-u", "origin", "main"], cwd=remote_dir, check=True)
 
 

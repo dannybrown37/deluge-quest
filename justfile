@@ -195,6 +195,10 @@ card-remote-init url:
 card-push msg="":
   deluge-backup push {{ if msg != "" { "\"" + msg + "\"" } else { "" } }}
 
+# Reinstall deluge-quest on the Windows side from the WSL working tree
+win-install:
+  powershell.exe -Command "\$env:PATH = [Environment]::GetEnvironmentVariable('PATH','User') + ';' + [Environment]::GetEnvironmentVariable('PATH','Machine'); uv tool install --force --from '$(wslpath -w {{justfile_directory()}})' deluge-quest"
+
 # Run deluge-backup on the Windows side via PowerShell (bypasses WSL filesystem boundary)
 deluge-backup-win +args:
   powershell.exe -Command "& \"\$env:APPDATA\uv\tools\deluge-quest\Scripts\deluge-backup.exe\" {{args}}"
