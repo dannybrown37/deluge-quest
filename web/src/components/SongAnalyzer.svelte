@@ -205,6 +205,7 @@
   );
 
   const CACHE_KEY_RESULTS = "deluge-stats-results";
+  const CACHE_KEY_PATHS = "deluge-stats-paths";
   const IDB_NAME = "deluge-stats";
   const IDB_STORE = "files";
 
@@ -260,6 +261,7 @@
   async function saveToSession() {
     try {
       sessionStorage.setItem(CACHE_KEY_RESULTS, JSON.stringify(results));
+      sessionStorage.setItem(CACHE_KEY_PATHS, JSON.stringify([...filePaths.entries()]));
     } catch {}
     try {
       const db = await openIdb();
@@ -286,6 +288,8 @@
       results = cached;
       fileCount = results.length;
       state = "done";
+      const rawPaths = sessionStorage.getItem(CACHE_KEY_PATHS);
+      if (rawPaths) filePaths = new Map(JSON.parse(rawPaths));
     } catch {
       return false;
     }
@@ -729,6 +733,7 @@
     clearFilters();
     try {
       sessionStorage.removeItem(CACHE_KEY_RESULTS);
+      sessionStorage.removeItem(CACHE_KEY_PATHS);
     } catch {}
     openIdb().then(db => idbClear(db).then(() => db.close())).catch(() => {});
   }
