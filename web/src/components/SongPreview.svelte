@@ -820,6 +820,7 @@ function reset() {
                   {@const loopX = clip.x + li * clip.patternW}
                   {@const loopW = Math.min(clip.patternW, clip.w - li * clip.patternW)}
                   {#if loopW > 0}
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <rect
                       x={loopX}
                       y={track.y + 3}
@@ -848,6 +849,7 @@ function reset() {
                   {/if}
                 {/each}
               {:else}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <rect
                   x={clip.x}
                   y={track.y + 3}

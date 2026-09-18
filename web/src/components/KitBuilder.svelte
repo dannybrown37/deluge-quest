@@ -1030,9 +1030,12 @@ function handleKitKey(e: KeyboardEvent) {
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   class="kit-builder"
   bind:this={containerEl}
+  role="application"
+  aria-label="Kit Builder"
   tabindex="0"
   onkeydown={handleKeydown}
 >
@@ -1151,6 +1154,7 @@ function handleKitKey(e: KeyboardEvent) {
               <div class="pane-empty"><p>No matching files.</p></div>
             {:else}
               {#each visibleEntries as entry, i}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <div
                   class="browse-entry"
                   class:browse-entry--selected={i === browseIndex && activePane === "browser"}
@@ -1161,6 +1165,7 @@ function handleKitKey(e: KeyboardEvent) {
                   onclick={() => { activePane = "browser"; browseIndex = i; }}
                   ondblclick={() => { if (entry.kind === "file") addSampleToKit(entry); else addFolderToKit(entry); }}
                 >
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
                   <span
                     class="browse-icon"
                     role="button"
@@ -1197,6 +1202,7 @@ function handleKitKey(e: KeyboardEvent) {
           <span class="pane-title">Kit Rows</span>
           <span class="pane-hint">{kit.rows.length} row{kit.rows.length !== 1 ? "s" : ""}</span>
         </div>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="pane-list"
           bind:this={kitListEl}
@@ -1210,6 +1216,7 @@ function handleKitKey(e: KeyboardEvent) {
             </div>
           {:else}
             {#each kit.rows as row, i}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
               <div
                 class="kit-row"
                 class:kit-row--selected={i === kit.selectedIndex && activePane === "kit"}
@@ -1322,6 +1329,8 @@ function handleKitKey(e: KeyboardEvent) {
                   class:step-on={engine?.pattern[ri]?.[si] ?? false}
                   class:step-active={si === currentStep && sequencerPlaying}
                   class:step-beat={si % 4 === 0}
+                  aria-label="Step {si + 1} for {row.name}"
+                  aria-pressed={engine?.pattern[ri]?.[si] ?? false}
                   onclick={() => seqToggleStep(ri, si)}
                 ></button>
               {/each}
@@ -1353,7 +1362,7 @@ function handleKitKey(e: KeyboardEvent) {
   <!-- Folder add confirmation modal -->
   {#if pendingFolderAdd}
     <div class="overlay" onclick={() => pendingFolderAdd = null} role="presentation">
-      <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
+      <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
         <h3>Add entire folder?</h3>
         <p>This will add <strong>{pendingFolderAdd.count}</strong> samples from <strong>{pendingFolderAdd.entry.name}</strong> to your kit.</p>
         <div class="modal-actions">
@@ -1371,7 +1380,7 @@ function handleKitKey(e: KeyboardEvent) {
   <!-- New Kit confirmation modal -->
   {#if showNewKitModal}
     <div class="overlay" onclick={() => showNewKitModal = false} role="presentation">
-      <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
+      <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
         <h3>Save before creating new kit?</h3>
         <p>You have unsaved changes.</p>
         <div class="modal-actions">
@@ -1386,7 +1395,7 @@ function handleKitKey(e: KeyboardEvent) {
   <!-- Help overlay -->
   {#if mode === "help"}
     <div class="overlay" onclick={() => mode = "normal"} role="presentation">
-      <div class="help-panel" onclick={(e) => e.stopPropagation()} role="dialog">
+      <div class="help-panel" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
         <h3>Keyboard Shortcuts</h3>
         <div class="help-grid">
           <div class="help-section">
