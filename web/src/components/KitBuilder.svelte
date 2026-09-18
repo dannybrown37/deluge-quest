@@ -684,6 +684,15 @@
   // --- Keyboard ---
 
   function handleKeydown(e: KeyboardEvent) {
+    if (pendingFolderAdd) {
+      if (e.key === "Escape") { pendingFolderAdd = null; e.preventDefault(); }
+      else if (e.key === "Enter") { const entry = pendingFolderAdd.entry; pendingFolderAdd = null; doAddFolder(entry); e.preventDefault(); }
+      return;
+    }
+    if (showNewKitModal) {
+      if (e.key === "Escape") { showNewKitModal = false; e.preventDefault(); }
+      return;
+    }
     if (mode === "help") {
       if (e.key === "Escape" || e.key === "?") { mode = "normal"; e.preventDefault(); }
       return;
@@ -829,7 +838,7 @@
     } else if (key === ">") { adjustPan(5); e.preventDefault();
     } else if (key === "<") { adjustPan(-5); e.preventDefault();
     } else if (key === "Escape") { kit.selectedIndex = -1; pendingD = false; e.preventDefault();
-    } else { pendingD = false; }
+    } else if (key !== "Shift" && key !== "Control" && key !== "Alt" && key !== "Meta") { pendingD = false; }
   }
 </script>
 
