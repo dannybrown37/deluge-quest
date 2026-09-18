@@ -641,6 +641,8 @@
       trackToolAction("kits", "load_kit");
       hasUnsavedChanges = false;
       saveKitToCache();
+      await resolveFileHandles();
+      await loadSequencerSamples();
     } catch (err: any) {
       console.error("Failed to parse kit XML:", err);
     }
