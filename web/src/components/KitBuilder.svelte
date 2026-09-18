@@ -68,10 +68,43 @@
   let visibleEntries = $derived.by(() => {
     if (!searchQuery) return flatEntries;
     const q = searchQuery.toLowerCase();
+    const matchingFiles = new Set<TreeEntry>();
+    const ancestorsOfMatches = new Set<TreeEntry>();
+    for (const e of flatEntries) {
+      if (e.kind === "file" && e.name.toLowerCase().includes(q)) {
+        matchingFiles.add(e);
+        let p = e.parent;
+        while (p) { ancestorsOfMatches.add(p); p = p.parent; }
+      }
+    }
     return flatEntries.filter(
-      (e) => e.kind === "directory" || e.name.toLowerCase().includes(q)
+      (e) => matchingFiles.has(e) || ancestorsOfMatches.has(e)
     );
   });
+
+  let breadcrumbAncestors = $derived.by(() => {
+    const entry = visibleEntries[browseIndex];
+    if (!entry) return [];
+    const chain: TreeEntry[] = [];
+    let p = entry.kind === "directory" ? entry : entry.parent;
+    while (p) { chain.unshift(p); p = p.parent; }
+    return chain;
+  });
+
+  let browsePosition = $derived.by(() => {
+    const entry = visibleEntries[browseIndex];
+    if (!entry) return null;
+    const folder = entry.kind === "directory" ? entry : entry.parent;
+    if (!folder) return null;
+    const siblings = visibleEntries.filter(
+      (e) => e.parent === folder
+    );
+    const idx = siblings.indexOf(entry);
+    return { index: idx + 1, total: siblings.length };
+  });
+
+  let showStickyHeader = $state(false);
+  let keyboardNav = false;
 
   const LOOP_MODES: KitRow["loopMode"][] = ["once", "loop", "cut"];
   const POLY_MODES: KitRow["polyphonic"][] = ["auto", "choke", "mono", "poly"];
@@ -236,14 +269,32 @@
   $effect(() => {
     void browseIndex;
     void kit.selectedIndex;
+    const block = keyboardNav ? "center" as const : "nearest" as const;
+    keyboardNav = false;
     if (activePane === "browser" && browserListEl) {
       const sel = browserListEl.querySelector(".browse-entry--selected");
-      sel?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      sel?.scrollIntoView({ block, behavior: "smooth" });
     }
     if (activePane === "kit" && kitListEl) {
       const sel = kitListEl.querySelector(".kit-row--selected");
-      sel?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      sel?.scrollIntoView({ block, behavior: "smooth" });
     }
+  });
+
+  $effect(() => {
+    if (!browserListEl) return;
+    const entry = visibleEntries[browseIndex];
+    if (!entry) { showStickyHeader = false; return; }
+    const folder = entry.kind === "directory" && entry.expanded ? entry : entry.parent;
+    if (!folder) { showStickyHeader = false; return; }
+    const folderIdx = visibleEntries.indexOf(folder);
+    if (folderIdx < 0) { showStickyHeader = false; return; }
+    const allEntryEls = browserListEl.querySelectorAll(".browse-entry");
+    const folderEl = allEntryEls[folderIdx] as HTMLElement | undefined;
+    if (!folderEl) { showStickyHeader = false; return; }
+    const listRect = browserListEl.getBoundingClientRect();
+    const folderRect = folderEl.getBoundingClientRect();
+    showStickyHeader = folderRect.bottom < listRect.top;
   });
 
   // --- Directory browsing ---
@@ -376,8 +427,29 @@
     setTimeout(() => { newRowIndex = -1; }, 1500);
   }
 
+  let pendingFolderAdd: { entry: TreeEntry; count: number } | null = $state(null);
+
+  async function countFolderAudioFiles(dir: FileSystemDirectoryHandle): Promise<number> {
+    let count = 0;
+    for await (const [name, handle] of (dir as any).entries()) {
+      if (handle.kind === "file" && AUDIO_EXT.test(name)) count++;
+      else if (handle.kind === "directory") count += await countFolderAudioFiles(handle as FileSystemDirectoryHandle);
+    }
+    return count;
+  }
+
   async function addFolderToKit(entry: TreeEntry) {
     if (entry.kind !== "directory") return;
+    const count = await countFolderAudioFiles(entry.handle as FileSystemDirectoryHandle);
+    if (count === 0) return;
+    if (count > 16) {
+      pendingFolderAdd = { entry, count };
+      return;
+    }
+    await doAddFolder(entry);
+  }
+
+  async function doAddFolder(entry: TreeEntry) {
     pushUndo();
     const dir = entry.handle as FileSystemDirectoryHandle;
     const files: { name: string; path: string; handle: FileSystemFileHandle }[] = [];
@@ -651,15 +723,19 @@
     const entry = entries[browseIndex];
 
     if (e.key === "j" || e.key === "ArrowDown") {
+      keyboardNav = true;
       browseIndex = Math.min(browseIndex + 1, entries.length - 1);
       e.preventDefault();
     } else if (e.key === "k" || e.key === "ArrowUp") {
+      keyboardNav = true;
       browseIndex = Math.max(browseIndex - 1, 0);
       e.preventDefault();
     } else if (e.key === "G") {
+      keyboardNav = true;
       browseIndex = entries.length - 1;
       e.preventDefault();
     } else if (e.key === "g") {
+      keyboardNav = true;
       browseIndex = 0;
       e.preventDefault();
     } else if (e.key === "l" || e.key === "ArrowRight") {
@@ -669,6 +745,7 @@
       if (entry) {
         if (entry.kind === "directory" && entry.expanded) collapseEntry(entry);
         else if (entry.parent) {
+          keyboardNav = true;
           const pi = entries.indexOf(entry.parent);
           if (pi >= 0) browseIndex = pi;
         }
@@ -707,13 +784,36 @@
   function handleKitKey(e: KeyboardEvent) {
     const { key } = e;
     if (key === "j" || key === "ArrowDown") {
+      keyboardNav = true;
       if (kit.rows.length > 0) kit.selectedIndex = Math.min(kit.selectedIndex + 1, kit.rows.length - 1);
       e.preventDefault();
     } else if (key === "k" || key === "ArrowUp") {
+      keyboardNav = true;
       if (kit.rows.length > 0) kit.selectedIndex = Math.max(kit.selectedIndex - 1, 0);
       e.preventDefault();
     } else if (key === "J") { moveRow(1); e.preventDefault();
     } else if (key === "K") { moveRow(-1); e.preventDefault();
+    } else if (key === "G" && pendingD) {
+      if (kit.rows.length > 0 && kit.selectedIndex >= 0) {
+        pushUndo();
+        const count = kit.rows.length - kit.selectedIndex;
+        for (let i = 0; i < count; i++) engine?.removeRow(kit.selectedIndex);
+        kit.rows.splice(kit.selectedIndex);
+        if (kit.selectedIndex >= kit.rows.length) kit.selectedIndex = kit.rows.length - 1;
+        seqVersion++;
+        saveSeqToCache();
+      }
+      pendingD = false; e.preventDefault();
+    } else if (key === "g" && pendingD) {
+      if (kit.rows.length > 0 && kit.selectedIndex >= 0) {
+        pushUndo();
+        for (let i = 0; i <= kit.selectedIndex; i++) engine?.removeRow(0);
+        kit.rows.splice(0, kit.selectedIndex + 1);
+        kit.selectedIndex = 0;
+        seqVersion++;
+        saveSeqToCache();
+      }
+      pendingD = false; e.preventDefault();
     } else if (key === "d") {
       if (pendingD) { deleteRow(); pendingD = false; }
       else { pendingD = true; setTimeout(() => pendingD = false, 500); }
@@ -823,52 +923,75 @@
             {/if}
           </span>
         </div>
-        <div class="pane-list" bind:this={browserListEl}>
-          {#if !samplesDir}
-            <div class="pane-empty">
-              <p>No folder open.</p>
-              <button class="btn btn-secondary btn-sm" onclick={openSamplesDir}>Open SAMPLES Folder</button>
+        <div class="pane-list-wrapper">
+          {#if showStickyHeader && breadcrumbAncestors.length > 0}
+            <div class="sticky-breadcrumb">
+              <span class="breadcrumb-trail">
+                {#each breadcrumbAncestors as ancestor, i}
+                  {#if i > 0}<span class="breadcrumb-sep">›</span>{/if}
+                  <button
+                    class="breadcrumb-link"
+                    onclick={() => {
+                      const idx = visibleEntries.indexOf(ancestor);
+                      if (idx >= 0) { keyboardNav = true; browseIndex = idx; }
+                    }}
+                  >{ancestor.name}</button>
+                {/each}
+              </span>
+              {#if browsePosition}
+                <span class="breadcrumb-pos">
+                  {browsePosition.index}/{browsePosition.total}{searchQuery ? " matches" : ""}
+                </span>
+              {/if}
             </div>
-          {:else if visibleEntries.length === 0}
-            <div class="pane-empty"><p>No matching files.</p></div>
-          {:else}
-            {#each visibleEntries as entry, i}
-              <div
-                class="browse-entry"
-                class:browse-entry--selected={i === browseIndex && activePane === "browser"}
-                class:browse-entry--dir={entry.kind === "directory"}
-                style="padding-left: {entry.depth + 0.5}rem"
-                role="button"
-                tabindex="-1"
-                onclick={() => { activePane = "browser"; browseIndex = i; }}
-                ondblclick={() => { if (entry.kind === "file") addSampleToKit(entry); else addFolderToKit(entry); }}
-              >
-                <span
-                  class="browse-icon"
+          {/if}
+          <div class="pane-list" bind:this={browserListEl}>
+            {#if !samplesDir}
+              <div class="pane-empty">
+                <p>No folder open.</p>
+                <button class="btn btn-secondary btn-sm" onclick={openSamplesDir}>Open SAMPLES Folder</button>
+              </div>
+            {:else if visibleEntries.length === 0}
+              <div class="pane-empty"><p>No matching files.</p></div>
+            {:else}
+              {#each visibleEntries as entry, i}
+                <div
+                  class="browse-entry"
+                  class:browse-entry--selected={i === browseIndex && activePane === "browser"}
+                  class:browse-entry--dir={entry.kind === "directory"}
+                  style="padding-left: {entry.depth + 0.5}rem"
                   role="button"
                   tabindex="-1"
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    if (entry.kind === "directory") {
-                      if (entry.expanded) collapseEntry(entry);
-                      else expandEntry(entry);
-                    } else {
-                      auditionBrowserEntry(entry);
-                    }
-                  }}
+                  onclick={() => { activePane = "browser"; browseIndex = i; }}
+                  ondblclick={() => { if (entry.kind === "file") addSampleToKit(entry); else addFolderToKit(entry); }}
                 >
-                  {#if entry.kind === "directory"}
-                    {entry.expanded ? "▼" : "▶"}
-                  {:else if playingAudio && playingAudio.index === -1 && visibleEntries[browseIndex] === entry && playingAudio.audio && !playingAudio.audio.paused}
-                    ■
-                  {:else}
-                    ▶
-                  {/if}
-                </span>
-                <span class="browse-name">{entry.name}</span>
-              </div>
-            {/each}
-          {/if}
+                  <span
+                    class="browse-icon"
+                    role="button"
+                    tabindex="-1"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      if (entry.kind === "directory") {
+                        if (entry.expanded) collapseEntry(entry);
+                        else expandEntry(entry);
+                      } else {
+                        auditionBrowserEntry(entry);
+                      }
+                    }}
+                  >
+                    {#if entry.kind === "directory"}
+                      {entry.expanded ? "▼" : "▶"}
+                    {:else if playingAudio && playingAudio.index === -1 && visibleEntries[browseIndex] === entry && playingAudio.audio && !playingAudio.audio.paused}
+                      ■
+                    {:else}
+                      ▶
+                    {/if}
+                  </span>
+                  <span class="browse-name">{entry.name}</span>
+                </div>
+              {/each}
+            {/if}
+          </div>
         </div>
       </div>
 
@@ -974,8 +1097,13 @@
                 min="40"
                 max="300"
                 value={seqBpm}
-                oninput={(e) => seqUpdateBpm(parseInt((e.target as HTMLInputElement).value) || 120)}
+                onchange={(e) => {
+                  const v = parseInt((e.target as HTMLInputElement).value);
+                  if (!isNaN(v)) seqUpdateBpm(v);
+                  (e.target as HTMLInputElement).value = String(seqBpm);
+                }}
                 onclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => e.stopPropagation()}
               />
             </label>
           </div>
@@ -1026,6 +1154,24 @@
     </div>
   {/if}
 
+  <!-- Folder add confirmation modal -->
+  {#if pendingFolderAdd}
+    <div class="overlay" onclick={() => pendingFolderAdd = null} role="presentation">
+      <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
+        <h3>Add entire folder?</h3>
+        <p>This will add <strong>{pendingFolderAdd.count}</strong> samples from <strong>{pendingFolderAdd.entry.name}</strong> to your kit.</p>
+        <div class="modal-actions">
+          <button class="btn btn-sm btn-secondary" onclick={() => pendingFolderAdd = null}>Cancel</button>
+          <button class="btn btn-sm btn-primary" onclick={() => {
+            const entry = pendingFolderAdd!.entry;
+            pendingFolderAdd = null;
+            doAddFolder(entry);
+          }}>Add {pendingFolderAdd.count} Samples</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- New Kit confirmation modal -->
   {#if showNewKitModal}
     <div class="overlay" onclick={() => showNewKitModal = false} role="presentation">
@@ -1066,6 +1212,8 @@
               <dt><kbd>j</kbd>/<kbd>k</kbd></dt><dd>Navigate rows</dd>
               <dt><kbd>J</kbd>/<kbd>K</kbd></dt><dd>Move row up/down</dd>
               <dt><kbd>dd</kbd></dt><dd>Delete row</dd>
+              <dt><kbd>dG</kbd></dt><dd>Delete to end</dd>
+              <dt><kbd>dg</kbd></dt><dd>Delete to start</dd>
               <dt><kbd>r</kbd></dt><dd>Rename row</dd>
               <dt><kbd>Space</kbd></dt><dd>Audition</dd>
               <dt><kbd>l</kbd></dt><dd>Cycle loop mode</dd>
@@ -1240,11 +1388,62 @@
     border-radius: 3px;
     padding: 0 0.2rem;
   }
+  .pane-list-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+  }
   .pane-list {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     scroll-behavior: smooth;
+  }
+  .sticky-breadcrumb {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.25rem 0.6rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    flex-shrink: 0;
+    gap: 0.5rem;
+  }
+  .breadcrumb-trail {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    overflow: hidden;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .breadcrumb-sep {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .breadcrumb-link {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .breadcrumb-link:hover { text-decoration: underline; }
+  .breadcrumb-link:last-child { color: var(--text); font-weight: 500; }
+  .breadcrumb-pos {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .pane-empty {
     padding: 2rem 1rem;
