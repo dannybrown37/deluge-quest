@@ -19,6 +19,17 @@ vi.mock("../lib/cardStore", () => ({
   },
 }));
 
+vi.mock("../lib/drumSynth", () => ({
+  create808Kit: () => ({
+    name: "Kit",
+    rows: [],
+    selectedIndex: -1,
+  }),
+  render808Buffers: vi.fn().mockResolvedValue(new Map()),
+  DEFAULT_808_PATTERN: [],
+  DRUM_808_NAMES: [],
+}));
+
 import { trackToolAction } from "../lib/analytics";
 import { cardStore } from "../lib/cardStore";
 
@@ -413,7 +424,7 @@ describe("KitBuilder", () => {
     render(KitBuilder);
 
     await waitFor(() => expect(screen.getByText("Cached Kit")).toBeTruthy());
-    expect(screen.getByText("CACHED")).toBeTruthy();
+    expect(screen.getAllByText("CACHED").length).toBeGreaterThan(0);
   });
 
   it("confirms discarding unsaved changes when starting a new kit", async () => {

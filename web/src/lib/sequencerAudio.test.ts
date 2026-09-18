@@ -343,6 +343,32 @@ describe("scheduling", () => {
   });
 });
 
+describe("setBuffer", () => {
+  it("directly sets a buffer at the given row index", () => {
+    const e = makeEngine();
+    e.addRow();
+    const buf = { duration: 1 } as unknown as AudioBuffer;
+    e.setBuffer(0, buf);
+    expect(internals(e).sampleBuffers[0]).toBe(buf);
+  });
+
+  it("is a no-op for an out-of-range row index", () => {
+    const e = makeEngine();
+    e.addRow();
+    const buf = { duration: 1 } as unknown as AudioBuffer;
+    e.setBuffer(5, buf);
+    expect(internals(e).sampleBuffers[0]).toBeNull();
+  });
+
+  it("is a no-op for a negative row index", () => {
+    const e = makeEngine();
+    e.addRow();
+    const buf = { duration: 1 } as unknown as AudioBuffer;
+    e.setBuffer(-1, buf);
+    expect(internals(e).sampleBuffers[0]).toBeNull();
+  });
+});
+
 describe("sample loading", () => {
   it("loadSample decodes audio into sampleBuffers[row]", async () => {
     const e = makeEngine();

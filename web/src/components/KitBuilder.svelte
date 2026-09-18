@@ -3,6 +3,11 @@ import { tick } from "svelte";
 import { trackToolAction } from "../lib/analytics";
 import { cardStore } from "../lib/cardStore";
 import {
+  create808Kit,
+  DEFAULT_808_PATTERN,
+  render808Buffers,
+} from "../lib/drumSynth";
+import {
   createEmptyKit,
   createEmptyRow,
   generateKitXml,
@@ -55,7 +60,6 @@ interface TreeEntry {
 
 let newRowIndex = $state(-1);
 
-let sequencerOpen = $state(false);
 let sequencerPlaying = $state(false);
 let currentStep = $state(-1);
 let seqBpm = $state(120);
@@ -164,15 +168,28 @@ function clearKitCache() {
   if (cached && cached.rows.length > 0) {
     kit = cached;
     hasUnsavedChanges = false;
+    loadSeqFromCache();
+  } else {
+    kit = create808Kit();
+    hasUnsavedChanges = false;
+    const eng = getOrCreateEngine();
+    eng.setPattern(DEFAULT_808_PATTERN);
+    saveSeqToCache();
   }
-  loadSeqFromCache();
 })();
+
+let isInitialLoad = true;
 
 // Auto-save to cache whenever kit changes
 $effect(() => {
   void kit.rows;
   void kit.name;
   void kit.selectedIndex;
+  if (isInitialLoad) {
+    isInitialLoad = false;
+    if (kit.rows.length > 0) saveKitToCache();
+    return;
+  }
   if (kit.rows.length > 0) {
     saveKitToCache();
     hasUnsavedChanges = true;
@@ -194,11 +211,6 @@ function getOrCreateEngine(): SequencerEngine {
     for (let i = 0; i < kit.rows.length; i++) engine.addRow();
   }
   return engine;
-}
-
-function toggleSequencer() {
-  sequencerOpen = !sequencerOpen;
-  if (sequencerOpen) getOrCreateEngine();
 }
 
 async function seqPlay() {
@@ -254,11 +266,21 @@ function syncEngineRows() {
   }
 }
 
+let synthBufferCache: Map<string, AudioBuffer> | null = null;
+
 async function loadSequencerSamples() {
   if (!engine) return;
+  if (!synthBufferCache) {
+    synthBufferCache = await render808Buffers();
+  }
   for (let i = 0; i < kit.rows.length; i++) {
     const fh = kit.rows[i].fileHandle;
-    if (fh) await engine.loadSample(i, fh);
+    if (fh) {
+      await engine.loadSample(i, fh);
+    } else {
+      const buf = synthBufferCache.get(kit.rows[i].name);
+      if (buf) engine.setBuffer(i, buf);
+    }
   }
 }
 
@@ -846,11 +868,6 @@ function handleKeydown(e: KeyboardEvent) {
     e.preventDefault();
     return;
   }
-  if (e.key === "s" && !e.ctrlKey && !e.metaKey) {
-    toggleSequencer();
-    e.preventDefault();
-    return;
-  }
   if (e.key === "Tab") {
     activePane = activePane === "browser" ? "kit" : "browser";
     e.preventDefault();
@@ -1077,6 +1094,9 @@ function handleKitKey(e: KeyboardEvent) {
       </div>
       <div class="toolbar-right">
         <button class="btn btn-sm btn-secondary" onclick={startNewKit}>New Kit</button>
+        {#if reconnectAvailable && !samplesDir}
+          <button class="btn btn-sm btn-primary" onclick={reconnectSamplesDir}>Use loaded SD card</button>
+        {/if}
         <button class="btn btn-sm btn-secondary" onclick={openSamplesDir}>
           {samplesDir ? "Change Folder" : "Open Folder"}
         </button>
@@ -1085,13 +1105,66 @@ function handleKitKey(e: KeyboardEvent) {
           <input type="file" accept=".xml,.XML" hidden onchange={handleFileInput} />
         </label>
         <button class="btn btn-sm btn-primary" onclick={exportKit}>Export</button>
-        <button
-          class="btn btn-sm {sequencerOpen ? 'btn-seq-active' : 'btn-secondary'}"
-          onclick={toggleSequencer}
-          title="Toggle step sequencer (s)"
-        >Seq</button>
       </div>
     </div>
+
+    <!-- Sequencer panel -->
+      <div class="sequencer-panel">
+        <div class="seq-toolbar">
+          <div class="seq-toolbar-left">
+            <button
+              class="btn btn-sm {sequencerPlaying ? 'btn-playing' : 'btn-primary'}"
+              onclick={seqPlay}
+            >{sequencerPlaying ? "Stop" : "Play"}</button>
+            <label class="seq-bpm-label">
+              <span class="seq-bpm-tag">BPM</span>
+              <input
+                type="number"
+                class="seq-bpm-input"
+                min="40"
+                max="300"
+                value={seqBpm}
+                onchange={(e) => {
+                  const v = parseInt((e.target as HTMLInputElement).value);
+                  if (!isNaN(v)) seqUpdateBpm(v);
+                  (e.target as HTMLInputElement).value = String(seqBpm);
+                }}
+                onclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => e.stopPropagation()}
+              />
+            </label>
+          </div>
+          <div class="seq-toolbar-right">
+            <button class="btn btn-sm btn-secondary" onclick={seqClearAll}>Clear All</button>
+            <button class="btn btn-sm btn-secondary" onclick={() => { loadSequencerSamples(); }}>Load Samples</button>
+          </div>
+        </div>
+        <div class="seq-grid">
+          {#each kit.rows as row, ri}
+            <div class="seq-row">
+              <div class="seq-row-label" title={row.samplePath}>
+                <span class="seq-row-name">{row.name}</span>
+                <button class="seq-row-clear" onclick={() => seqClearRow(ri)} title="Clear row">×</button>
+              </div>
+              {#each { length: NUM_STEPS } as _, si}
+                {@const _v = seqVersion}
+                <button
+                  class="step-cell"
+                  class:step-on={engine?.pattern[ri]?.[si] ?? false}
+                  class:step-active={si === currentStep && sequencerPlaying}
+                  class:step-beat={si % 4 === 0}
+                  aria-label="Step {si + 1} for {row.name}"
+                  aria-pressed={engine?.pattern[ri]?.[si] ?? false}
+                  onclick={() => seqToggleStep(ri, si)}
+                ></button>
+              {/each}
+            </div>
+          {/each}
+          {#if kit.rows.length === 0}
+            <div class="seq-empty">Add rows to the kit to start sequencing.</div>
+          {/if}
+        </div>
+      </div>
 
     <div class="panes">
       <!-- Left: Sample Browser -->
@@ -1283,66 +1356,6 @@ function handleKitKey(e: KeyboardEvent) {
       </div>
     </div>
 
-    <!-- Sequencer panel -->
-    {#if sequencerOpen}
-      <div class="sequencer-panel">
-        <div class="seq-toolbar">
-          <div class="seq-toolbar-left">
-            <button
-              class="btn btn-sm {sequencerPlaying ? 'btn-playing' : 'btn-primary'}"
-              onclick={seqPlay}
-            >{sequencerPlaying ? "Stop" : "Play"}</button>
-            <label class="seq-bpm-label">
-              <span class="seq-bpm-tag">BPM</span>
-              <input
-                type="number"
-                class="seq-bpm-input"
-                min="40"
-                max="300"
-                value={seqBpm}
-                onchange={(e) => {
-                  const v = parseInt((e.target as HTMLInputElement).value);
-                  if (!isNaN(v)) seqUpdateBpm(v);
-                  (e.target as HTMLInputElement).value = String(seqBpm);
-                }}
-                onclick={(e) => e.stopPropagation()}
-                onkeydown={(e) => e.stopPropagation()}
-              />
-            </label>
-          </div>
-          <div class="seq-toolbar-right">
-            <button class="btn btn-sm btn-secondary" onclick={seqClearAll}>Clear All</button>
-            <button class="btn btn-sm btn-secondary" onclick={() => { loadSequencerSamples(); }}>Load Samples</button>
-          </div>
-        </div>
-        <div class="seq-grid">
-          {#each kit.rows as row, ri}
-            <div class="seq-row">
-              <div class="seq-row-label" title={row.samplePath}>
-                <span class="seq-row-name">{row.name}</span>
-                <button class="seq-row-clear" onclick={() => seqClearRow(ri)} title="Clear row">×</button>
-              </div>
-              {#each { length: NUM_STEPS } as _, si}
-                {@const _v = seqVersion}
-                <button
-                  class="step-cell"
-                  class:step-on={engine?.pattern[ri]?.[si] ?? false}
-                  class:step-active={si === currentStep && sequencerPlaying}
-                  class:step-beat={si % 4 === 0}
-                  aria-label="Step {si + 1} for {row.name}"
-                  aria-pressed={engine?.pattern[ri]?.[si] ?? false}
-                  onclick={() => seqToggleStep(ri, si)}
-                ></button>
-              {/each}
-            </div>
-          {/each}
-          {#if kit.rows.length === 0}
-            <div class="seq-empty">Add rows to the kit to start sequencing.</div>
-          {/if}
-        </div>
-      </div>
-    {/if}
-
     <!-- Status bar -->
     <div class="statusbar">
       <span class="status-pane">{activePane === "browser" ? "BROWSER" : "KIT"}</span>
@@ -1352,10 +1365,8 @@ function handleKitKey(e: KeyboardEvent) {
       {#if playingAudio}
         <span class="status-playing">▶ playing</span>
       {/if}
-      {#if sequencerOpen}
-        <span class="status-seq">{sequencerPlaying ? `▶ ${seqBpm}bpm` : "SEQ"}</span>
-      {/if}
-      <span class="status-hint">Tab to switch · s seq · ? for help</span>
+      <span class="status-seq">{sequencerPlaying ? `▶ ${seqBpm}bpm` : "SEQ"}</span>
+      <span class="status-hint">Tab to switch · ? for help</span>
     </div>
   {/if}
 
@@ -1433,20 +1444,11 @@ function handleKitKey(e: KeyboardEvent) {
             <h4>Global</h4>
             <dl>
               <dt><kbd>Tab</kbd></dt><dd>Switch pane</dd>
-              <dt><kbd>s</kbd></dt><dd>Toggle sequencer</dd>
               <dt><kbd>u</kbd></dt><dd>Undo</dd>
               <dt><kbd>?</kbd></dt><dd>This help</dd>
               <dt><kbd>Esc</kbd></dt><dd>Close / clear</dd>
             </dl>
           </div>
-          {#if sequencerOpen}
-            <div class="help-section">
-              <h4>Sequencer</h4>
-              <dl>
-                <dt><kbd>s</kbd></dt><dd>Toggle panel</dd>
-              </dl>
-            </div>
-          {/if}
         </div>
       </div>
     </div>
@@ -2008,11 +2010,6 @@ function handleKitKey(e: KeyboardEvent) {
     border-color: var(--teal);
   }
   .btn-playing:hover { opacity: 0.9; }
-  .btn-seq-active {
-    background: var(--teal);
-    color: var(--ground);
-    border-color: var(--teal);
-  }
   .seq-bpm-label {
     display: flex;
     align-items: center;

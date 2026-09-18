@@ -106,6 +106,12 @@ export class SequencerEngine {
     return this._pattern.map((row) => [...row]);
   }
 
+  setBuffer(rowIndex: number, buffer: AudioBuffer): void {
+    if (rowIndex >= 0 && rowIndex < this.sampleBuffers.length) {
+      this.sampleBuffers[rowIndex] = buffer;
+    }
+  }
+
   async loadSample(
     rowIndex: number,
     handle: FileSystemFileHandle,
