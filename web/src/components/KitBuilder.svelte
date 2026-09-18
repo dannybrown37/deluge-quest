@@ -1881,13 +1881,13 @@
   .seq-row:hover .seq-row-clear { opacity: 1; }
   .seq-row-clear:hover { color: var(--accent); }
   .step-cell {
-    width: 28px;
+    flex: 1 1 0;
+    min-width: 24px;
     height: 24px;
     border: 1px solid var(--border);
     border-radius: 3px;
     background: var(--ground);
     cursor: pointer;
-    flex-shrink: 0;
     transition: background 0.08s, border-color 0.08s;
     padding: 0;
   }
@@ -1921,7 +1921,7 @@
     .help-grid { grid-template-columns: 1fr; }
     .toolbar { flex-direction: column; align-items: stretch; }
     .toolbar-right { justify-content: flex-end; }
-    .step-cell { width: 24px; height: 22px; }
+    .step-cell { min-width: 20px; height: 22px; }
     .seq-row-label { width: 60px; }
     .seq-toolbar { flex-direction: column; align-items: stretch; }
   }
