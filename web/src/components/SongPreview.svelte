@@ -11,7 +11,7 @@ import { type EQBand, SongPlayer } from "../lib/songAudio";
 
 type State = "idle" | "loading" | "processing" | "done" | "error";
 
-let state: State = $state("idle");
+let status: State = $state("idle");
 let progress = $state("");
 let progressPct = $state(0);
 let errorMsg = $state("");
@@ -339,7 +339,7 @@ let layout = $derived.by(() => {
 
 async function inspect(name: string, xmlContent: string) {
   fileName = name;
-  state = "loading";
+  status = "loading";
 
   try {
     const pyodide = await loadPyodide((stage, pct) => {
@@ -347,14 +347,14 @@ async function inspect(name: string, xmlContent: string) {
       progressPct = pct;
     });
 
-    state = "processing";
+    status = "processing";
     progress = "Parsing song";
     progressPct = 85;
 
     const result = await inspectSong(xmlContent, pyodide);
 
     if (result.tracks.length === 0) {
-      state = "error";
+      status = "error";
       errorMsg = "No tracks found. This song has no clips or arrangement data.";
       return;
     }
@@ -362,11 +362,11 @@ async function inspect(name: string, xmlContent: string) {
     data = result;
     trackVolumes = result.tracks.map(() => 1);
     trackMuted = result.tracks.map(() => false);
-    state = "done";
+    status = "done";
     progressPct = 100;
     trackToolAction("preview", "inspect");
   } catch (e: any) {
-    state = "error";
+    status = "error";
     errorMsg = e.message || "Failed to parse song";
     trackToolAction("preview", "inspect_error");
   }
@@ -374,7 +374,7 @@ async function inspect(name: string, xmlContent: string) {
 
 async function handleFile(file: File) {
   if (!file.name.toLowerCase().endsWith(".xml")) {
-    state = "error";
+    status = "error";
     errorMsg = "Please drop a Deluge .XML song file";
     return;
   }
@@ -548,14 +548,14 @@ function reset() {
   player = null;
   playState = "stopped";
   playheadTick = 0;
-  state = "idle";
+  status = "idle";
   data = null;
   fileName = "";
   errorMsg = "";
 }
 </script>
 
-{#if state === "idle"}
+{#if status === "idle"}
   {#if statsCount > 0}
     <a class="resume-banner" href="/stats">
       <span>{statsCount} song{statsCount === 1 ? "" : "s"} loaded in Song Stats</span>
@@ -602,7 +602,7 @@ function reset() {
     </div>
   </div>
 
-{:else if state === "loading" || state === "processing"}
+{:else if status === "loading" || status === "processing"}
   <div class="status-card">
     <div class="status-pipeline">
       <div class="pipeline-step" class:pipeline-step--active={progressPct < 40}>
@@ -628,7 +628,7 @@ function reset() {
     <p class="status-file">{fileName}</p>
   </div>
 
-{:else if state === "done" && data && layout}
+{:else if status === "done" && data && layout}
   <div class="preview-panel">
     <div class="preview-panel-header">
       <div class="meta">
@@ -922,7 +922,7 @@ function reset() {
     </div>
   {/if}
 
-{:else if state === "error"}
+{:else if status === "error"}
   <div class="error-card">
     <p class="error-msg">{errorMsg}</p>
     <button class="btn btn-secondary" onclick={reset}>Try again</button>

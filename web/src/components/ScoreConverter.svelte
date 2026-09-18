@@ -5,7 +5,7 @@ import { convertToMusicXML, loadPyodide } from "../lib/pyodide";
 
 type State = "idle" | "loading" | "processing" | "done" | "error";
 
-let state: State = $state("idle");
+let status: State = $state("idle");
 let progress = $state("");
 let progressPct = $state(0);
 let errorMsg = $state("");
@@ -72,7 +72,7 @@ tryLoadCardSongs();
 
 async function convert(name: string, xmlContent: string) {
   fileName = name;
-  state = "loading";
+  status = "loading";
 
   try {
     const pyodide = await loadPyodide((stage, pct) => {
@@ -80,18 +80,18 @@ async function convert(name: string, xmlContent: string) {
       progressPct = pct;
     });
 
-    state = "processing";
+    status = "processing";
     progress = "Converting";
     progressPct = 85;
 
     resultXml = await convertToMusicXML(xmlContent, pyodide);
 
-    state = "done";
+    status = "done";
     progress = "Done";
     progressPct = 100;
     trackToolAction("score", "convert");
   } catch (e: any) {
-    state = "error";
+    status = "error";
     errorMsg = e.message || "Conversion failed";
     trackToolAction("score", "convert_error");
   }
@@ -99,7 +99,7 @@ async function convert(name: string, xmlContent: string) {
 
 async function handleFile(file: File) {
   if (!file.name.toLowerCase().endsWith(".xml")) {
-    state = "error";
+    status = "error";
     errorMsg = "Please drop a Deluge .XML song file";
     return;
   }
@@ -159,14 +159,14 @@ function download() {
 }
 
 function reset() {
-  state = "idle";
+  status = "idle";
   resultXml = "";
   fileName = "";
   errorMsg = "";
 }
 </script>
 
-{#if state === "idle"}
+{#if status === "idle"}
   {#if statsCount > 0}
     <a class="resume-banner" href="/stats">
       <span>{statsCount} song{statsCount === 1 ? "" : "s"} loaded in Song Stats</span>
@@ -242,7 +242,7 @@ function reset() {
     </div>
   </div>
 
-{:else if state === "loading" || state === "processing"}
+{:else if status === "loading" || status === "processing"}
   <div class="status-card">
     <div class="status-pipeline">
       <div class="pipeline-step" class:pipeline-step--active={progressPct < 40}>
@@ -268,7 +268,7 @@ function reset() {
     <p class="status-file">{fileName}</p>
   </div>
 
-{:else if state === "done"}
+{:else if status === "done"}
   <div class="result-card">
     <div class="result-header">
       <span class="result-icon">✓</span>
@@ -281,7 +281,7 @@ function reset() {
     </div>
   </div>
 
-{:else if state === "error"}
+{:else if status === "error"}
   <div class="error-card">
     <p class="error-msg">{errorMsg}</p>
     <button class="btn btn-secondary" onclick={reset}>Try again</button>

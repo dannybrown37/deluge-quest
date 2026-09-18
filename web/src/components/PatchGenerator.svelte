@@ -80,7 +80,7 @@ const ARP_MODES = ["off", "up", "down", "upDown", "random"];
 const POLY_MODES = ["poly", "mono", "legato", "choke"];
 
 let selectedCategory: Category = $state("lead");
-let patch: Patch | null = $state(null);
+let patch = $state<Patch | null>(null);
 let history: Patch[] = $state([]);
 let bulkCount: number = $state(10);
 
@@ -720,7 +720,7 @@ function bulkDownload() {
   if (files.length > 0) patch = files[0] ? history[0] : patch;
 
   const zip = buildZip(files);
-  const blob = new Blob([zip], { type: "application/zip" });
+  const blob = new Blob([zip as BlobPart], { type: "application/zip" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

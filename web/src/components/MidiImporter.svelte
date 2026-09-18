@@ -4,7 +4,7 @@ import { convertMidiToDelugeXml, loadPyodide } from "../lib/pyodide";
 
 type State = "idle" | "loading" | "processing" | "done" | "error";
 
-let state: State = $state("idle");
+let status: State = $state("idle");
 let progress = $state("");
 let progressPct = $state(0);
 let errorMsg = $state("");
@@ -14,7 +14,7 @@ let dragOver = $state(false);
 
 async function convert(name: string, bytes: ArrayBuffer) {
   fileName = name;
-  state = "loading";
+  status = "loading";
 
   try {
     const pyodide = await loadPyodide((stage, pct) => {
@@ -22,7 +22,7 @@ async function convert(name: string, bytes: ArrayBuffer) {
       progressPct = pct;
     });
 
-    state = "processing";
+    status = "processing";
     progress = "Installing mido";
     progressPct = 80;
 
@@ -31,12 +31,12 @@ async function convert(name: string, bytes: ArrayBuffer) {
     progress = "Converting";
     progressPct = 90;
 
-    state = "done";
+    status = "done";
     progress = "Done";
     progressPct = 100;
     trackToolAction("import", "convert");
   } catch (e: any) {
-    state = "error";
+    status = "error";
     errorMsg = e.message || "Conversion failed";
     trackToolAction("import", "convert_error");
   }
@@ -44,7 +44,7 @@ async function convert(name: string, bytes: ArrayBuffer) {
 
 async function handleFile(file: File) {
   if (!file.name.toLowerCase().match(/\.midi?$/)) {
-    state = "error";
+    status = "error";
     errorMsg = "Please drop a .mid or .midi file";
     return;
   }
@@ -85,14 +85,14 @@ function download() {
 }
 
 function reset() {
-  state = "idle";
+  status = "idle";
   resultXml = "";
   fileName = "";
   errorMsg = "";
 }
 </script>
 
-{#if state === "idle"}
+{#if status === "idle"}
   <div
     class="dropzone"
     class:dropzone--over={dragOver}
@@ -111,7 +111,7 @@ function reset() {
     </div>
   </div>
 
-{:else if state === "loading" || state === "processing"}
+{:else if status === "loading" || status === "processing"}
   <div class="status-card">
     <div class="status-pipeline">
       <div class="pipeline-step" class:pipeline-step--active={progressPct < 40}>
@@ -141,7 +141,7 @@ function reset() {
     <p class="status-file">{fileName}</p>
   </div>
 
-{:else if state === "done"}
+{:else if status === "done"}
   <div class="result-card">
     <div class="result-header">
       <span class="result-icon">✓</span>
@@ -154,7 +154,7 @@ function reset() {
     </div>
   </div>
 
-{:else if state === "error"}
+{:else if status === "error"}
   <div class="error-card">
     <p class="error-msg">{errorMsg}</p>
     <button class="btn btn-secondary" onclick={reset}>Try again</button>

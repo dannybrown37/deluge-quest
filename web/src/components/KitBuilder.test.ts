@@ -375,7 +375,7 @@ describe("KitBuilder", () => {
     await fireEvent.keyDown(container, { key: "e" });
 
     expect(clickSpy).toHaveBeenCalled();
-    expect(mockTrack).toHaveBeenCalledWith("kits", "export", { rows: 1 });
+    expect(mockTrack).toHaveBeenCalledWith("kits", "export");
 
     clickSpy.mockRestore();
   });

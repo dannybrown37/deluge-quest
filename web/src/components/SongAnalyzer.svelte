@@ -22,7 +22,7 @@ interface DroppedFile {
 
 type State = "idle" | "indexing" | "loading" | "processing" | "done" | "error";
 
-let state: State = $state("idle");
+let status: State = $state("idle");
 let progress = $state("");
 let progressPct = $state(0);
 let errorMsg = $state("");
@@ -320,7 +320,7 @@ async function restoreFromSession(): Promise<boolean> {
     if (!cached?.length) return false;
     results = cached;
     fileCount = results.length;
-    state = "done";
+    status = "done";
   } catch {
     return false;
   }
@@ -506,7 +506,7 @@ function filterToSongsDir(entries: DroppedFile[]): DroppedFile[] {
 }
 
 async function openFolderWithAccess() {
-  state = "indexing";
+  status = "indexing";
   progress = "Indexing card";
   progressPct = 0;
   try {
@@ -516,7 +516,7 @@ async function openFolderWithAccess() {
     });
 
     if (cardStore.songXmls.size === 0) {
-      state = "error";
+      status = "error";
       errorMsg =
         "Not a Deluge SD card: no SONGS directory found. Select the SD card root folder so deleted songs land in SOFT_DELETE/SONGS/... at the root.";
       return;
@@ -526,7 +526,7 @@ async function openFolderWithAccess() {
     await processFromCardStore();
   } catch (e: any) {
     if (e?.name !== "AbortError") {
-      state = "error";
+      status = "error";
       errorMsg = e.message || "Failed to open folder";
     }
   }
@@ -535,7 +535,7 @@ async function openFolderWithAccess() {
 async function processFromCardStore() {
   const entries = [...cardStore.songXmls.entries()];
   fileCount = entries.length;
-  state = "loading";
+  status = "loading";
 
   try {
     const pyodide = await loadPyodide((stage, pct) => {
@@ -543,7 +543,7 @@ async function processFromCardStore() {
       progressPct = pct;
     });
 
-    state = "processing";
+    status = "processing";
     progress = `Analyzing ${entries.length} file${entries.length > 1 ? "s" : ""}`;
     progressPct = 85;
 
@@ -561,12 +561,12 @@ async function processFromCardStore() {
         lastModified: p ? cardStore.songLastModified.get(p) : undefined,
       };
     });
-    state = "done";
+    status = "done";
     progressPct = 100;
     saveToSession();
     trackToolAction("stats", "analyze_card");
   } catch (e: any) {
-    state = "error";
+    status = "error";
     errorMsg = e.message || "Analysis failed";
     trackToolAction("stats", "analyze_error");
   }
@@ -610,14 +610,14 @@ async function deleteSong(filename: string) {
 
 async function processFiles(entries: DroppedFile[]) {
   if (entries.length === 0) {
-    state = "error";
+    status = "error";
     errorMsg =
       "No .XML files found. Drop your Deluge SD card, or its SONGS folder.";
     return;
   }
 
   fileCount = entries.length;
-  state = "loading";
+  status = "loading";
 
   try {
     const pyodide = await loadPyodide((stage, pct) => {
@@ -625,7 +625,7 @@ async function processFiles(entries: DroppedFile[]) {
       progressPct = pct;
     });
 
-    state = "processing";
+    status = "processing";
     progress = `Analyzing ${entries.length} file${entries.length > 1 ? "s" : ""}`;
     progressPct = 85;
 
@@ -649,7 +649,7 @@ async function processFiles(entries: DroppedFile[]) {
       path: pathByName.get(s.filename),
       lastModified: timestamps.get(s.filename),
     }));
-    state = "done";
+    status = "done";
     progressPct = 100;
     saveToSession();
     trackToolAction("stats", "analyze_drop");
@@ -661,7 +661,7 @@ async function processFiles(entries: DroppedFile[]) {
       })),
     );
   } catch (e: any) {
-    state = "error";
+    status = "error";
     errorMsg = e.message || "Analysis failed";
   }
 }
@@ -683,7 +683,7 @@ async function tryAdoptDroppedDirectoryHandle(
     await (handle as any).requestPermission?.({ mode: "readwrite" });
   } catch {}
 
-  state = "indexing";
+  status = "indexing";
   progress = "Indexing card";
   progressPct = 0;
   try {
@@ -695,7 +695,7 @@ async function tryAdoptDroppedDirectoryHandle(
       },
     );
     if (cardStore.songXmls.size === 0) {
-      state = "error";
+      status = "error";
       errorMsg =
         "Not a Deluge SD card: no SONGS directory found. Drop the SD card root folder.";
       return true;
@@ -703,7 +703,7 @@ async function tryAdoptDroppedDirectoryHandle(
     adoptCardStore();
     await processFromCardStore();
   } catch (e: any) {
-    state = "error";
+    status = "error";
     errorMsg = e.message || "Failed to read dropped folder";
   }
   return true;
@@ -843,7 +843,7 @@ function openInPreview(filename: string) {
 }
 
 function reset() {
-  state = "idle";
+  status = "idle";
   results = [];
   errorMsg = "";
   fileCount = 0;
@@ -861,7 +861,7 @@ function reset() {
 }
 </script>
 
-{#if state === "idle"}
+{#if status === "idle"}
   <div
     class="dropzone"
     class:dropzone--over={dragOver}
@@ -888,7 +888,7 @@ function reset() {
     </div>
   </div>
 
-{:else if state === "indexing"}
+{:else if status === "indexing"}
   <div class="status-card">
     <div class="status-pipeline">
       <div class="pipeline-step pipeline-step--active">
@@ -901,7 +901,7 @@ function reset() {
     </div>
   </div>
 
-{:else if state === "loading" || state === "processing"}
+{:else if status === "loading" || status === "processing"}
   <div class="status-card">
     <div class="status-pipeline">
       <div class="pipeline-step" class:pipeline-step--active={progressPct < 40}>
@@ -926,7 +926,7 @@ function reset() {
     </div>
   </div>
 
-{:else if state === "done"}
+{:else if status === "done"}
   <div class="results">
     <!-- Filters -->
     <div class="filters">
@@ -1244,7 +1244,7 @@ function reset() {
     {/if}
   </div>
 
-{:else if state === "error"}
+{:else if status === "error"}
   <div class="error-card">
     <p class="error-msg">{errorMsg}</p>
     <button class="btn btn-secondary" onclick={reset}>Try again</button>

@@ -57,9 +57,9 @@ function isAppManagedPath(relPath: string): boolean {
   return APP_MANAGED_DIRS.has(relPath.toUpperCase().split("/")[0]);
 }
 
-let state: State = $state("idle");
+let status: State = $state("idle");
 let errorMsg = $state("");
-let report: CardReport | null = $state(null);
+let report = $state<CardReport | null>(null);
 let dragOver = $state(false);
 let cardName = $state("");
 let listCategory = $state<"samples" | "songs" | "analysis">("samples");
@@ -222,7 +222,7 @@ function extractPresetRefs(xmlText: string): Set<string> {
 }
 
 async function scanFromHandle() {
-  state = "indexing";
+  status = "indexing";
   progress = "Indexing card";
   progressPct = 0;
   await cardStore.pickDirectory((stage, done, total) => {
@@ -233,7 +233,7 @@ async function scanFromHandle() {
 }
 
 async function reconnectFromCardStore() {
-  state = "indexing";
+  status = "indexing";
   progress = "Reconnecting";
   progressPct = 0;
   const ok = await cardStore.requestReconnect((stage, done, total) => {
@@ -243,11 +243,11 @@ async function reconnectFromCardStore() {
   if (ok) {
     await runScanFromCardStore();
   } else {
-    state = "idle";
+    status = "idle";
   }
 }
 
-/** Clears all move/fix tracking state — must run at the start of every fresh scan, not just
+/** Clears all move/fix tracking status — must run at the start of every fresh scan, not just
  * full reset(), or stale entries from a prior run can silently no-op legitimate actions. */
 function resetActionState() {
   movedFiles = new Set();
@@ -266,13 +266,13 @@ async function runScanFromCardStore() {
   cardName = rootHandle?.name ?? "";
 
   if (cardStore.sampleIndex.size === 0) {
-    state = "error";
+    status = "error";
     errorMsg =
       "Not a Deluge SD card: no SAMPLES directory found. Select the SD card root folder.";
     return;
   }
 
-  state = "processing";
+  status = "processing";
   progress = "Scanning XML references...";
   await new Promise((r) => setTimeout(r, 0));
 
@@ -305,7 +305,7 @@ async function runScanFromCardStore() {
 async function scanCard(files: File[]) {
   canWrite = false;
   rootHandle = null;
-  state = "processing";
+  status = "processing";
   progress = "Indexing files...";
 
   await new Promise((r) => setTimeout(r, 0));
@@ -331,7 +331,7 @@ async function scanCard(files: File[]) {
     return rel.toUpperCase().startsWith("SAMPLES/");
   });
   if (!hasSamples) {
-    state = "error";
+    status = "error";
     errorMsg =
       "Not a Deluge SD card: no SAMPLES directory found. Select the SD card root folder.";
     return;
@@ -562,7 +562,7 @@ async function computeReport(
     songsByType,
     invalidXml,
   };
-  state = "done";
+  status = "done";
   saveToSession();
   trackToolAction("manage", "scan");
 }
@@ -729,17 +729,6 @@ async function sortAllSongs() {
   trackToolAction("manage", "sort_songs");
 }
 
-let filteredSongsForMove = $derived([
-  ...filteredDelugeOnlySongs,
-  ...filteredExternalSongs,
-]);
-
-let defaultMoveToFolderName = $derived.by(() => {
-  if (filterSongChannels.size !== 1) return "";
-  const ch = [...filterSongChannels][0];
-  return sanitizeFolderName(formatChannel(ch, songChannelLabels));
-});
-
 async function moveFilteredSongsToFolder() {
   const folderName = sanitizeFolderName(moveToFolderName);
   if (!rootHandle || !folderName || filteredSongsForMove.length === 0) return;
@@ -871,7 +860,7 @@ async function openDirectoryPicker() {
     await scanFromHandle();
   } catch (e: any) {
     if (e.name !== "AbortError") {
-      state = "error";
+      status = "error";
       errorMsg = e.message || "Failed to open directory";
     }
   }
@@ -1008,7 +997,7 @@ function restoreFromSession(): boolean {
       const fwRaw = sessionStorage.getItem(CACHE_KEY_FIRMWARE);
       if (fwRaw) songFirmwareVersions = new Map(JSON.parse(fwRaw));
     } catch {}
-    state = "done";
+    status = "done";
     return true;
   } catch {
     return false;
@@ -1039,7 +1028,7 @@ function reset() {
     currentAudio = null;
     playingFile = null;
   }
-  state = "idle";
+  status = "idle";
   report = null;
   errorMsg = "";
   cardName = "";
@@ -1078,6 +1067,17 @@ let filteredExternalSongs = $derived(
     ...(report?.songsByType.externalOnly ?? []),
   ]).sort(),
 );
+
+let filteredSongsForMove = $derived([
+  ...filteredDelugeOnlySongs,
+  ...filteredExternalSongs,
+]);
+
+let defaultMoveToFolderName = $derived.by(() => {
+  if (filterSongChannels.size !== 1) return "";
+  const ch = [...filterSongChannels][0];
+  return sanitizeFolderName(formatChannel(ch, songChannelLabels));
+});
 
 let allSongMidiChannels = $derived.by(() => {
   const chs = new Set<number>();
@@ -1253,7 +1253,7 @@ let sampleTree = $derived(
     filteredSamplePaths,
     refSources,
     unusedSet,
-    new Set(),
+    new Set<string>(),
     allSampleSizes,
   ),
 );
@@ -1353,7 +1353,7 @@ async function playSample(samplePath: string) {
 }
 </script>
 
-{#if state === "idle"}
+{#if status === "idle"}
   <div
     class="dropzone"
     class:dropzone--over={dragOver}
@@ -1396,7 +1396,7 @@ async function playSample(samplePath: string) {
     </div>
   </div>
 
-{:else if state === "indexing"}
+{:else if status === "indexing"}
   <div class="status-card">
     <div class="status-msg">{progress}</div>
     <div class="progress-bar">
@@ -1404,7 +1404,7 @@ async function playSample(samplePath: string) {
     </div>
   </div>
 
-{:else if state === "processing"}
+{:else if status === "processing"}
   <div class="status-card">
     <div class="status-msg">{progress}</div>
     <div class="progress-bar">
@@ -1412,7 +1412,7 @@ async function playSample(samplePath: string) {
     </div>
   </div>
 
-{:else if state === "done" && report}
+{:else if status === "done" && report}
   <div class="results">
     <div class="summary-card">
       <h2 class="summary-title">{cardName || "Deluge SD Card"}</h2>
@@ -1954,7 +1954,7 @@ async function playSample(samplePath: string) {
     </div>
   </div>
 
-{:else if state === "error"}
+{:else if status === "error"}
   <div class="error-card">
     <p class="error-msg">{errorMsg}</p>
     <button class="btn btn-secondary" onclick={reset}>Try again</button>
