@@ -278,12 +278,12 @@ describe("CardScanner", () => {
     expect(screen.getByText("song1")).toBeTruthy();
   });
 
-  it("shows unused samples and duplicates on the analysis tab", async () => {
+  it("shows unused samples and a find-duplicates button on the analysis tab", async () => {
     await scanAndWait();
     await fireEvent.click(screen.getByText("Analysis"));
 
     expect(screen.getByText(/Unused samples/)).toBeTruthy();
-    expect(screen.getByText(/Duplicate samples/)).toBeTruthy();
+    expect(screen.getByText("Find duplicate samples")).toBeTruthy();
   });
 
   it("deletes an unused sample from the analysis tab", async () => {
@@ -539,11 +539,15 @@ describe("CardScanner", () => {
     errSpy.mockRestore();
   });
 
-  it("shows duplicate sample groups on the analysis tab", async () => {
+  it("shows duplicate sample groups after clicking find duplicates", async () => {
     await scanAndWait();
     await fireEvent.click(screen.getByText("Analysis"));
+    await fireEvent.click(screen.getByText("Find duplicate samples"));
 
-    expect(screen.getByText(/Duplicate samples/)).toBeTruthy();
+    await waitFor(
+      () => expect(screen.getByText(/Duplicate samples/)).toBeTruthy(),
+      { timeout: 3000 },
+    );
     expect(screen.getAllByText("dup1.wav").length).toBeGreaterThan(0);
     expect(screen.getAllByText("dup2.wav").length).toBeGreaterThan(0);
   });
@@ -654,7 +658,7 @@ describe("CardScanner", () => {
     expect(screen.getAllByText("fixed").length).toBe(2);
   });
 
-  it('shows "no issues found" when the report has nothing to flag', async () => {
+  it('shows "no issues found" after scanning duplicates with nothing flagged', async () => {
     mockCardStore.sampleIndex = new Map();
     mockCardStore.sampleIndex.set(
       "samples/kick.wav",
@@ -675,7 +679,11 @@ describe("CardScanner", () => {
     );
 
     await fireEvent.click(screen.getByText("Analysis"));
-    expect(screen.getByText("No issues found.")).toBeTruthy();
+    await fireEvent.click(screen.getByText("Find duplicate samples"));
+    await waitFor(
+      () => expect(screen.getByText("No issues found.")).toBeTruthy(),
+      { timeout: 3000 },
+    );
   });
 
   it("stops a currently playing sample when clicked again", async () => {

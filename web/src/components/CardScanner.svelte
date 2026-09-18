@@ -88,6 +88,8 @@ let customSongFolders = $state<string[]>(loadCustomSongFolders());
 let showMoveToFolderPanel = $state(false);
 let moveToFolderName = $state("");
 let movingToFolder = $state(false);
+let dupStatus = $state<"idle" | "scanning" | "done">("idle");
+let dupProgress = $state("");
 
 let refSources = $state(new Map<string, Set<string>>());
 let allSamplePaths = $state<string[]>([]);
@@ -483,61 +485,6 @@ async function computeReport(
   }
   unusedPresets.sort();
 
-  progress = "Finding duplicates (grouping by size)...";
-  await new Promise((r) => setTimeout(r, 0));
-
-  const sizeGroups = new Map<number, string[]>();
-  for (const [path, size] of allSamples) {
-    const group = sizeGroups.get(size);
-    if (group) group.push(path);
-    else sizeGroups.set(size, [path]);
-  }
-
-  const candidatePaths: string[] = [];
-  for (const [size, paths] of sizeGroups) {
-    if (paths.length < 2 || size === 0) continue;
-    candidatePaths.push(...paths);
-  }
-
-  const hashGroups = new Map<string, { size: number; files: string[] }>();
-  let hashDone = 0;
-  const totalToHash = candidatePaths.length;
-
-  for (const path of candidatePaths) {
-    const file = await getSampleFile(path);
-    const buf = await file.arrayBuffer();
-    const hashBuf = await crypto.subtle.digest("SHA-256", buf);
-    const hashArr = new Uint8Array(hashBuf);
-    const hash = Array.from(hashArr, (b) =>
-      b.toString(16).padStart(2, "0"),
-    ).join("");
-
-    const existing = hashGroups.get(hash);
-    if (existing) {
-      existing.files.push(path);
-    } else {
-      hashGroups.set(hash, { size: file.size, files: [path] });
-    }
-
-    hashDone++;
-    if (hashDone % 50 === 0) {
-      progress = `Finding duplicates (hashing ${hashDone}/${totalToHash})...`;
-      await new Promise((r) => setTimeout(r, 0));
-    }
-  }
-
-  const duplicates: DuplicateGroup[] = [];
-  let duplicateWastedBytes = 0;
-  for (const [hash, { size, files }] of hashGroups) {
-    if (files.length < 2) continue;
-    files.sort();
-    duplicates.push({ hash, size, files });
-    duplicateWastedBytes += size * (files.length - 1);
-  }
-  duplicates.sort(
-    (a, b) => b.size * (b.files.length - 1) - a.size * (a.files.length - 1),
-  );
-
   songsByType.delugeOnly.sort();
   songsByType.mixed.sort();
   songsByType.externalOnly.sort();
@@ -557,14 +504,89 @@ async function computeReport(
     missingReferences: missing,
     unusedPresets,
     reclaimableBytes: reclaimable,
-    duplicates,
-    duplicateWastedBytes,
+    duplicates: [],
+    duplicateWastedBytes: 0,
     songsByType,
     invalidXml,
   };
+  dupStatus = "idle";
+  dupProgress = "";
   status = "done";
   saveToSession();
   trackToolAction("manage", "scan");
+}
+
+const HASH_BATCH_SIZE = 12;
+
+async function findDuplicates() {
+  if (!report || dupStatus === "scanning") return;
+  dupStatus = "scanning";
+  dupProgress = "Grouping by size...";
+  await new Promise((r) => setTimeout(r, 0));
+
+  const sizeGroups = new Map<number, string[]>();
+  for (const [path, size] of allSampleSizes) {
+    const group = sizeGroups.get(size);
+    if (group) group.push(path);
+    else sizeGroups.set(size, [path]);
+  }
+
+  const candidatePaths: string[] = [];
+  for (const [size, paths] of sizeGroups) {
+    if (paths.length < 2 || size === 0) continue;
+    candidatePaths.push(...paths);
+  }
+
+  const hashGroups = new Map<string, { size: number; files: string[] }>();
+  let hashDone = 0;
+  const totalToHash = candidatePaths.length;
+
+  async function hashOne(path: string) {
+    const info = cardStore.sampleIndex.get(path.toLowerCase());
+    const file = info
+      ? await info.handle.getFile()
+      : fileHandles.get(path);
+    if (!file) return;
+    const buf = await (file instanceof File ? file : file).arrayBuffer();
+    const hashBuf = await crypto.subtle.digest("SHA-256", buf);
+    const hash = Array.from(new Uint8Array(hashBuf), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+
+    const existing = hashGroups.get(hash);
+    if (existing) {
+      existing.files.push(path);
+    } else {
+      hashGroups.set(hash, { size: file.size, files: [path] });
+    }
+    hashDone++;
+  }
+
+  for (let i = 0; i < candidatePaths.length; i += HASH_BATCH_SIZE) {
+    const batch = candidatePaths.slice(i, i + HASH_BATCH_SIZE);
+    await Promise.all(batch.map(hashOne));
+    if (hashDone % 48 === 0 || i + HASH_BATCH_SIZE >= candidatePaths.length) {
+      dupProgress = `Hashing ${hashDone}/${totalToHash}...`;
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  const duplicates: DuplicateGroup[] = [];
+  let duplicateWastedBytes = 0;
+  for (const [hash, { size, files }] of hashGroups) {
+    if (files.length < 2) continue;
+    files.sort();
+    duplicates.push({ hash, size, files });
+    duplicateWastedBytes += size * (files.length - 1);
+  }
+  duplicates.sort(
+    (a, b) => b.size * (b.files.length - 1) - a.size * (a.files.length - 1),
+  );
+
+  report = { ...report!, duplicates, duplicateWastedBytes };
+  dupStatus = "done";
+  dupProgress = "";
+  saveToSession();
 }
 
 async function moveSample(samplePath: string) {
@@ -990,6 +1012,7 @@ function restoreFromSession(): boolean {
     cached.songsByType ??= { delugeOnly: [], mixed: [], externalOnly: [] };
     cached.invalidXml ??= [];
     report = cached;
+    dupStatus = cached.duplicates?.length > 0 ? "done" : "idle";
     cardName = sessionStorage.getItem(CACHE_KEY_NAME) ?? "";
     try {
       const chRaw = sessionStorage.getItem(CACHE_KEY_MIDI_CHS);
@@ -1858,8 +1881,14 @@ async function playSample(samplePath: string) {
             </div>
           {/if}
 
-          {#if report.duplicates.length > 0}
-            <div class="analysis-section">
+          <div class="analysis-section">
+            {#if dupStatus === "idle"}
+              <button class="btn btn-secondary" onclick={findDuplicates}>Find duplicate samples</button>
+              <p class="list-subtext">Hashes samples that share a file size to find exact duplicates. Can take a while on large cards.</p>
+            {:else if dupStatus === "scanning"}
+              <h4 class="list-heading">Finding duplicates...</h4>
+              <p class="list-subtext">{dupProgress}</p>
+            {:else if report.duplicates.length > 0}
               <h4 class="list-heading">Duplicate samples ({report.duplicates.length} groups, {formatBytes(report.duplicateWastedBytes)} wasted)</h4>
               <div class="dup-list">
                 {#each report.duplicates as group, i}
@@ -1883,8 +1912,10 @@ async function playSample(samplePath: string) {
                   </div>
                 {/each}
               </div>
-            </div>
-          {/if}
+            {:else}
+              <p class="list-subtext">No duplicate samples found.</p>
+            {/if}
+          </div>
 
           {#if report.invalidXml.length > 0}
             <div class="analysis-section">
@@ -1945,7 +1976,7 @@ async function playSample(samplePath: string) {
             </div>
           {/if}
 
-          {#if report.unusedSamples.length === 0 && report.unusedPresets.length === 0 && report.duplicates.length === 0 && report.invalidXml.length === 0 && report.missingReferences.length === 0}
+          {#if report.unusedSamples.length === 0 && report.unusedPresets.length === 0 && dupStatus === "done" && report.duplicates.length === 0 && report.invalidXml.length === 0 && report.missingReferences.length === 0}
             <p class="list-empty">No issues found.</p>
           {/if}
         </div>
