@@ -1,5 +1,5 @@
 <script lang="ts">
-import { tick } from "svelte";
+import { onDestroy, tick } from "svelte";
 import { trackToolAction } from "../lib/analytics";
 import { cardStore } from "../lib/cardStore";
 import {
@@ -66,6 +66,10 @@ let seqBpm = $state(120);
 let engine: SequencerEngine | null = $state(null);
 let seqFocusRow = $state(0);
 let seqFocusStep = $state(0);
+
+onDestroy(() => {
+  engine?.dispose();
+});
 
 let selectedRow = $derived(
   kit.selectedIndex >= 0 && kit.selectedIndex < kit.rows.length
