@@ -618,8 +618,10 @@ class TestBuildPatch:
 
         mod1 = ModulatorPatch(transpose=2, cents=50, to_modulator1=False)
         mod2 = ModulatorPatch(transpose=-1, cents=100, to_modulator1=True)
-        mock_song.instruments[0].sound.modulator1 = mod1
-        mock_song.instruments[0].sound.modulator2 = mod2
+        sound = mock_song.instruments[0].sound
+        assert sound is not None
+        sound.modulator1 = mod1
+        sound.modulator2 = mod2
 
         mock_parse.return_value = mock_song
         mock_analyze.return_value = mock_song_stats

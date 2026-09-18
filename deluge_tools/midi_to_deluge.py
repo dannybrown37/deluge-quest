@@ -4,11 +4,15 @@ import struct
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-try:
+if TYPE_CHECKING:
     import mido
-except ImportError:
-    mido = None  # type: ignore[assignment]
+else:
+    try:
+        import mido
+    except ImportError:
+        mido = None
 
 from deluge_tools.parser import (
     TICKS_PER_QUARTER,
