@@ -1,735 +1,864 @@
 <script lang="ts">
-  import { loadPyodide, analyzeStats, convertToMusicXML, type SongStats } from "../lib/pyodide";
-  import { moveToTrash } from "../lib/softDelete";
-  import { cardStore, basename, topDir } from "../lib/cardStore";
-  import { trackToolAction } from "../lib/analytics";
-  import { getChannelLabels, setChannelLabel, removeChannelLabel, formatChannel } from "../lib/channelLabels";
+import { trackToolAction } from "../lib/analytics";
+import { basename, cardStore, topDir } from "../lib/cardStore";
+import {
+  formatChannel,
+  getChannelLabels,
+  removeChannelLabel,
+  setChannelLabel,
+} from "../lib/channelLabels";
+import {
+  analyzeStats,
+  convertToMusicXML,
+  loadPyodide,
+  type SongStats,
+} from "../lib/pyodide";
+import { moveToTrash } from "../lib/softDelete";
 
-  interface DroppedFile {
-    file: File;
-    path: string;
+interface DroppedFile {
+  file: File;
+  path: string;
+}
+
+type State = "idle" | "indexing" | "loading" | "processing" | "done" | "error";
+
+let state: State = $state("idle");
+let progress = $state("");
+let progressPct = $state(0);
+let errorMsg = $state("");
+let results: SongStats[] = $state([]);
+let fileContents = $state(new Map<string, string>());
+let sortBy = $state("name");
+let sortAsc = $state(true);
+let dragOver = $state(false);
+let fileCount = $state(0);
+
+let convertingFile = $state("");
+let convertedFiles = $state(new Map<string, string>());
+
+let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
+let filePaths = $state(new Map<string, string>());
+let deletingFiles = $state(new Set<string>());
+let viewMode = $state<"flat" | "folders">("flat");
+let collapsedFolders = $state<string[]>([]);
+let reconnectAvailable = $state(false);
+let reconnecting = $state(false);
+let hasFileSystemAccess = $derived(
+  typeof window !== "undefined" && "showDirectoryPicker" in window,
+);
+
+let filterArr = $state<"all" | "yes" | "no">("all");
+let filterGear = $state<"all" | "deluge" | "external">("all");
+let filterKey = $state("");
+let filterBpmMin = $state("");
+let filterBpmMax = $state("");
+let filterNotesMin = $state("");
+let searchQuery = $state("");
+let filterMidiChannels = $state<Set<number>>(new Set());
+let filterMidiMode = $state<"or" | "and" | "only">("or");
+let showChannelLabelEditor = $state(false);
+let channelLabels = $state<Record<number, string>>(getChannelLabels());
+
+const ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function durationStrToSeconds(s: string): number {
+  if (s === "-") return -1;
+  if (s.endsWith("s")) return parseInt(s, 10);
+  const [minutes, secs] = s.split(":").map(Number);
+  return minutes * 60 + secs;
+}
+
+const sortFns: Record<string, (a: SongStats, b: SongStats) => number> = {
+  name: (a, b) => a.filename.localeCompare(b.filename),
+  bpm: (a, b) => a.bpm - b.bpm,
+  key: (a, b) => a.key.localeCompare(b.key),
+  duration: (a, b) =>
+    durationStrToSeconds(a.durationStr) - durationStrToSeconds(b.durationStr),
+  notes: (a, b) => a.totalNotes - b.totalNotes,
+  instruments: (a, b) => a.instrumentCount - b.instrumentCount,
+  clips: (a, b) => a.clipCount - b.clipCount,
+  modified: (a, b) => (a.lastModified ?? 0) - (b.lastModified ?? 0),
+  firmware: (a, b) => a.firmwareVersion.localeCompare(b.firmwareVersion),
+};
+
+function formatDate(ts?: number): string {
+  if (!ts) return "-";
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatDateFull(ts?: number): string {
+  if (!ts) return "";
+  return new Date(ts).toLocaleString();
+}
+
+let filtered = $derived.by(() => {
+  let items = results;
+  if (filterArr === "yes") items = items.filter((s) => s.hasArrangement);
+  else if (filterArr === "no") items = items.filter((s) => !s.hasArrangement);
+  if (filterGear === "deluge")
+    items = items.filter((s) => s.midiCount === 0 && s.cvCount === 0);
+  else if (filterGear === "external")
+    items = items.filter((s) => s.midiCount > 0 || s.cvCount > 0);
+  if (filterKey) items = items.filter((s) => s.key === filterKey);
+  const bpmMin = filterBpmMin ? parseFloat(filterBpmMin) : 0;
+  const bpmMax = filterBpmMax ? parseFloat(filterBpmMax) : Infinity;
+  if (bpmMin > 0 || bpmMax < Infinity)
+    items = items.filter((s) => s.bpm >= bpmMin && s.bpm <= bpmMax);
+  const notesMin = filterNotesMin ? parseInt(filterNotesMin) : 0;
+  if (notesMin > 0) items = items.filter((s) => s.totalNotes >= notesMin);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    items = items.filter((s) => s.filename.toLowerCase().includes(q));
   }
-
-  type State = "idle" | "indexing" | "loading" | "processing" | "done" | "error";
-
-  let state: State = $state("idle");
-  let progress = $state("");
-  let progressPct = $state(0);
-  let errorMsg = $state("");
-  let results: SongStats[] = $state([]);
-  let fileContents = $state(new Map<string, string>());
-  let sortBy = $state("name");
-  let sortAsc = $state(true);
-  let dragOver = $state(false);
-  let fileCount = $state(0);
-
-  let convertingFile = $state("");
-  let convertedFiles = $state(new Map<string, string>());
-
-  let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
-  let filePaths = $state(new Map<string, string>());
-  let deletingFiles = $state(new Set<string>());
-  let viewMode = $state<"flat" | "folders">("flat");
-  let collapsedFolders = $state<string[]>([]);
-  let reconnectAvailable = $state(false);
-  let reconnecting = $state(false);
-  let hasFileSystemAccess = $derived(typeof window !== "undefined" && "showDirectoryPicker" in window);
-
-  let filterArr = $state<"all" | "yes" | "no">("all");
-  let filterGear = $state<"all" | "deluge" | "external">("all");
-  let filterKey = $state("");
-  let filterBpmMin = $state("");
-  let filterBpmMax = $state("");
-  let filterNotesMin = $state("");
-  let searchQuery = $state("");
-  let filterMidiChannels = $state<Set<number>>(new Set());
-  let filterMidiMode = $state<"or" | "and" | "only">("or");
-  let showChannelLabelEditor = $state(false);
-  let channelLabels = $state<Record<number, string>>(getChannelLabels());
-
-  const ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-  function durationStrToSeconds(s: string): number {
-    if (s === "-") return -1;
-    if (s.endsWith("s")) return parseInt(s, 10);
-    const [minutes, secs] = s.split(":").map(Number);
-    return minutes * 60 + secs;
+  if (filterMidiChannels.size > 0) {
+    items = items.filter((s) => {
+      const channels = s.midiChannels ?? [];
+      return filterMidiMode === "or"
+        ? channels.some((ch) => filterMidiChannels.has(ch))
+        : filterMidiMode === "and"
+          ? [...filterMidiChannels].every((ch) => channels.includes(ch))
+          : channels.length > 0 &&
+            channels.every((ch) => filterMidiChannels.has(ch));
+    });
   }
+  return items;
+});
 
-  const sortFns: Record<string, (a: SongStats, b: SongStats) => number> = {
-    name: (a, b) => a.filename.localeCompare(b.filename),
-    bpm: (a, b) => a.bpm - b.bpm,
-    key: (a, b) => a.key.localeCompare(b.key),
-    duration: (a, b) => durationStrToSeconds(a.durationStr) - durationStrToSeconds(b.durationStr),
-    notes: (a, b) => a.totalNotes - b.totalNotes,
-    instruments: (a, b) => a.instrumentCount - b.instrumentCount,
-    clips: (a, b) => a.clipCount - b.clipCount,
-    modified: (a, b) => (a.lastModified ?? 0) - (b.lastModified ?? 0),
-    firmware: (a, b) => a.firmwareVersion.localeCompare(b.firmwareVersion),
+let sorted = $derived.by(() => {
+  const fn = sortFns[sortBy] ?? sortFns.name;
+  const s = [...filtered].sort(fn);
+  return sortAsc ? s : s.reverse();
+});
+
+interface FolderGroup {
+  folder: string;
+  songs: SongStats[];
+}
+
+let folderGroups = $derived.by(() => {
+  const groups = new Map<string, SongStats[]>();
+  for (const s of sorted) {
+    const parts = (s.path ?? s.filename).split("/");
+    parts.pop();
+    const folder = parts.length > 0 ? parts.join("/") : "(root)";
+    if (!groups.has(folder)) groups.set(folder, []);
+    groups.get(folder)!.push(s);
+  }
+  const result: FolderGroup[] = [];
+  for (const [folder, songs] of [...groups.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  )) {
+    result.push({ folder, songs });
+  }
+  return result;
+});
+
+function toggleFolder(folder: string) {
+  if (collapsedFolders.includes(folder)) {
+    collapsedFolders = collapsedFolders.filter((f) => f !== folder);
+  } else {
+    collapsedFolders = [...collapsedFolders, folder];
+  }
+}
+
+let allMidiChannels = $derived.by(() => {
+  const chs = new Set<number>();
+  for (const s of results) for (const ch of s.midiChannels ?? []) chs.add(ch);
+  return [...chs].sort((a, b) => a - b);
+});
+
+let allKeys = $derived.by(() => {
+  const keys: Record<string, number> = {};
+  for (const s of results) {
+    if (!s.key.startsWith("Error")) {
+      keys[s.key] = (keys[s.key] || 0) + 1;
+    }
+  }
+  return keys;
+});
+
+let keyMatrix = $derived.by(() => {
+  const scales = new Set<string>();
+  const matrix: Record<string, Record<string, number>> = {};
+  for (const [key, count] of Object.entries(allKeys)) {
+    const parts = key.split(" ");
+    const root = parts[0];
+    const scale = parts.slice(1).join(" ") || "?";
+    scales.add(scale);
+    if (!matrix[root]) matrix[root] = {};
+    matrix[root][scale] = count;
+  }
+  const scaleList = [...scales].sort();
+  const usedRoots = ROOTS.filter((r) => matrix[r]);
+  return { scales: scaleList, roots: usedRoots, matrix };
+});
+
+let summary = $derived.by(() => {
+  if (filtered.length === 0) return null;
+  const total = filtered.length;
+  const arrCount = filtered.filter((s) => s.hasArrangement).length;
+  const bpms = filtered.map((s) => s.bpm).filter((b) => b > 0);
+  const totalNotes = filtered.reduce((sum, s) => sum + s.totalNotes, 0);
+  const totalInst = filtered.reduce((sum, s) => sum + s.instrumentCount, 0);
+  const totalClips = filtered.reduce((sum, s) => sum + s.clipCount, 0);
+  return {
+    total,
+    arrCount,
+    bpmMin: bpms.length ? Math.min(...bpms) : 0,
+    bpmMax: bpms.length ? Math.max(...bpms) : 0,
+    bpmAvg: bpms.length ? bpms.reduce((a, b) => a + b, 0) / bpms.length : 0,
+    totalNotes,
+    totalInst,
+    totalClips,
   };
+});
 
-  function formatDate(ts?: number): string {
-    if (!ts) return "-";
-    const d = new Date(ts);
-    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-  }
+let hasActiveFilters = $derived(
+  filterArr !== "all" ||
+    filterGear !== "all" ||
+    filterKey !== "" ||
+    filterBpmMin !== "" ||
+    filterBpmMax !== "" ||
+    filterNotesMin !== "" ||
+    searchQuery !== "" ||
+    filterMidiChannels.size > 0,
+);
 
-  function formatDateFull(ts?: number): string {
-    if (!ts) return "";
-    return new Date(ts).toLocaleString();
-  }
+const CACHE_KEY_RESULTS = "deluge-stats-results";
+const IDB_NAME = "deluge-stats";
+const IDB_STORE = "files";
 
-  let filtered = $derived.by(() => {
-    let items = results;
-    if (filterArr === "yes") items = items.filter(s => s.hasArrangement);
-    else if (filterArr === "no") items = items.filter(s => !s.hasArrangement);
-    if (filterGear === "deluge") items = items.filter(s => s.midiCount === 0 && s.cvCount === 0);
-    else if (filterGear === "external") items = items.filter(s => s.midiCount > 0 || s.cvCount > 0);
-    if (filterKey) items = items.filter(s => s.key === filterKey);
-    const bpmMin = filterBpmMin ? parseFloat(filterBpmMin) : 0;
-    const bpmMax = filterBpmMax ? parseFloat(filterBpmMax) : Infinity;
-    if (bpmMin > 0 || bpmMax < Infinity) items = items.filter(s => s.bpm >= bpmMin && s.bpm <= bpmMax);
-    const notesMin = filterNotesMin ? parseInt(filterNotesMin) : 0;
-    if (notesMin > 0) items = items.filter(s => s.totalNotes >= notesMin);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      items = items.filter(s => s.filename.toLowerCase().includes(q));
-    }
-    if (filterMidiChannels.size > 0) {
-      items = items.filter(s => {
-        const channels = s.midiChannels ?? [];
-        return filterMidiMode === "or"
-          ? channels.some(ch => filterMidiChannels.has(ch))
-          : filterMidiMode === "and"
-          ? [...filterMidiChannels].every(ch => channels.includes(ch))
-          : channels.length > 0 && channels.every(ch => filterMidiChannels.has(ch));
-      });
-    }
-    return items;
-  });
-
-  let sorted = $derived.by(() => {
-    const fn = sortFns[sortBy] ?? sortFns.name;
-    const s = [...filtered].sort(fn);
-    return sortAsc ? s : s.reverse();
-  });
-
-  interface FolderGroup {
-    folder: string;
-    songs: SongStats[];
-  }
-
-  let folderGroups = $derived.by(() => {
-    const groups = new Map<string, SongStats[]>();
-    for (const s of sorted) {
-      const parts = (s.path ?? s.filename).split("/");
-      parts.pop();
-      const folder = parts.length > 0 ? parts.join("/") : "(root)";
-      if (!groups.has(folder)) groups.set(folder, []);
-      groups.get(folder)!.push(s);
-    }
-    const result: FolderGroup[] = [];
-    for (const [folder, songs] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-      result.push({ folder, songs });
-    }
-    return result;
-  });
-
-  function toggleFolder(folder: string) {
-    if (collapsedFolders.includes(folder)) {
-      collapsedFolders = collapsedFolders.filter(f => f !== folder);
-    } else {
-      collapsedFolders = [...collapsedFolders, folder];
-    }
-  }
-
-  let allMidiChannels = $derived.by(() => {
-    const chs = new Set<number>();
-    for (const s of results) for (const ch of s.midiChannels ?? []) chs.add(ch);
-    return [...chs].sort((a, b) => a - b);
-  });
-
-  let allKeys = $derived.by(() => {
-    const keys: Record<string, number> = {};
-    for (const s of results) {
-      if (!s.key.startsWith("Error")) {
-        keys[s.key] = (keys[s.key] || 0) + 1;
-      }
-    }
-    return keys;
-  });
-
-  let keyMatrix = $derived.by(() => {
-    const scales = new Set<string>();
-    const matrix: Record<string, Record<string, number>> = {};
-    for (const [key, count] of Object.entries(allKeys)) {
-      const parts = key.split(" ");
-      const root = parts[0];
-      const scale = parts.slice(1).join(" ") || "?";
-      scales.add(scale);
-      if (!matrix[root]) matrix[root] = {};
-      matrix[root][scale] = count;
-    }
-    const scaleList = [...scales].sort();
-    const usedRoots = ROOTS.filter(r => matrix[r]);
-    return { scales: scaleList, roots: usedRoots, matrix };
-  });
-
-  let summary = $derived.by(() => {
-    if (filtered.length === 0) return null;
-    const total = filtered.length;
-    const arrCount = filtered.filter(s => s.hasArrangement).length;
-    const bpms = filtered.map(s => s.bpm).filter(b => b > 0);
-    const totalNotes = filtered.reduce((sum, s) => sum + s.totalNotes, 0);
-    const totalInst = filtered.reduce((sum, s) => sum + s.instrumentCount, 0);
-    const totalClips = filtered.reduce((sum, s) => sum + s.clipCount, 0);
-    return {
-      total,
-      arrCount,
-      bpmMin: bpms.length ? Math.min(...bpms) : 0,
-      bpmMax: bpms.length ? Math.max(...bpms) : 0,
-      bpmAvg: bpms.length ? bpms.reduce((a, b) => a + b, 0) / bpms.length : 0,
-      totalNotes,
-      totalInst,
-      totalClips,
+function openIdb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE))
+        db.createObjectStore(IDB_STORE);
     };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
+}
 
-  let hasActiveFilters = $derived(
-    filterArr !== "all" || filterGear !== "all" || filterKey !== "" || filterBpmMin !== "" ||
-    filterBpmMax !== "" || filterNotesMin !== "" || searchQuery !== "" || filterMidiChannels.size > 0
+function idbPut(
+  db: IDBDatabase,
+  key: string,
+  value: string,
+  store = IDB_STORE,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readwrite");
+    tx.objectStore(store).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function idbGetAll(db: IDBDatabase): Promise<Map<string, string>> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readonly");
+    const store = tx.objectStore(IDB_STORE);
+    const map = new Map<string, string>();
+    const req = store.openCursor();
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (cursor) {
+        map.set(cursor.key as string, cursor.value);
+        cursor.continue();
+      } else {
+        resolve(map);
+      }
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbClear(db: IDBDatabase, store = IDB_STORE): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readwrite");
+    tx.objectStore(store).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function saveToSession() {
+  try {
+    sessionStorage.setItem(CACHE_KEY_RESULTS, JSON.stringify(results));
+  } catch {}
+  try {
+    const db = await openIdb();
+    await idbClear(db);
+    for (const [name, content] of fileContents) {
+      await idbPut(db, name, content);
+    }
+    db.close();
+  } catch {}
+}
+
+function adoptCardStore() {
+  rootHandle = cardStore.rootHandle;
+  filePaths = new Map(
+    [...cardStore.songXmls.keys()].map((p) => [basename(p), p]),
   );
+  fileContents = new Map(
+    [...cardStore.songXmls.entries()].map(([p, text]) => [basename(p), text]),
+  );
+}
 
-  const CACHE_KEY_RESULTS = "deluge-stats-results";
-  const IDB_NAME = "deluge-stats";
-  const IDB_STORE = "files";
-
-  function openIdb(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(IDB_NAME, 2);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+async function restoreFromSession(): Promise<boolean> {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY_RESULTS);
+    if (!raw) return false;
+    const cached = JSON.parse(raw);
+    if (!cached?.length) return false;
+    results = cached;
+    fileCount = results.length;
+    state = "done";
+  } catch {
+    return false;
   }
-
-  function idbPut(db: IDBDatabase, key: string, value: string, store = IDB_STORE): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(store, "readwrite");
-      tx.objectStore(store).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  function idbGetAll(db: IDBDatabase): Promise<Map<string, string>> {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, "readonly");
-      const store = tx.objectStore(IDB_STORE);
-      const map = new Map<string, string>();
-      const req = store.openCursor();
-      req.onsuccess = () => {
-        const cursor = req.result;
-        if (cursor) {
-          map.set(cursor.key as string, cursor.value);
-          cursor.continue();
-        } else {
-          resolve(map);
-        }
-      };
-      req.onerror = () => reject(req.error);
-    });
-  }
-
-  function idbClear(db: IDBDatabase, store = IDB_STORE): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(store, "readwrite");
-      tx.objectStore(store).clear();
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  async function saveToSession() {
-    try {
-      sessionStorage.setItem(CACHE_KEY_RESULTS, JSON.stringify(results));
-    } catch {}
-    try {
-      const db = await openIdb();
-      await idbClear(db);
-      for (const [name, content] of fileContents) {
-        await idbPut(db, name, content);
-      }
-      db.close();
-    } catch {}
-  }
-
-  function adoptCardStore() {
-    rootHandle = cardStore.rootHandle;
-    filePaths = new Map([...cardStore.songXmls.keys()].map(p => [basename(p), p]));
-    fileContents = new Map([...cardStore.songXmls.entries()].map(([p, text]) => [basename(p), text]));
-  }
-
-  async function restoreFromSession(): Promise<boolean> {
-    try {
-      const raw = sessionStorage.getItem(CACHE_KEY_RESULTS);
-      if (!raw) return false;
-      const cached = JSON.parse(raw);
-      if (!cached?.length) return false;
-      results = cached;
-      fileCount = results.length;
-      state = "done";
-    } catch {
-      return false;
-    }
-    try {
-      const db = await openIdb();
-      fileContents = await idbGetAll(db);
-      db.close();
-    } catch {}
-    try {
-      if (await cardStore.reconnect()) {
-        adoptCardStore();
-      } else {
-        reconnectAvailable = await cardStore.hasPersistedHandle();
-      }
-    } catch {}
-    return true;
-  }
-
-  /** Silently loads from a previously connected card (via persisted handle), same as Kits/Clean. */
-  async function tryAutoLoad() {
-    if (cardStore.isLoaded && cardStore.songXmls.size > 0) {
+  try {
+    const db = await openIdb();
+    fileContents = await idbGetAll(db);
+    db.close();
+  } catch {}
+  try {
+    if (await cardStore.reconnect()) {
       adoptCardStore();
-      await processFromCardStore();
-      return;
+    } else {
+      reconnectAvailable = await cardStore.hasPersistedHandle();
     }
-    try {
-      if (await cardStore.reconnect()) {
-        if (cardStore.songXmls.size > 0) {
-          adoptCardStore();
-          await processFromCardStore();
-        }
-      } else {
-        reconnectAvailable = await cardStore.hasPersistedHandle();
-      }
-    } catch {}
-  }
+  } catch {}
+  return true;
+}
 
-  async function reconnectFolder() {
-    if (reconnecting) return;
-    reconnecting = true;
-    try {
-      if (await cardStore.requestReconnect()) {
+/** Silently loads from a previously connected card (via persisted handle), same as Kits/Clean. */
+async function tryAutoLoad() {
+  if (cardStore.isLoaded && cardStore.songXmls.size > 0) {
+    adoptCardStore();
+    await processFromCardStore();
+    return;
+  }
+  try {
+    if (await cardStore.reconnect()) {
+      if (cardStore.songXmls.size > 0) {
         adoptCardStore();
-        reconnectAvailable = false;
+        await processFromCardStore();
       }
-    } catch {} finally {
-      reconnecting = false;
+    } else {
+      reconnectAvailable = await cardStore.hasPersistedHandle();
     }
-  }
+  } catch {}
+}
 
-  function exportCsv() {
-    trackToolAction("stats", "export_csv");
-    const headers = ["Song", "BPM", "Key", "Duration", "Type", "Instruments", "Synths", "Kits", "Clips", "Notes", "Arrangement", "Modified", "Firmware"];
-    const rows = sorted.map(s => [
-      s.filename.replace(/\.XML$/i, ""),
-      s.bpm > 0 ? s.bpm.toFixed(1) : "",
-      s.key,
-      s.durationStr,
-      [s.synthCount ? "I" : "", s.kitCount ? "K" : "", s.midiCount ? "M" : "", s.cvCount ? "C" : "", s.audioCount ? "A" : ""].filter(Boolean).join("") || "-",
-      s.instrumentCount,
-      s.synthCount,
-      s.kitCount,
-      s.clipCount,
-      s.totalNotes,
-      s.hasArrangement ? "yes" : "no",
-      s.lastModified ? new Date(s.lastModified).toISOString().split("T")[0] : "",
-      s.firmwareVersion,
-    ]);
-    const csv = [headers, ...rows].map(r => r.map(c => {
-      const str = String(c);
-      return str.includes(",") || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
-    }).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `deluge-stats-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  restoreFromSession()
-    .then((hadCache) => { if (!hadCache) tryAutoLoad(); })
-    .catch(() => tryAutoLoad());
-
-  async function readEntryRecursive(entry: FileSystemEntry, basePath = ""): Promise<DroppedFile[]> {
-    const entryPath = basePath ? `${basePath}/${entry.name}` : entry.name;
-    if (entry.isFile) {
-      return new Promise((resolve) => {
-        (entry as FileSystemFileEntry).file(
-          (f) => resolve(f.name.toLowerCase().endsWith(".xml") ? [{ file: f, path: entryPath }] : []),
-          () => resolve([]),
-        );
-      });
+async function reconnectFolder() {
+  if (reconnecting) return;
+  reconnecting = true;
+  try {
+    if (await cardStore.requestReconnect()) {
+      adoptCardStore();
+      reconnectAvailable = false;
     }
-    if (entry.isDirectory) {
-      if (APP_MANAGED_DIRS.has(entry.name.toUpperCase())) return [];
-      const reader = (entry as FileSystemDirectoryEntry).createReader();
-      const entries = await new Promise<FileSystemEntry[]>((resolve) => {
-        const all: FileSystemEntry[] = [];
-        const readBatch = () => {
-          reader.readEntries((batch) => {
-            if (batch.length === 0) { resolve(all); return; }
+  } catch {
+  } finally {
+    reconnecting = false;
+  }
+}
+
+function exportCsv() {
+  trackToolAction("stats", "export_csv");
+  const headers = [
+    "Song",
+    "BPM",
+    "Key",
+    "Duration",
+    "Type",
+    "Instruments",
+    "Synths",
+    "Kits",
+    "Clips",
+    "Notes",
+    "Arrangement",
+    "Modified",
+    "Firmware",
+  ];
+  const rows = sorted.map((s) => [
+    s.filename.replace(/\.XML$/i, ""),
+    s.bpm > 0 ? s.bpm.toFixed(1) : "",
+    s.key,
+    s.durationStr,
+    [
+      s.synthCount ? "I" : "",
+      s.kitCount ? "K" : "",
+      s.midiCount ? "M" : "",
+      s.cvCount ? "C" : "",
+      s.audioCount ? "A" : "",
+    ]
+      .filter(Boolean)
+      .join("") || "-",
+    s.instrumentCount,
+    s.synthCount,
+    s.kitCount,
+    s.clipCount,
+    s.totalNotes,
+    s.hasArrangement ? "yes" : "no",
+    s.lastModified ? new Date(s.lastModified).toISOString().split("T")[0] : "",
+    s.firmwareVersion,
+  ]);
+  const csv = [headers, ...rows]
+    .map((r) =>
+      r
+        .map((c) => {
+          const str = String(c);
+          return str.includes(",") || str.includes('"')
+            ? `"${str.replace(/"/g, '""')}"`
+            : str;
+        })
+        .join(","),
+    )
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `deluge-stats-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+restoreFromSession()
+  .then((hadCache) => {
+    if (!hadCache) tryAutoLoad();
+  })
+  .catch(() => tryAutoLoad());
+
+async function readEntryRecursive(
+  entry: FileSystemEntry,
+  basePath = "",
+): Promise<DroppedFile[]> {
+  const entryPath = basePath ? `${basePath}/${entry.name}` : entry.name;
+  if (entry.isFile) {
+    return new Promise((resolve) => {
+      (entry as FileSystemFileEntry).file(
+        (f) =>
+          resolve(
+            f.name.toLowerCase().endsWith(".xml")
+              ? [{ file: f, path: entryPath }]
+              : [],
+          ),
+        () => resolve([]),
+      );
+    });
+  }
+  if (entry.isDirectory) {
+    if (APP_MANAGED_DIRS.has(entry.name.toUpperCase())) return [];
+    const reader = (entry as FileSystemDirectoryEntry).createReader();
+    const entries = await new Promise<FileSystemEntry[]>((resolve) => {
+      const all: FileSystemEntry[] = [];
+      const readBatch = () => {
+        reader.readEntries(
+          (batch) => {
+            if (batch.length === 0) {
+              resolve(all);
+              return;
+            }
             all.push(...batch);
             readBatch();
-          }, () => resolve(all));
-        };
-        readBatch();
-      });
-      const nested = await Promise.all(entries.map(e => readEntryRecursive(e, entryPath)));
-      return nested.flat();
-    }
-    return [];
+          },
+          () => resolve(all),
+        );
+      };
+      readBatch();
+    });
+    const nested = await Promise.all(
+      entries.map((e) => readEntryRecursive(e, entryPath)),
+    );
+    return nested.flat();
   }
+  return [];
+}
 
-  const SOFT_DELETE_DIR_NAME = "SOFT_DELETE";
-  const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR_NAME, "REPAIR_BACKUP"]);
+const SOFT_DELETE_DIR_NAME = "SOFT_DELETE";
+const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR_NAME, "REPAIR_BACKUP"]);
 
-  /** SOFT_DELETE/ and REPAIR_BACKUP/ are app-managed, not card content — never analyze or list them. */
-  function isSoftDeletePath(path: string): boolean {
-    const segments = new Set(path.toUpperCase().split("/"));
-    return [...APP_MANAGED_DIRS].some(d => segments.has(d));
-  }
+/** SOFT_DELETE/ and REPAIR_BACKUP/ are app-managed, not card content — never analyze or list them. */
+function isSoftDeletePath(path: string): boolean {
+  const segments = new Set(path.toUpperCase().split("/"));
+  return [...APP_MANAGED_DIRS].some((d) => segments.has(d));
+}
 
-  /** If any dropped/browsed file lives under a SONGS/ dir, keep only those — drops of the SD card
-   * root otherwise pull in KITS/SYNTHS XMLs too. Falls back to everything when no SONGS/ dir is found
-   * (e.g. the user dropped the SONGS folder's contents directly). */
-  function filterToSongsDir(entries: DroppedFile[]): DroppedFile[] {
-    const withoutTrash = entries.filter(e => !isSoftDeletePath(e.path));
-    const songEntries = withoutTrash.filter(e => topDir(e.path).toUpperCase() === "SONGS");
-    return songEntries.length > 0 ? songEntries : withoutTrash;
-  }
+/** If any dropped/browsed file lives under a SONGS/ dir, keep only those — drops of the SD card
+ * root otherwise pull in KITS/SYNTHS XMLs too. Falls back to everything when no SONGS/ dir is found
+ * (e.g. the user dropped the SONGS folder's contents directly). */
+function filterToSongsDir(entries: DroppedFile[]): DroppedFile[] {
+  const withoutTrash = entries.filter((e) => !isSoftDeletePath(e.path));
+  const songEntries = withoutTrash.filter(
+    (e) => topDir(e.path).toUpperCase() === "SONGS",
+  );
+  return songEntries.length > 0 ? songEntries : withoutTrash;
+}
 
-  async function openFolderWithAccess() {
-    state = "indexing";
-    progress = "Indexing card";
-    progressPct = 0;
-    try {
-      await cardStore.pickDirectory((stage, done, total) => {
-        progress = total > 0 ? `${stage} (${done}/${total})` : stage;
-        progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
-      });
+async function openFolderWithAccess() {
+  state = "indexing";
+  progress = "Indexing card";
+  progressPct = 0;
+  try {
+    await cardStore.pickDirectory((stage, done, total) => {
+      progress = total > 0 ? `${stage} (${done}/${total})` : stage;
+      progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+    });
 
-      if (cardStore.songXmls.size === 0) {
-        state = "error";
-        errorMsg = "Not a Deluge SD card: no SONGS directory found. Select the SD card root folder so deleted songs land in SOFT_DELETE/SONGS/... at the root.";
-        return;
-      }
-
-      adoptCardStore();
-      await processFromCardStore();
-    } catch (e: any) {
-      if (e?.name !== "AbortError") {
-        state = "error";
-        errorMsg = e.message || "Failed to open folder";
-      }
-    }
-  }
-
-  async function processFromCardStore() {
-    const entries = [...cardStore.songXmls.entries()];
-    fileCount = entries.length;
-    state = "loading";
-
-    try {
-      const pyodide = await loadPyodide((stage, pct) => {
-        progress = stage;
-        progressPct = pct;
-      });
-
-      state = "processing";
-      progress = `Analyzing ${entries.length} file${entries.length > 1 ? "s" : ""}`;
-      progressPct = 85;
-
-      const pathByName = new Map(entries.map(([p]) => [basename(p), p]));
-      const fileData = entries.map(([p, content]) => ({ name: basename(p), content }));
-      const stats = await analyzeStats(fileData, pyodide);
-      results = stats.map(s => {
-        const p = pathByName.get(s.filename);
-        return { ...s, path: p, lastModified: p ? cardStore.songLastModified.get(p) : undefined };
-      });
-      state = "done";
-      progressPct = 100;
-      saveToSession();
-      trackToolAction("stats", "analyze_card");
-    } catch (e: any) {
+    if (cardStore.songXmls.size === 0) {
       state = "error";
-      errorMsg = e.message || "Analysis failed";
-      trackToolAction("stats", "analyze_error");
-    }
-  }
-
-  async function deleteSong(filename: string) {
-    if (!rootHandle || deletingFiles.has(filename)) return;
-    const path = filePaths.get(filename);
-    if (!path) return;
-    if (!confirm(`Move "${filename}" to ${SOFT_DELETE_DIR_NAME}/? You can restore it from there later.`)) return;
-
-    const next = new Set(deletingFiles);
-    next.add(filename);
-    deletingFiles = next;
-
-    try {
-      await moveToTrash(rootHandle, path);
-      trackToolAction("stats", "delete_song");
-      results = results.filter(s => s.filename !== filename);
-      const contents = new Map(fileContents);
-      contents.delete(filename);
-      fileContents = contents;
-      const paths = new Map(filePaths);
-      paths.delete(filename);
-      filePaths = paths;
-      cardStore.songXmls.delete(path);
-      saveToSession();
-    } catch (e: any) {
-      console.error(`Failed to delete ${filename}:`, e);
-    } finally {
-      const rm = new Set(deletingFiles);
-      rm.delete(filename);
-      deletingFiles = rm;
-    }
-  }
-
-  async function processFiles(entries: DroppedFile[]) {
-    if (entries.length === 0) {
-      state = "error";
-      errorMsg = "No .XML files found. Drop your Deluge SD card, or its SONGS folder.";
+      errorMsg =
+        "Not a Deluge SD card: no SONGS directory found. Select the SD card root folder so deleted songs land in SOFT_DELETE/SONGS/... at the root.";
       return;
     }
 
-    fileCount = entries.length;
-    state = "loading";
-
-    try {
-      const pyodide = await loadPyodide((stage, pct) => {
-        progress = stage;
-        progressPct = pct;
-      });
-
-      state = "processing";
-      progress = `Analyzing ${entries.length} file${entries.length > 1 ? "s" : ""}`;
-      progressPct = 85;
-
-      const timestamps = new Map(entries.map(e => [e.file.name, e.file.lastModified]));
-      const fileData = await Promise.all(
-        entries.map(async e => ({ name: e.file.name, content: await e.file.text() }))
-      );
-
-      fileContents = new Map(fileData.map(f => [f.name, f.content]));
-      filePaths = new Map(entries.map(e => [e.file.name, e.path]));
-
-      const pathByName = new Map(entries.map(e => [e.file.name, e.path]));
-      const stats = await analyzeStats(fileData, pyodide);
-      results = stats.map(s => ({ ...s, path: pathByName.get(s.filename), lastModified: timestamps.get(s.filename) }));
-      state = "done";
-      progressPct = 100;
-      saveToSession();
-      trackToolAction("stats", "analyze_drop");
-      await cardStore.saveSongCache(
-        "your dropped folder",
-        entries.map(e => ({ path: e.path, xml: fileContents.get(e.file.name) ?? "" })),
-      );
-    } catch (e: any) {
+    adoptCardStore();
+    await processFromCardStore();
+  } catch (e: any) {
+    if (e?.name !== "AbortError") {
       state = "error";
-      errorMsg = e.message || "Analysis failed";
+      errorMsg = e.message || "Failed to open folder";
     }
   }
+}
 
-  /** Chrome/Edge only: a dropped folder can hand back a real, persistable FileSystemDirectoryHandle
-   * instead of the one-shot FileSystemEntry tree — using it means /preview and /score can silently
-   * reconnect to this same card later, exactly as if "Load SD card" had been used. */
-  async function tryAdoptDroppedDirectoryHandle(items: DataTransferItemList): Promise<boolean> {
-    const item = Array.from(items).find(i => i.kind === "file");
-    const getAsFileSystemHandle = (item as any)?.getAsFileSystemHandle;
-    if (!item || typeof getAsFileSystemHandle !== "function") return false;
+async function processFromCardStore() {
+  const entries = [...cardStore.songXmls.entries()];
+  fileCount = entries.length;
+  state = "loading";
 
-    const handle = await getAsFileSystemHandle.call(item);
-    if (!handle || handle.kind !== "directory") return false;
+  try {
+    const pyodide = await loadPyodide((stage, pct) => {
+      progress = stage;
+      progressPct = pct;
+    });
 
-    try {
-      await (handle as any).requestPermission?.({ mode: "readwrite" });
-    } catch {}
+    state = "processing";
+    progress = `Analyzing ${entries.length} file${entries.length > 1 ? "s" : ""}`;
+    progressPct = 85;
 
-    state = "indexing";
-    progress = "Indexing card";
-    progressPct = 0;
-    try {
-      await cardStore.adoptHandle(handle as FileSystemDirectoryHandle, (stage, done, total) => {
+    const pathByName = new Map(entries.map(([p]) => [basename(p), p]));
+    const fileData = entries.map(([p, content]) => ({
+      name: basename(p),
+      content,
+    }));
+    const stats = await analyzeStats(fileData, pyodide);
+    results = stats.map((s) => {
+      const p = pathByName.get(s.filename);
+      return {
+        ...s,
+        path: p,
+        lastModified: p ? cardStore.songLastModified.get(p) : undefined,
+      };
+    });
+    state = "done";
+    progressPct = 100;
+    saveToSession();
+    trackToolAction("stats", "analyze_card");
+  } catch (e: any) {
+    state = "error";
+    errorMsg = e.message || "Analysis failed";
+    trackToolAction("stats", "analyze_error");
+  }
+}
+
+async function deleteSong(filename: string) {
+  if (!rootHandle || deletingFiles.has(filename)) return;
+  const path = filePaths.get(filename);
+  if (!path) return;
+  if (
+    !confirm(
+      `Move "${filename}" to ${SOFT_DELETE_DIR_NAME}/? You can restore it from there later.`,
+    )
+  )
+    return;
+
+  const next = new Set(deletingFiles);
+  next.add(filename);
+  deletingFiles = next;
+
+  try {
+    await moveToTrash(rootHandle, path);
+    trackToolAction("stats", "delete_song");
+    results = results.filter((s) => s.filename !== filename);
+    const contents = new Map(fileContents);
+    contents.delete(filename);
+    fileContents = contents;
+    const paths = new Map(filePaths);
+    paths.delete(filename);
+    filePaths = paths;
+    cardStore.songXmls.delete(path);
+    saveToSession();
+  } catch (e: any) {
+    console.error(`Failed to delete ${filename}:`, e);
+  } finally {
+    const rm = new Set(deletingFiles);
+    rm.delete(filename);
+    deletingFiles = rm;
+  }
+}
+
+async function processFiles(entries: DroppedFile[]) {
+  if (entries.length === 0) {
+    state = "error";
+    errorMsg =
+      "No .XML files found. Drop your Deluge SD card, or its SONGS folder.";
+    return;
+  }
+
+  fileCount = entries.length;
+  state = "loading";
+
+  try {
+    const pyodide = await loadPyodide((stage, pct) => {
+      progress = stage;
+      progressPct = pct;
+    });
+
+    state = "processing";
+    progress = `Analyzing ${entries.length} file${entries.length > 1 ? "s" : ""}`;
+    progressPct = 85;
+
+    const timestamps = new Map(
+      entries.map((e) => [e.file.name, e.file.lastModified]),
+    );
+    const fileData = await Promise.all(
+      entries.map(async (e) => ({
+        name: e.file.name,
+        content: await e.file.text(),
+      })),
+    );
+
+    fileContents = new Map(fileData.map((f) => [f.name, f.content]));
+    filePaths = new Map(entries.map((e) => [e.file.name, e.path]));
+
+    const pathByName = new Map(entries.map((e) => [e.file.name, e.path]));
+    const stats = await analyzeStats(fileData, pyodide);
+    results = stats.map((s) => ({
+      ...s,
+      path: pathByName.get(s.filename),
+      lastModified: timestamps.get(s.filename),
+    }));
+    state = "done";
+    progressPct = 100;
+    saveToSession();
+    trackToolAction("stats", "analyze_drop");
+    await cardStore.saveSongCache(
+      "your dropped folder",
+      entries.map((e) => ({
+        path: e.path,
+        xml: fileContents.get(e.file.name) ?? "",
+      })),
+    );
+  } catch (e: any) {
+    state = "error";
+    errorMsg = e.message || "Analysis failed";
+  }
+}
+
+/** Chrome/Edge only: a dropped folder can hand back a real, persistable FileSystemDirectoryHandle
+ * instead of the one-shot FileSystemEntry tree — using it means /preview and /score can silently
+ * reconnect to this same card later, exactly as if "Load SD card" had been used. */
+async function tryAdoptDroppedDirectoryHandle(
+  items: DataTransferItemList,
+): Promise<boolean> {
+  const item = Array.from(items).find((i) => i.kind === "file");
+  const getAsFileSystemHandle = (item as any)?.getAsFileSystemHandle;
+  if (!item || typeof getAsFileSystemHandle !== "function") return false;
+
+  const handle = await getAsFileSystemHandle.call(item);
+  if (!handle || handle.kind !== "directory") return false;
+
+  try {
+    await (handle as any).requestPermission?.({ mode: "readwrite" });
+  } catch {}
+
+  state = "indexing";
+  progress = "Indexing card";
+  progressPct = 0;
+  try {
+    await cardStore.adoptHandle(
+      handle as FileSystemDirectoryHandle,
+      (stage, done, total) => {
         progress = total > 0 ? `${stage} (${done}/${total})` : stage;
         progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
-      });
-      if (cardStore.songXmls.size === 0) {
-        state = "error";
-        errorMsg = "Not a Deluge SD card: no SONGS directory found. Drop the SD card root folder.";
-        return true;
-      }
-      adoptCardStore();
-      await processFromCardStore();
-    } catch (e: any) {
+      },
+    );
+    if (cardStore.songXmls.size === 0) {
       state = "error";
-      errorMsg = e.message || "Failed to read dropped folder";
+      errorMsg =
+        "Not a Deluge SD card: no SONGS directory found. Drop the SD card root folder.";
+      return true;
     }
-    return true;
+    adoptCardStore();
+    await processFromCardStore();
+  } catch (e: any) {
+    state = "error";
+    errorMsg = e.message || "Failed to read dropped folder";
   }
+  return true;
+}
 
-  async function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    dragOver = false;
+async function handleDrop(e: DragEvent) {
+  e.preventDefault();
+  dragOver = false;
 
-    const items = e.dataTransfer?.items;
-    if (items && (await tryAdoptDroppedDirectoryHandle(items))) return;
+  const items = e.dataTransfer?.items;
+  if (items && (await tryAdoptDroppedDirectoryHandle(items))) return;
 
-    if (items) {
-      const entries = Array.from(items)
-        .map(item => item.webkitGetAsEntry?.())
-        .filter((e): e is FileSystemEntry => e != null);
+  if (items) {
+    const entries = Array.from(items)
+      .map((item) => item.webkitGetAsEntry?.())
+      .filter((e): e is FileSystemEntry => e != null);
 
-      if (entries.length > 0) {
-        const allEntries = (await Promise.all(entries.map(en => readEntryRecursive(en)))).flat();
-        await processFiles(filterToSongsDir(allEntries));
-        return;
-      }
+    if (entries.length > 0) {
+      const allEntries = (
+        await Promise.all(entries.map((en) => readEntryRecursive(en)))
+      ).flat();
+      await processFiles(filterToSongsDir(allEntries));
+      return;
     }
-
-    const files = e.dataTransfer?.files;
-    if (files?.length) {
-      const entries = Array.from(files)
-        .filter(f => f.name.toLowerCase().endsWith(".xml"))
-        .map(f => ({ file: f, path: (f as any).webkitRelativePath || f.name }));
-      await processFiles(filterToSongsDir(entries));
-    }
   }
 
-  function handleDragOver(e: DragEvent) {
-    e.preventDefault();
-    dragOver = true;
-  }
-
-  function handleDragLeave() {
-    dragOver = false;
-  }
-
-  function handleInputChange(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const files = input.files;
-    if (!files?.length) return;
+  const files = e.dataTransfer?.files;
+  if (files?.length) {
     const entries = Array.from(files)
-      .filter(f => f.name.toLowerCase().endsWith(".xml"))
-      .map(f => ({ file: f, path: (f as any).webkitRelativePath || f.name }));
-    processFiles(filterToSongsDir(entries));
+      .filter((f) => f.name.toLowerCase().endsWith(".xml"))
+      .map((f) => ({ file: f, path: (f as any).webkitRelativePath || f.name }));
+    await processFiles(filterToSongsDir(entries));
   }
+}
 
-  function setSort(col: string) {
-    if (sortBy === col) {
-      sortAsc = !sortAsc;
-    } else {
-      sortBy = col;
-      sortAsc = true;
-    }
-  }
+function handleDragOver(e: DragEvent) {
+  e.preventDefault();
+  dragOver = true;
+}
 
-  function clearFilters() {
-    filterArr = "all";
-    filterGear = "all";
-    filterKey = "";
-    filterBpmMin = "";
-    filterBpmMax = "";
-    filterNotesMin = "";
-    searchQuery = "";
-    filterMidiChannels = new Set();
-  }
+function handleDragLeave() {
+  dragOver = false;
+}
 
-  function toggleMidiChannel(ch: number) {
-    const next = new Set(filterMidiChannels);
-    if (next.has(ch)) next.delete(ch);
-    else next.add(ch);
-    filterMidiChannels = next;
-  }
+function handleInputChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = input.files;
+  if (!files?.length) return;
+  const entries = Array.from(files)
+    .filter((f) => f.name.toLowerCase().endsWith(".xml"))
+    .map((f) => ({ file: f, path: (f as any).webkitRelativePath || f.name }));
+  processFiles(filterToSongsDir(entries));
+}
 
-  function handleLabelChange(ch: number, value: string) {
-    if (value.trim()) {
-      setChannelLabel(ch, value);
-    } else {
-      removeChannelLabel(ch);
-    }
-    channelLabels = getChannelLabels();
+function setSort(col: string) {
+  if (sortBy === col) {
+    sortAsc = !sortAsc;
+  } else {
+    sortBy = col;
+    sortAsc = true;
   }
+}
 
-  function filterByKey(key: string) {
-    filterKey = filterKey === key ? "" : key;
-  }
+function clearFilters() {
+  filterArr = "all";
+  filterGear = "all";
+  filterKey = "";
+  filterBpmMin = "";
+  filterBpmMax = "";
+  filterNotesMin = "";
+  searchQuery = "";
+  filterMidiChannels = new Set();
+}
 
-  async function convertScore(filename: string) {
-    if (convertedFiles.get(filename)) {
-      downloadMusicXml(filename);
-      return;
-    }
-    const content = fileContents.get(filename);
-    if (!content) return;
-    convertingFile = filename;
-    try {
-      const pyodide = await loadPyodide();
-      const musicxml = await convertToMusicXML(content, pyodide);
-      convertedFiles = new Map(convertedFiles).set(filename, musicxml);
-      trackToolAction("stats", "convert_score");
-      downloadMusicXml(filename);
-    } catch (e: any) {
-      errorMsg = `Score conversion failed for ${filename}: ${e.message}`;
-    } finally {
-      convertingFile = "";
-    }
-  }
+function toggleMidiChannel(ch: number) {
+  const next = new Set(filterMidiChannels);
+  if (next.has(ch)) next.delete(ch);
+  else next.add(ch);
+  filterMidiChannels = next;
+}
 
-  function downloadMusicXml(filename: string) {
-    const xml = convertedFiles.get(filename);
-    if (!xml) return;
-    const blob = new Blob([xml], { type: "application/xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename.replace(/\.XML$/i, ".musicxml");
-    a.click();
-    URL.revokeObjectURL(url);
+function handleLabelChange(ch: number, value: string) {
+  if (value.trim()) {
+    setChannelLabel(ch, value);
+  } else {
+    removeChannelLabel(ch);
   }
+  channelLabels = getChannelLabels();
+}
 
-  function openInPreview(filename: string) {
-    const content = fileContents.get(filename);
-    if (!content) return;
-    trackToolAction("stats", "open_in_preview");
-    sessionStorage.setItem("deluge-preview-file", JSON.stringify({ name: filename, content }));
-    window.location.href = "/preview";
-  }
+function filterByKey(key: string) {
+  filterKey = filterKey === key ? "" : key;
+}
 
-  function reset() {
-    state = "idle";
-    results = [];
-    errorMsg = "";
-    fileCount = 0;
-    fileContents = new Map();
-    rootHandle = null;
-    filePaths = new Map();
-    reconnectAvailable = false;
-    clearFilters();
-    try {
-      sessionStorage.removeItem(CACHE_KEY_RESULTS);
-    } catch {}
-    openIdb().then(db => idbClear(db).then(() => db.close())).catch(() => {});
+async function convertScore(filename: string) {
+  if (convertedFiles.get(filename)) {
+    downloadMusicXml(filename);
+    return;
   }
+  const content = fileContents.get(filename);
+  if (!content) return;
+  convertingFile = filename;
+  try {
+    const pyodide = await loadPyodide();
+    const musicxml = await convertToMusicXML(content, pyodide);
+    convertedFiles = new Map(convertedFiles).set(filename, musicxml);
+    trackToolAction("stats", "convert_score");
+    downloadMusicXml(filename);
+  } catch (e: any) {
+    errorMsg = `Score conversion failed for ${filename}: ${e.message}`;
+  } finally {
+    convertingFile = "";
+  }
+}
+
+function downloadMusicXml(filename: string) {
+  const xml = convertedFiles.get(filename);
+  if (!xml) return;
+  const blob = new Blob([xml], { type: "application/xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.replace(/\.XML$/i, ".musicxml");
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function openInPreview(filename: string) {
+  const content = fileContents.get(filename);
+  if (!content) return;
+  trackToolAction("stats", "open_in_preview");
+  sessionStorage.setItem(
+    "deluge-preview-file",
+    JSON.stringify({ name: filename, content }),
+  );
+  window.location.href = "/preview";
+}
+
+function reset() {
+  state = "idle";
+  results = [];
+  errorMsg = "";
+  fileCount = 0;
+  fileContents = new Map();
+  rootHandle = null;
+  filePaths = new Map();
+  reconnectAvailable = false;
+  clearFilters();
+  try {
+    sessionStorage.removeItem(CACHE_KEY_RESULTS);
+  } catch {}
+  openIdb()
+    .then((db) => idbClear(db).then(() => db.close()))
+    .catch(() => {});
+}
 </script>
 
 {#if state === "idle"}

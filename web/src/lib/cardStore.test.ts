@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  cardStore,
-  walkHandle,
-  ext,
-  topDir,
   basename,
+  cardStore,
+  ext,
   normalizePath,
   songHasArrangement,
-} from './cardStore';
+  topDir,
+  walkHandle,
+} from "./cardStore";
 
 // Minimal in-memory IndexedDB fake. openIdb() in cardStore.ts only ever needs
 // open -> transaction -> objectStore.{put,get,delete} -> oncomplete, so we
@@ -102,7 +102,7 @@ class FakeIDBFactory {
 }
 
 class FakeFileEntry {
-  kind = 'file' as const;
+  kind = "file" as const;
   constructor(
     public name: string,
     private content: string,
@@ -121,9 +121,9 @@ class FakeFileEntry {
 }
 
 class FakeDirEntry {
-  kind = 'directory' as const;
+  kind = "directory" as const;
   children = new Map<string, FakeDirEntry | FakeFileEntry>();
-  permission: 'granted' | 'denied' = 'granted';
+  permission: "granted" | "denied" = "granted";
   constructor(public name: string) {}
 
   addFile(name: string, content: string): FakeFileEntry {
@@ -152,9 +152,9 @@ class FakeDirEntry {
 }
 
 function buildTree(files: Record<string, string>): FakeDirEntry {
-  const root = new FakeDirEntry('CARD');
+  const root = new FakeDirEntry("CARD");
   for (const [path, content] of Object.entries(files)) {
-    const parts = path.split('/');
+    const parts = path.split("/");
     const fileName = parts.pop()!;
     let dir = root;
     for (const part of parts) {
@@ -166,11 +166,12 @@ function buildTree(files: Record<string, string>): FakeDirEntry {
   return root;
 }
 
-const ARRANGEMENT_XML = `<song clipInstances="0x${'a'.repeat(24)}"></song>`;
+const ARRANGEMENT_XML = `<song clipInstances="0x${"a".repeat(24)}"></song>`;
 const SESSION_XML = `<song clipInstances=""></song>`;
 
 beforeEach(() => {
-  (globalThis as unknown as { indexedDB: FakeIDBFactory }).indexedDB = new FakeIDBFactory();
+  (globalThis as unknown as { indexedDB: FakeIDBFactory }).indexedDB =
+    new FakeIDBFactory();
   cardStore.reset();
 });
 
@@ -178,96 +179,96 @@ afterEach(() => {
   cardStore.reset();
 });
 
-describe('pure path helpers', () => {
+describe("pure path helpers", () => {
   it.each([
-    ['song.xml', 'xml'],
-    ['SAMPLES/kick.WAV', 'wav'],
-    ['noext', ''],
-    ['a.b.c', 'c'],
-  ])('ext(%s) === %s', (name, expected) => {
+    ["song.xml", "xml"],
+    ["SAMPLES/kick.WAV", "wav"],
+    ["noext", ""],
+    ["a.b.c", "c"],
+  ])("ext(%s) === %s", (name, expected) => {
     expect(ext(name)).toBe(expected);
   });
 
   it.each([
-    ['SAMPLES/DRUMS/kick.wav', 'SAMPLES'],
-    ['song.xml', 'song.xml'],
-  ])('topDir(%s) === %s', (path, expected) => {
+    ["SAMPLES/DRUMS/kick.wav", "SAMPLES"],
+    ["song.xml", "song.xml"],
+  ])("topDir(%s) === %s", (path, expected) => {
     expect(topDir(path)).toBe(expected);
   });
 
   it.each([
-    ['SAMPLES/DRUMS/kick.wav', 'kick.wav'],
-    ['song.xml', 'song.xml'],
-  ])('basename(%s) === %s', (path, expected) => {
+    ["SAMPLES/DRUMS/kick.wav", "kick.wav"],
+    ["song.xml", "song.xml"],
+  ])("basename(%s) === %s", (path, expected) => {
     expect(basename(path)).toBe(expected);
   });
 
   it.each([
-    ['/SAMPLES/Kick.wav', 'samples/kick.wav'],
-    ['SAMPLES/Kick.wav', 'samples/kick.wav'],
-  ])('normalizePath(%s) === %s', (path, expected) => {
+    ["/SAMPLES/Kick.wav", "samples/kick.wav"],
+    ["SAMPLES/Kick.wav", "samples/kick.wav"],
+  ])("normalizePath(%s) === %s", (path, expected) => {
     expect(normalizePath(path)).toBe(expected);
   });
 
   it.each([
     [ARRANGEMENT_XML, true],
     [SESSION_XML, false],
-    ['<song></song>', false],
-  ])('songHasArrangement detects clipInstances payload', (xml, expected) => {
+    ["<song></song>", false],
+  ])("songHasArrangement detects clipInstances payload", (xml, expected) => {
     expect(songHasArrangement(xml)).toBe(expected);
   });
 });
 
-describe('walkHandle', () => {
-  it('flattens nested directories into path/handle pairs', async () => {
+describe("walkHandle", () => {
+  it("flattens nested directories into path/handle pairs", async () => {
     const root = buildTree({
-      'SONGS/one.xml': 'a',
-      'SAMPLES/DRUMS/kick.wav': 'b',
+      "SONGS/one.xml": "a",
+      "SAMPLES/DRUMS/kick.wav": "b",
     });
     const out: { path: string; handle: FileSystemFileHandle }[] = [];
-    await walkHandle(root as unknown as FileSystemDirectoryHandle, '', out);
+    await walkHandle(root as unknown as FileSystemDirectoryHandle, "", out);
     const paths = out.map((o) => o.path).sort();
-    expect(paths).toEqual(['SAMPLES/DRUMS/kick.wav', 'SONGS/one.xml']);
+    expect(paths).toEqual(["SAMPLES/DRUMS/kick.wav", "SONGS/one.xml"]);
   });
 
-  it('skips app-managed directories', async () => {
+  it("skips app-managed directories", async () => {
     const root = buildTree({
-      'SONGS/one.xml': 'a',
-      'SOFT_DELETE/deleted.xml': 'b',
-      'MOVE_BACKUP/x.xml': 'c',
-      'REPAIR_BACKUP/y.xml': 'd',
-      'HISTORY_BACKUP/SONGS/old.xml': 'e',
+      "SONGS/one.xml": "a",
+      "SOFT_DELETE/deleted.xml": "b",
+      "MOVE_BACKUP/x.xml": "c",
+      "REPAIR_BACKUP/y.xml": "d",
+      "HISTORY_BACKUP/SONGS/old.xml": "e",
     });
     const out: { path: string; handle: FileSystemFileHandle }[] = [];
-    await walkHandle(root as unknown as FileSystemDirectoryHandle, '', out);
-    expect(out.map((o) => o.path)).toEqual(['SONGS/one.xml']);
+    await walkHandle(root as unknown as FileSystemDirectoryHandle, "", out);
+    expect(out.map((o) => o.path)).toEqual(["SONGS/one.xml"]);
   });
 });
 
-describe('cardStore.adoptHandle indexing', () => {
-  it('indexes SONGS, KITS/SYNTHS, and SAMPLES into their respective maps', async () => {
+describe("cardStore.adoptHandle indexing", () => {
+  it("indexes SONGS, KITS/SYNTHS, and SAMPLES into their respective maps", async () => {
     const root = buildTree({
-      'SONGS/track1.xml': ARRANGEMENT_XML,
-      'KITS/KIT001.XML': '<kit/>',
-      'SYNTHS/SYNT001.XML': '<synth/>',
-      'SAMPLES/DRUMS/kick.wav': 'audio',
-      'SAMPLES/notes.txt': 'ignored, not an audio ext',
+      "SONGS/track1.xml": ARRANGEMENT_XML,
+      "KITS/KIT001.XML": "<kit/>",
+      "SYNTHS/SYNT001.XML": "<synth/>",
+      "SAMPLES/DRUMS/kick.wav": "audio",
+      "SAMPLES/notes.txt": "ignored, not an audio ext",
     });
 
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
 
     expect(cardStore.isLoaded).toBe(true);
-    expect(cardStore.songXmls.get('SONGS/track1.xml')).toBe(ARRANGEMENT_XML);
-    expect(cardStore.presetIndex.has('KITS/KIT001.XML')).toBe(true);
-    expect(cardStore.presetIndex.has('SYNTHS/SYNT001.XML')).toBe(true);
-    expect(cardStore.sampleIndex.has('samples/drums/kick.wav')).toBe(true);
-    expect(cardStore.sampleIndex.has('samples/notes.txt')).toBe(false);
+    expect(cardStore.songXmls.get("SONGS/track1.xml")).toBe(ARRANGEMENT_XML);
+    expect(cardStore.presetIndex.has("KITS/KIT001.XML")).toBe(true);
+    expect(cardStore.presetIndex.has("SYNTHS/SYNT001.XML")).toBe(true);
+    expect(cardStore.sampleIndex.has("samples/drums/kick.wav")).toBe(true);
+    expect(cardStore.sampleIndex.has("samples/notes.txt")).toBe(false);
   });
 
-  it('ignores app-managed dirs while indexing', async () => {
+  it("ignores app-managed dirs while indexing", async () => {
     const root = buildTree({
-      'SONGS/track1.xml': ARRANGEMENT_XML,
-      'SOFT_DELETE/SONGS/gone.xml': ARRANGEMENT_XML,
+      "SONGS/track1.xml": ARRANGEMENT_XML,
+      "SOFT_DELETE/SONGS/gone.xml": ARRANGEMENT_XML,
     });
 
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
@@ -276,31 +277,36 @@ describe('cardStore.adoptHandle indexing', () => {
   });
 });
 
-describe('cardStore.eligibleSongs', () => {
-  it('filters to arrangement songs by default and sorts by path', async () => {
+describe("cardStore.eligibleSongs", () => {
+  it("filters to arrangement songs by default and sorts by path", async () => {
     const root = buildTree({
-      'SONGS/b_session.xml': SESSION_XML,
-      'SONGS/a_arranged.xml': ARRANGEMENT_XML,
+      "SONGS/b_session.xml": SESSION_XML,
+      "SONGS/a_arranged.xml": ARRANGEMENT_XML,
     });
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
 
     const songs = cardStore.eligibleSongs();
-    expect(songs).toEqual([{ path: 'SONGS/a_arranged.xml', xml: ARRANGEMENT_XML }]);
+    expect(songs).toEqual([
+      { path: "SONGS/a_arranged.xml", xml: ARRANGEMENT_XML },
+    ]);
   });
 
-  it('returns all songs sorted by path when arrangementOnly is false', async () => {
+  it("returns all songs sorted by path when arrangementOnly is false", async () => {
     const root = buildTree({
-      'SONGS/b_session.xml': SESSION_XML,
-      'SONGS/a_arranged.xml': ARRANGEMENT_XML,
+      "SONGS/b_session.xml": SESSION_XML,
+      "SONGS/a_arranged.xml": ARRANGEMENT_XML,
     });
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
 
     const songs = cardStore.eligibleSongs(false);
-    expect(songs.map((s) => s.path)).toEqual(['SONGS/a_arranged.xml', 'SONGS/b_session.xml']);
+    expect(songs.map((s) => s.path)).toEqual([
+      "SONGS/a_arranged.xml",
+      "SONGS/b_session.xml",
+    ]);
   });
 });
 
-describe('cardStore.getSampleBuffer', () => {
+describe("cardStore.getSampleBuffer", () => {
   function fakeAudioContext() {
     let decodeCalls = 0;
     return {
@@ -314,26 +320,28 @@ describe('cardStore.getSampleBuffer', () => {
     };
   }
 
-  it('returns null for a path not on the card', async () => {
+  it("returns null for a path not on the card", async () => {
     const root = buildTree({});
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
     const { ctx } = fakeAudioContext();
-    expect(await cardStore.getSampleBuffer('SAMPLES/missing.wav', ctx)).toBeNull();
+    expect(
+      await cardStore.getSampleBuffer("SAMPLES/missing.wav", ctx),
+    ).toBeNull();
   });
 
-  it('decodes once and serves subsequent reads from cache', async () => {
-    const root = buildTree({ 'SAMPLES/kick.wav': 'audio' });
+  it("decodes once and serves subsequent reads from cache", async () => {
+    const root = buildTree({ "SAMPLES/kick.wav": "audio" });
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
     const { ctx, getDecodeCalls } = fakeAudioContext();
 
-    const first = await cardStore.getSampleBuffer('SAMPLES/kick.wav', ctx);
-    const second = await cardStore.getSampleBuffer('SAMPLES/kick.wav', ctx);
+    const first = await cardStore.getSampleBuffer("SAMPLES/kick.wav", ctx);
+    const second = await cardStore.getSampleBuffer("SAMPLES/kick.wav", ctx);
 
     expect(first).toBe(second);
     expect(getDecodeCalls()).toBe(1);
   });
 
-  it('evicts the least-recently-used buffer once the cache exceeds capacity', async () => {
+  it("evicts the least-recently-used buffer once the cache exceeds capacity", async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 65; i++) files[`SAMPLES/s${i}.wav`] = `audio${i}`;
     const root = buildTree(files);
@@ -346,34 +354,38 @@ describe('cardStore.getSampleBuffer', () => {
     expect(getDecodeCalls()).toBe(65);
 
     // s0 was evicted (LRU, cache size 64) -> re-fetching it decodes again.
-    await cardStore.getSampleBuffer('SAMPLES/s0.wav', ctx);
+    await cardStore.getSampleBuffer("SAMPLES/s0.wav", ctx);
     expect(getDecodeCalls()).toBe(66);
 
     // s64 (most recently used before eviction pressure) is still cached.
-    await cardStore.getSampleBuffer('SAMPLES/s64.wav', ctx);
+    await cardStore.getSampleBuffer("SAMPLES/s64.wav", ctx);
     expect(getDecodeCalls()).toBe(66);
   });
 });
 
-describe('cardStore.pickDirectory', () => {
-  it('opens the native directory picker and adopts the result', async () => {
-    const root = buildTree({ 'SONGS/track1.xml': ARRANGEMENT_XML });
-    const original = (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker;
-    (window as unknown as { showDirectoryPicker: () => Promise<FakeDirEntry> }).showDirectoryPicker =
-      async () => root;
+describe("cardStore.pickDirectory", () => {
+  it("opens the native directory picker and adopts the result", async () => {
+    const root = buildTree({ "SONGS/track1.xml": ARRANGEMENT_XML });
+    const original = (window as unknown as { showDirectoryPicker?: unknown })
+      .showDirectoryPicker;
+    (
+      window as unknown as { showDirectoryPicker: () => Promise<FakeDirEntry> }
+    ).showDirectoryPicker = async () => root;
 
     await cardStore.pickDirectory();
 
     expect(cardStore.isLoaded).toBe(true);
     expect(cardStore.songXmls.size).toBe(1);
 
-    (window as unknown as { showDirectoryPicker: unknown }).showDirectoryPicker = original;
+    (
+      window as unknown as { showDirectoryPicker: unknown }
+    ).showDirectoryPicker = original;
   });
 });
 
-describe('cardStore.reset', () => {
-  it('clears all indexes and rootHandle', async () => {
-    const root = buildTree({ 'SONGS/track1.xml': ARRANGEMENT_XML });
+describe("cardStore.reset", () => {
+  it("clears all indexes and rootHandle", async () => {
+    const root = buildTree({ "SONGS/track1.xml": ARRANGEMENT_XML });
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
 
     cardStore.reset();
@@ -386,53 +398,59 @@ describe('cardStore.reset', () => {
   });
 });
 
-describe('song cache persistence (IndexedDB)', () => {
-  it('round-trips through save/load/clear', async () => {
+describe("song cache persistence (IndexedDB)", () => {
+  it("round-trips through save/load/clear", async () => {
     expect(await cardStore.loadCachedSongs()).toBeNull();
 
-    await cardStore.saveSongCache('MyCard', [{ path: 'SONGS/a.xml', xml: ARRANGEMENT_XML }]);
+    await cardStore.saveSongCache("MyCard", [
+      { path: "SONGS/a.xml", xml: ARRANGEMENT_XML },
+    ]);
     const cached = await cardStore.loadCachedSongs();
-    expect(cached?.cardName).toBe('MyCard');
-    expect(cached?.songs).toEqual([{ path: 'SONGS/a.xml', xml: ARRANGEMENT_XML }]);
+    expect(cached?.cardName).toBe("MyCard");
+    expect(cached?.songs).toEqual([
+      { path: "SONGS/a.xml", xml: ARRANGEMENT_XML },
+    ]);
 
     await cardStore.clearSongCache();
     expect(await cardStore.loadCachedSongs()).toBeNull();
   });
 
-  it('adoptHandle persists a rootHandle so hasPersistedHandle becomes true', async () => {
+  it("adoptHandle persists a rootHandle so hasPersistedHandle becomes true", async () => {
     expect(await cardStore.hasPersistedHandle()).toBe(false);
-    const root = buildTree({ 'SONGS/track1.xml': ARRANGEMENT_XML });
+    const root = buildTree({ "SONGS/track1.xml": ARRANGEMENT_XML });
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
     expect(await cardStore.hasPersistedHandle()).toBe(true);
   });
 });
 
-describe('cardStore reconnect flows', () => {
-  it('reconnectHandleOnly returns null with no persisted handle', async () => {
+describe("cardStore reconnect flows", () => {
+  it("reconnectHandleOnly returns null with no persisted handle", async () => {
     expect(await cardStore.reconnectHandleOnly()).toBeNull();
   });
 
-  it('reconnectHandleOnly returns the handle when permission is already granted', async () => {
+  it("reconnectHandleOnly returns the handle when permission is already granted", async () => {
     const root = buildTree({});
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
     cardStore.reset();
 
     const handle = await cardStore.reconnectHandleOnly();
     expect(handle).toBe(root as unknown as FileSystemDirectoryHandle);
-    expect(cardStore.rootHandle).toBe(root as unknown as FileSystemDirectoryHandle);
+    expect(cardStore.rootHandle).toBe(
+      root as unknown as FileSystemDirectoryHandle,
+    );
   });
 
-  it('reconnectHandleOnly returns null when permission is denied', async () => {
+  it("reconnectHandleOnly returns null when permission is denied", async () => {
     const root = buildTree({});
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
-    root.permission = 'denied';
+    root.permission = "denied";
     cardStore.reset();
 
     expect(await cardStore.reconnectHandleOnly()).toBeNull();
   });
 
-  it('reconnect silently re-walks the card when permission is already granted', async () => {
-    const root = buildTree({ 'SONGS/track1.xml': ARRANGEMENT_XML });
+  it("reconnect silently re-walks the card when permission is already granted", async () => {
+    const root = buildTree({ "SONGS/track1.xml": ARRANGEMENT_XML });
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
     cardStore.reset();
 
@@ -442,18 +460,18 @@ describe('cardStore reconnect flows', () => {
     expect(cardStore.songXmls.size).toBe(1);
   });
 
-  it('reconnect returns false without prompting when permission is not granted', async () => {
-    const root = buildTree({ 'SONGS/track1.xml': ARRANGEMENT_XML });
+  it("reconnect returns false without prompting when permission is not granted", async () => {
+    const root = buildTree({ "SONGS/track1.xml": ARRANGEMENT_XML });
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
-    root.permission = 'denied';
+    root.permission = "denied";
     cardStore.reset();
 
     expect(await cardStore.reconnect()).toBe(false);
     expect(cardStore.isLoaded).toBe(false);
   });
 
-  it('requestReconnect loads the card once the user grants permission', async () => {
-    const root = buildTree({ 'SONGS/track1.xml': ARRANGEMENT_XML });
+  it("requestReconnect loads the card once the user grants permission", async () => {
+    const root = buildTree({ "SONGS/track1.xml": ARRANGEMENT_XML });
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
     cardStore.reset();
 
@@ -462,11 +480,11 @@ describe('cardStore reconnect flows', () => {
     expect(cardStore.songXmls.size).toBe(1);
   });
 
-  it('requestReconnect returns false with no persisted handle', async () => {
+  it("requestReconnect returns false with no persisted handle", async () => {
     expect(await cardStore.requestReconnect()).toBe(false);
   });
 
-  it('reconnectHandleOnly can prompt for permission via requestPermission', async () => {
+  it("reconnectHandleOnly can prompt for permission via requestPermission", async () => {
     const root = buildTree({});
     await cardStore.adoptHandle(root as unknown as FileSystemDirectoryHandle);
     cardStore.reset();
@@ -476,20 +494,20 @@ describe('cardStore reconnect flows', () => {
   });
 });
 
-describe('cardStore IndexedDB failure handling', () => {
-  it('hasPersistedHandle resolves false when IndexedDB is unavailable', async () => {
+describe("cardStore IndexedDB failure handling", () => {
+  it("hasPersistedHandle resolves false when IndexedDB is unavailable", async () => {
     (globalThis as unknown as { indexedDB: { open(): never } }).indexedDB = {
       open() {
-        throw new Error('IndexedDB blocked');
+        throw new Error("IndexedDB blocked");
       },
     };
     expect(await cardStore.hasPersistedHandle()).toBe(false);
   });
 
-  it('loadCachedSongs resolves null when IndexedDB is unavailable', async () => {
+  it("loadCachedSongs resolves null when IndexedDB is unavailable", async () => {
     (globalThis as unknown as { indexedDB: { open(): never } }).indexedDB = {
       open() {
-        throw new Error('IndexedDB blocked');
+        throw new Error("IndexedDB blocked");
       },
     };
     expect(await cardStore.loadCachedSongs()).toBeNull();

@@ -1,10 +1,10 @@
 ---
-import fs from 'node:fs';
-import path from 'node:path';
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import DelugeUI from '../../components/DelugeUI.svelte';
-import SongPlayer from '../../components/SongPlayer.svelte';
-import { parseFile } from 'music-metadata';
+import fs from "node:fs";
+import path from "node:path";
+import { parseFile } from "music-metadata";
+import DelugeUI from "../../components/DelugeUI.svelte";
+import SongPlayer from "../../components/SongPlayer.svelte";
+import BaseLayout from "../../layouts/BaseLayout.astro";
 
 interface SongInfo {
   file: string;
@@ -17,50 +17,63 @@ interface SongInfo {
 }
 
 export async function getStaticPaths() {
-  const audioDir = path.join(process.cwd(), 'public', 'audio');
-  const files = fs.readdirSync(audioDir)
+  const audioDir = path.join(process.cwd(), "public", "audio");
+  const files = fs
+    .readdirSync(audioDir)
     .filter((f: string) => /\.(mp3|wav|ogg|flac|m4a)$/i.test(f))
     .sort();
 
-  const paths = await Promise.all(files.map(async (f: string) => {
-    const base = f.replace(/\.[^.]+$/, '');
-    const m = base.match(/^(.*?)\s*\[([^\]]*)\]$/);
-    const songName = m ? m[1].trim() : base;
-    const tags = m ? m[2].split(',').map((s: string) => s.trim()).filter(Boolean) : [];
-    const slug = songName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const paths = await Promise.all(
+    files.map(async (f: string) => {
+      const base = f.replace(/\.[^.]+$/, "");
+      const m = base.match(/^(.*?)\s*\[([^\]]*)\]$/);
+      const songName = m ? m[1].trim() : base;
+      const tags = m
+        ? m[2]
+            .split(",")
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+        : [];
+      const slug = songName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
 
-    let duration: string | undefined;
-    let durationSeconds: number | undefined;
-    try {
-      const meta = await parseFile(path.join(audioDir, f));
-      if (meta.format.duration) {
-        const secs = Math.floor(meta.format.duration);
-        const mins = Math.floor(secs / 60);
-        const rem = secs % 60;
-        duration = `${mins}:${String(rem).padStart(2, '0')}`;
-        durationSeconds = secs;
-      }
-    } catch {}
+      let duration: string | undefined;
+      let durationSeconds: number | undefined;
+      try {
+        const meta = await parseFile(path.join(audioDir, f));
+        if (meta.format.duration) {
+          const secs = Math.floor(meta.format.duration);
+          const mins = Math.floor(secs / 60);
+          const rem = secs % 60;
+          duration = `${mins}:${String(rem).padStart(2, "0")}`;
+          durationSeconds = secs;
+        }
+      } catch {}
 
-    const song: SongInfo = {
-      file: f,
-      name: songName,
-      slug,
-      year: tags.find((t: string) => /^\d{4}$/.test(t)),
-      genre: tags.find((t: string) => !/^\d{4}$/.test(t)),
-      duration,
-      durationSeconds,
-    };
+      const song: SongInfo = {
+        file: f,
+        name: songName,
+        slug,
+        year: tags.find((t: string) => /^\d{4}$/.test(t)),
+        genre: tags.find((t: string) => !/^\d{4}$/.test(t)),
+        duration,
+        durationSeconds,
+      };
 
-    return { params: { slug }, props: { song } };
-  }));
+      return { params: { slug }, props: { song } };
+    }),
+  );
 
   return paths;
 }
 
 const { song } = Astro.props as { song: SongInfo };
 const pageUrl = `https://deluge.quest/songs/${song.slug}`;
-const description = [song.genre, song.year, song.duration].filter(Boolean).join(' · ');
+const description = [song.genre, song.year, song.duration]
+  .filter(Boolean)
+  .join(" · ");
 ---
 
 <BaseLayout

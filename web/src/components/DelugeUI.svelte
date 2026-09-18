@@ -1,568 +1,789 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { navigate } from 'astro:transitions/client';
-  import { homeAudio } from '../lib/homeAudio';
-  import { shouldSyncScreen } from '../lib/screenGuard';
-  import { PAD_SOUNDS, velocityForPosition, glowForVelocity, PadEffectsChain } from '../lib/padSounds';
-  import { AudioVisualizer, type VisualizerMode } from '../lib/audioVisualizer';
+import { navigate } from "astro:transitions/client";
+import { onDestroy, onMount } from "svelte";
+import { AudioVisualizer, type VisualizerMode } from "../lib/audioVisualizer";
+import { homeAudio } from "../lib/homeAudio";
+import {
+  glowForVelocity,
+  PAD_SOUNDS,
+  PadEffectsChain,
+  velocityForPosition,
+} from "../lib/padSounds";
+import { shouldSyncScreen } from "../lib/screenGuard";
 
-  interface Pad {
-    row: number;
-    col: number;
-    color: string;
-    glowIntensity: number;
-    active: boolean;
-    link?: string;
-    label?: string;
-    group?: string;
-    soundIndex?: number;
-    velocity?: number;
-  }
+interface Pad {
+  row: number;
+  col: number;
+  color: string;
+  glowIntensity: number;
+  active: boolean;
+  link?: string;
+  label?: string;
+  group?: string;
+  soundIndex?: number;
+  velocity?: number;
+}
 
-  const ROWS = 8;
-  const COLS = 16;
-  const SIDEBAR_COLS = 2;
+const ROWS = 8;
+const COLS = 16;
+const SIDEBAR_COLS = 2;
 
-  const GOLD = '#D4A847';
-  const TEAL = '#5AABAC';
-  const GREEN = '#40A060';
-  const RED = '#CC3030';
-  const PURPLE = '#8050B0';
-  const WHITE = '#E0DDD6';
-  const OFF = 'transparent';
+const GOLD = "#D4A847";
+const TEAL = "#5AABAC";
+const GREEN = "#40A060";
+const RED = "#CC3030";
+const PURPLE = "#8050B0";
+const WHITE = "#E0DDD6";
+const OFF = "transparent";
 
-  const DEFAULT_KNOB_VALUES = [0, 0, 127, 0, 0, 64, 100];
-  let knobValues = [...DEFAULT_KNOB_VALUES];
-  let knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
-  const knobMeta = [
-    { name: 'delay time',     style: 'black', hint: 'Delay Time' },
-    { name: 'delay fdbk',     style: 'black', hint: 'Delay Feedback' },
-    { name: 'filter',         style: 'gold',  hint: 'Cutoff' },
-    { name: 'resonance',      style: 'gold',  hint: 'Resonance' },
-    { name: 'reverb',         style: 'black', hint: 'Reverb' },
-    { name: 'tempo',          style: 'black', hint: 'Speed' },
-    { name: 'output',         style: 'gold',  hint: 'Volume' },
-  ];
+const DEFAULT_KNOB_VALUES = [0, 0, 127, 0, 0, 64, 100];
+let knobValues = [...DEFAULT_KNOB_VALUES];
+let knobAngles = knobValues.map((v) => (v / 127) * 270 - 135);
+const knobMeta = [
+  { name: "delay time", style: "black", hint: "Delay Time" },
+  { name: "delay fdbk", style: "black", hint: "Delay Feedback" },
+  { name: "filter", style: "gold", hint: "Cutoff" },
+  { name: "resonance", style: "gold", hint: "Resonance" },
+  { name: "reverb", style: "black", hint: "Reverb" },
+  { name: "tempo", style: "black", hint: "Speed" },
+  { name: "output", style: "gold", hint: "Volume" },
+];
 
-  function knobTip(i: number): string {
-    return knobMeta[i].hint;
-  }
+function knobTip(i: number): string {
+  return knobMeta[i].hint;
+}
 
-  let screenText = 'DELUGE.QUEST';
-  let screenSubtext = 'drop a song to begin';
-  let pads: Pad[][] = [];
-  let sidebarPads: Pad[][] = [];
-  let mounted = false;
-  let draggingKnob: number | null = null;
-  let dragStartY = 0;
-  let dragStartAngle = 0;
-  let knobDisplayTimer: ReturnType<typeof setTimeout> | null = null;
-  let hoveredPad = false;
+let screenText = "DELUGE.QUEST";
+let screenSubtext = "drop a song to begin";
+let pads: Pad[][] = [];
+let sidebarPads: Pad[][] = [];
+let mounted = false;
+let draggingKnob: number | null = null;
+let dragStartY = 0;
+let dragStartAngle = 0;
+let knobDisplayTimer: ReturnType<typeof setTimeout> | null = null;
+let hoveredPad = false;
 
-  function holdKnobDisplay() {
-    if (knobDisplayTimer) clearTimeout(knobDisplayTimer);
-    knobDisplayTimer = setTimeout(() => {
-      knobDisplayTimer = null;
-      screenText = idleText();
-      if (isPlaying) {
-        screenSubtext = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
-      } else {
-        screenSubtext = idleSubtext();
-      }
-    }, 800);
-  }
-
-  export let initialSongName: string | undefined = undefined;
-  let padAudioCtx: AudioContext | null = null;
-  let padEffects: PadEffectsChain | null = null;
-
-  $: songs = homeAudio.songs;
-  $: browseSongs = songs.map((s, i) => ({ song: s, realIndex: i })).sort((a, b) => a.song.name.localeCompare(b.song.name));
-  $: currentSongIndex = homeAudio.currentSongIndex;
-  $: songLoaded = homeAudio.songLoaded;
-  $: isPlaying = homeAudio.isPlaying;
-  let browsing = false;
-  let browseIndex = 0;
-  let unsubscribe: (() => void) | null = null;
-  let vizCanvas: HTMLCanvasElement;
-  let visualizer: AudioVisualizer | null = null;
-  let vizMode: VisualizerMode = 'bars';
-  let vizPaused = false;
-
-  function toggleVizMode() {
-    vizMode = vizMode === 'bars' ? 'circuit' : 'bars';
-    if (visualizer) visualizer.mode = vizMode;
-  }
-
-  function toggleVizPaused() {
-    if (!visualizer) return;
-    visualizer.paused = !visualizer.paused;
-    vizPaused = visualizer.paused;
-  }
-
-  function syncFromAudio() {
-    connectVisualizerToAudio();
-    isPlaying = homeAudio.isPlaying;
-    songLoaded = homeAudio.songLoaded;
-    currentSongIndex = homeAudio.currentSongIndex;
-    songs = homeAudio.songs;
-    if (shouldSyncScreen({ isPlaying, knobHoldTimer: knobDisplayTimer, draggingKnob, hoveredPad })) {
-      screenText = idleText();
-      screenSubtext = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
-    }
-  }
-
-  function marquee(node: HTMLElement, _text: string) {
-    const inner = node.firstElementChild as HTMLElement;
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    function measure() {
-      if (reduceMotion) return;
-      node.classList.remove('is-scrolling');
-      node.style.removeProperty('--marquee-shift');
-      node.style.removeProperty('--marquee-duration');
-      inner.style.animation = '';
-      const overflow = inner.scrollWidth - node.clientWidth;
-      if (overflow > 2) {
-        node.style.setProperty('--marquee-shift', `-${overflow + 12}px`);
-        const seconds = (overflow + 12) / 45 + 2;
-        inner.style.animation = `oled-marquee ${seconds}s ease-in-out infinite alternate`;
-        node.classList.add('is-scrolling');
-      }
-    }
-    requestAnimationFrame(measure);
-    return {
-      update() { requestAnimationFrame(measure); },
-    };
-  }
-
-  function idleText(): string {
-    return songs[currentSongIndex]?.name.toUpperCase() ?? 'DELUGE.QUEST';
-  }
-
-  function idleSubtext(): string {
-    if (!songs[currentSongIndex]) return 'drop a song to begin';
-    return homeAudio.loadedSongIndex === currentSongIndex ? 'press play' : 'press load';
-  }
-
-  async function fetchSongList() {
-    await homeAudio.fetchSongList();
-    songs = homeAudio.songs;
-    if (initialSongName && songs.length > 0) {
-      const target = initialSongName.toLowerCase();
-      const idx = songs.findIndex(s => s.name.toLowerCase() === target);
-      if (idx >= 0) {
-        homeAudio.currentSongIndex = idx;
-      }
-    }
-    currentSongIndex = homeAudio.currentSongIndex;
-    if (songs.length > 0) {
-      screenText = idleText();
+function holdKnobDisplay() {
+  if (knobDisplayTimer) clearTimeout(knobDisplayTimer);
+  knobDisplayTimer = setTimeout(() => {
+    knobDisplayTimer = null;
+    screenText = idleText();
+    if (isPlaying) {
+      screenSubtext = homeAudio.formatTime(
+        homeAudio.elapsed,
+        homeAudio.duration,
+      );
+    } else {
       screenSubtext = idleSubtext();
     }
-  }
+  }, 800);
+}
 
-  async function stepSong(delta: number) {
-    screenText = 'LOADING';
-    await homeAudio.stepSong(delta);
-    syncFromAudio();
-  }
+export let initialSongName: string | undefined = undefined;
+let padAudioCtx: AudioContext | null = null;
+let padEffects: PadEffectsChain | null = null;
 
-  const DESIGN_WIDTH = 900;
-  const FOOTER_RESERVE = 50;
-  let wrapperWidth = DESIGN_WIDTH;
-  let housingHeight = 0;
-  let scalerEl: HTMLElement;
-  let availableHeight = 9999;
+$: songs = homeAudio.songs;
+$: browseSongs = songs
+  .map((s, i) => ({ song: s, realIndex: i }))
+  .sort((a, b) => a.song.name.localeCompare(b.song.name));
+$: currentSongIndex = homeAudio.currentSongIndex;
+$: songLoaded = homeAudio.songLoaded;
+$: isPlaying = homeAudio.isPlaying;
+let browsing = false;
+let browseIndex = 0;
+let unsubscribe: (() => void) | null = null;
+let vizCanvas: HTMLCanvasElement;
+let visualizer: AudioVisualizer | null = null;
+let vizMode: VisualizerMode = "bars";
+let vizPaused = false;
 
-  function measureAvailable() {
-    if (!scalerEl) return;
-    const top = scalerEl.getBoundingClientRect().top + window.scrollY;
-    availableHeight = window.innerHeight - top - FOOTER_RESERVE;
-  }
+function toggleVizMode() {
+  vizMode = vizMode === "bars" ? "circuit" : "bars";
+  if (visualizer) visualizer.mode = vizMode;
+}
 
-  function resizeVisualizer() {
-    if (visualizer) visualizer.resize();
-  }
+function toggleVizPaused() {
+  if (!visualizer) return;
+  visualizer.paused = !visualizer.paused;
+  vizPaused = visualizer.paused;
+}
 
-  $: heightScale = housingHeight > 0 && availableHeight > 200 ? availableHeight / housingHeight : 1;
-  $: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH, heightScale);
-  $: offsetX = (wrapperWidth - DESIGN_WIDTH * scale) / 2;
-  $: if (scale && mounted) requestAnimationFrame(resizeVisualizer);
-
-  const AUDITION_PALETTE = ['#4488DD','#DD55AA','#DDBB33','#5AABAC','#CC3030','#AACC30','#3355CC','#FF6622'];
-
-  const TOOLS: { group: string; label: string; link: string; color: string; subtext: string }[] = [
-    { group: 'manage',    label: 'Card Management',  link: '/manage',    color: AUDITION_PALETTE[0], subtext: 'organize samples & songs' },
-    { group: 'stats',     label: 'Song Stats',      link: '/stats',     color: AUDITION_PALETTE[1], subtext: 'library analysis & stats' },
-    { group: 'preview',   label: 'Song Preview',     link: '/preview',   color: AUDITION_PALETTE[2], subtext: 'arrangement preview & playback' },
-    { group: 'score',     label: 'Score Converter',  link: '/score',     color: AUDITION_PALETTE[3], subtext: 'Deluge XML → MusicXML' },
-    { group: 'kits',      label: 'Kit Builder',      link: '/kits',      color: AUDITION_PALETTE[4], subtext: 'build & edit drum kits' },
-    { group: 'patch',     label: 'Patch Generator',  link: '/patch',     color: AUDITION_PALETTE[5], subtext: 'random synth presets' },
-    { group: 'midi',      label: 'MIDI Import',      link: '/import',    color: AUDITION_PALETTE[6], subtext: 'MIDI → Deluge XML' },
-    { group: 'backup',    label: 'Card Backup',      link: '/backup',    color: AUDITION_PALETTE[7], subtext: 'git-based card backup' },
-  ];
-
-  const FUTURE_TOOLS: { group: string; label: string; subtext: string; color: string }[] = [
-    { group: 'future-1', label: 'Coming Soon', subtext: '', color: AUDITION_PALETTE[7] },
-  ];
-
-  function soundAt(r: number, c: number): number {
-    const blockRow = Math.floor(r / 4);
-    const blockCol = Math.floor(c / 4);
-    return blockRow * 4 + blockCol;
-  }
-
-  const SIDEBAR_LEFT: { rows: number[]; color: string; link: string; label: string; group: string; subtext: string }[] = [
-    { rows: [0, 1], color: GREEN,   link: '/faq', label: 'FAQ', group: 'faq', subtext: 'open source / community' },
-    { rows: [2, 3], color: RED, link: '/songs', label: 'Songs', group: 'songs', subtext: 'browse all tracks' },
-    { rows: [4, 5], color: GREEN, link: '/changelog', label: 'Changelog', group: 'changelog', subtext: 'view updates & changes' },
-    { rows: [6, 7], color: RED,   link: 'https://github.com/dannybrown37/deluge', label: 'GitHub', group: 'github', subtext: 'view source code' },
-  ];
-
-  function sidebarLeftAt(r: number): typeof SIDEBAR_LEFT[number] {
-    return SIDEBAR_LEFT.find(s => s.rows.includes(r))!;
-  }
-
-  function initPads() {
-    pads = [];
-    for (let r = 0; r < ROWS; r++) {
-      const row: Pad[] = [];
-      for (let c = 0; c < COLS; c++) {
-        const idx = soundAt(r, c);
-        let color = OFF;
-        let glowIntensity = 0;
-        let active = false;
-        let label: string | undefined;
-        let group: string | undefined;
-        let soundIndex: number | undefined;
-        let velocity: number | undefined;
-
-        if (idx < PAD_SOUNDS.length) {
-          const sound = PAD_SOUNDS[idx];
-          const localR = r % 4, localC = c % 4;
-          velocity = velocityForPosition(localR, localC);
-          color = sound.color;
-          glowIntensity = glowForVelocity(velocity);
-          active = true;
-          label = sound.name;
-          group = `sound-${idx}`;
-          soundIndex = idx;
-        }
-
-        row.push({ row: r, col: c, color, glowIntensity, active, label, group, soundIndex, velocity });
-      }
-      pads.push(row);
-    }
-
-    sidebarPads = [];
-    for (let r = 0; r < ROWS; r++) {
-      const row: Pad[] = [];
-      for (let c = 0; c < SIDEBAR_COLS; c++) {
-        let color = OFF;
-        let glowIntensity = 0;
-        let active = false;
-        let link: string | undefined;
-        let label: string | undefined;
-        let group: string | undefined;
-
-        if (c === 0) {
-          const s = sidebarLeftAt(r);
-          color = s.color; glowIntensity = 0.5; active = true;
-          link = s.link; label = s.label; group = s.group;
-        } else {
-          const toolIdx = r;
-          if (toolIdx < TOOLS.length) {
-            const tool = TOOLS[toolIdx];
-            color = tool.color; glowIntensity = 0.5; active = true;
-            link = tool.link; label = tool.label; group = tool.group;
-          } else {
-            const futureIdx = toolIdx - TOOLS.length;
-            if (futureIdx < FUTURE_TOOLS.length) {
-              const f = FUTURE_TOOLS[futureIdx];
-              color = f.color; glowIntensity = 0.15; active = false;
-              label = f.label; group = f.group;
-            }
-          }
-        }
-
-        row.push({ row: r, col: c, color, glowIntensity, active, link, label, group });
-      }
-      sidebarPads.push(row);
-    }
-  }
-
-  function handlePadHover(pad: Pad) {
-    if (!pad.label) return;
-    hoveredPad = true;
-    screenText = pad.label.toUpperCase();
-    if (pad.soundIndex !== undefined && pad.velocity !== undefined) {
-      const pct = Math.round(pad.velocity * 100);
-      screenSubtext = `velocity ${pct}%`;
-      return;
-    }
-    const allTools = [...TOOLS, ...FUTURE_TOOLS];
-    const match = allTools.find(t => t.group === pad.group);
-    if (match) { screenSubtext = match.subtext; }
-    else {
-      const sidebarMatch = SIDEBAR_LEFT.find(s => s.group === pad.group);
-      if (sidebarMatch) screenSubtext = sidebarMatch.subtext;
-      else screenSubtext = '';
-    }
-  }
-
-  function handlePadLeave() {
-    hoveredPad = false;
+function syncFromAudio() {
+  connectVisualizerToAudio();
+  isPlaying = homeAudio.isPlaying;
+  songLoaded = homeAudio.songLoaded;
+  currentSongIndex = homeAudio.currentSongIndex;
+  songs = homeAudio.songs;
+  if (
+    shouldSyncScreen({
+      isPlaying,
+      knobHoldTimer: knobDisplayTimer,
+      draggingKnob,
+      hoveredPad,
+    })
+  ) {
     screenText = idleText();
-    screenSubtext = isPlaying
-      ? homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration)
-      : idleSubtext();
+    screenSubtext = homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration);
   }
+}
 
-  function ensurePadAudio() {
-    if (!padAudioCtx) {
-      padAudioCtx = new AudioContext();
-      padEffects = new PadEffectsChain(padAudioCtx);
-      padEffects.updateVolume(knobValues[6]);
-      padEffects.updateFilter(knobValues[2], knobValues[3]);
-      padEffects.updateReverb(knobValues[4]);
-      padEffects.updateDelay(knobValues[0], knobValues[1]);
-    }
-    if (padAudioCtx.state === 'suspended') padAudioCtx.resume();
-  }
-
-  function handlePadClick(pad: Pad) {
-    if (pad.soundIndex !== undefined && pad.velocity !== undefined) {
-      ensurePadAudio();
-      PAD_SOUNDS[pad.soundIndex].play(padAudioCtx!, padEffects!.input, pad.velocity);
-      return;
-    }
-    if (pad.link) {
-      if (pad.link.startsWith('http')) window.open(pad.link, '_blank', 'noopener');
-      else navigate(pad.link);
+function marquee(node: HTMLElement, _text: string) {
+  const inner = node.firstElementChild as HTMLElement;
+  const reduceMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  function measure() {
+    if (reduceMotion) return;
+    node.classList.remove("is-scrolling");
+    node.style.removeProperty("--marquee-shift");
+    node.style.removeProperty("--marquee-duration");
+    inner.style.animation = "";
+    const overflow = inner.scrollWidth - node.clientWidth;
+    if (overflow > 2) {
+      node.style.setProperty("--marquee-shift", `-${overflow + 12}px`);
+      const seconds = (overflow + 12) / 45 + 2;
+      inner.style.animation = `oled-marquee ${seconds}s ease-in-out infinite alternate`;
+      node.classList.add("is-scrolling");
     }
   }
+  requestAnimationFrame(measure);
+  return {
+    update() {
+      requestAnimationFrame(measure);
+    },
+  };
+}
 
-  function handleKnobStart(idx: number, e: MouseEvent | TouchEvent) {
-    draggingKnob = idx;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    dragStartY = clientY;
-    dragStartAngle = knobAngles[idx];
-    e.preventDefault();
-  }
+function idleText(): string {
+  return songs[currentSongIndex]?.name.toUpperCase() ?? "DELUGE.QUEST";
+}
 
-  function initVisualizer() {
-    if (visualizer || !vizCanvas) return;
-    visualizer = new AudioVisualizer(vizCanvas);
-    visualizer.resize();
-    vizPaused = visualizer.paused;
-    visualizer.start();
-  }
+function idleSubtext(): string {
+  if (!songs[currentSongIndex]) return "drop a song to begin";
+  return homeAudio.loadedSongIndex === currentSongIndex
+    ? "press play"
+    : "press load";
+}
 
-  function connectVisualizerToAudio() {
-    if (!visualizer || visualizer.connected || !homeAudio.analyserNode) return;
-    visualizer.connect(homeAudio.analyserNode);
-  }
-
-  async function initAudio() {
-    await homeAudio.initAudio();
-    applyKnobs();
-    connectVisualizerToAudio();
-    if (songs.length > 0 && homeAudio.loadedSongIndex !== homeAudio.currentSongIndex) await loadSong(homeAudio.currentSongIndex);
-  }
-
-  async function loadSong(idx: number) {
-    screenText = 'LOADING';
-    screenSubtext = songs[idx]?.name ?? '';
-    const ok = await homeAudio.loadSong(idx);
-    if (ok) {
-      syncFromAudio();
-      screenText = homeAudio.currentSong!.name.toUpperCase();
-      screenSubtext = 'press play';
-    } else {
-      screenText = 'ERROR';
-      screenSubtext = 'load failed';
+async function fetchSongList() {
+  await homeAudio.fetchSongList();
+  songs = homeAudio.songs;
+  if (initialSongName && songs.length > 0) {
+    const target = initialSongName.toLowerCase();
+    const idx = songs.findIndex((s) => s.name.toLowerCase() === target);
+    if (idx >= 0) {
+      homeAudio.currentSongIndex = idx;
     }
   }
-
-  function resetKnobs() {
-    knobValues = [...DEFAULT_KNOB_VALUES];
-    knobAngles = knobValues.map(v => (v / 127) * 270 - 135);
-    updateVolume();
-    updateFilter();
-    updateReverb();
-    updateDelay();
-    updatePlaybackRate();
-  }
-
-  function handleLoad() {
-    if (songs.length === 0) return;
-    browsing = !browsing;
-    if (browsing) {
-      browseIndex = browseSongs.findIndex(b => b.realIndex === currentSongIndex);
-      screenText = 'LOAD SONG';
-      screenSubtext = `${songs.length} songs`;
-    } else {
-      screenText = idleText();
-      screenSubtext = idleSubtext();
-    }
-  }
-
-  function handleReset() {
-    resetKnobs();
+  currentSongIndex = homeAudio.currentSongIndex;
+  if (songs.length > 0) {
     screenText = idleText();
-    screenSubtext = 'knobs reset';
-  }
-
-  function songSlug(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  }
-
-  async function chooseSong(idx: number) {
-    browsing = false;
-    await initAudio();
-    resetKnobs();
-    await loadSong(idx);
-    const song = songs[idx];
-    if (song) navigate(`/songs/${songSlug(song.name)}`);
-  }
-
-  function handleOutsideClick(e: MouseEvent) {
-    if (!browsing) return;
-    const t = e.target as HTMLElement;
-    if (t.closest('.song-browser') || t.closest('.load-btn')) return;
-    browsing = false;
     screenSubtext = idleSubtext();
   }
+}
 
-  function handleBrowseKeys(e: KeyboardEvent) {
-    if (!browsing) return;
-    if (e.key === 'Escape') { browsing = false; screenSubtext = idleSubtext(); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); browseIndex = (browseIndex + 1) % browseSongs.length; }
-    if (e.key === 'ArrowUp') { e.preventDefault(); browseIndex = (browseIndex - 1 + browseSongs.length) % browseSongs.length; }
-    if (e.key === 'Enter') { e.preventDefault(); chooseSong(browseSongs[browseIndex]?.realIndex ?? 0); }
-  }
+async function stepSong(delta: number) {
+  screenText = "LOADING";
+  await homeAudio.stepSong(delta);
+  syncFromAudio();
+}
 
-  function applyKnobs() {
-    homeAudio.updateVolume(knobValues[6]);
-    homeAudio.updateFilter(knobValues[2], knobValues[3]);
-    homeAudio.updateReverb(knobValues[4]);
-    homeAudio.updateDelay(knobValues[0], knobValues[1]);
-    homeAudio.updatePlaybackRate(knobValues[5]);
-    if (padEffects) {
-      padEffects.updateVolume(knobValues[6]);
-      padEffects.updateFilter(knobValues[2], knobValues[3]);
-      padEffects.updateReverb(knobValues[4]);
-      padEffects.updateDelay(knobValues[0], knobValues[1]);
+const DESIGN_WIDTH = 900;
+const FOOTER_RESERVE = 50;
+let wrapperWidth = DESIGN_WIDTH;
+let housingHeight = 0;
+let scalerEl: HTMLElement;
+let availableHeight = 9999;
+
+function measureAvailable() {
+  if (!scalerEl) return;
+  const top = scalerEl.getBoundingClientRect().top + window.scrollY;
+  availableHeight = window.innerHeight - top - FOOTER_RESERVE;
+}
+
+function resizeVisualizer() {
+  if (visualizer) visualizer.resize();
+}
+
+$: heightScale =
+  housingHeight > 0 && availableHeight > 200
+    ? availableHeight / housingHeight
+    : 1;
+$: scale = Math.min(1, wrapperWidth / DESIGN_WIDTH, heightScale);
+$: offsetX = (wrapperWidth - DESIGN_WIDTH * scale) / 2;
+$: if (scale && mounted) requestAnimationFrame(resizeVisualizer);
+
+const AUDITION_PALETTE = [
+  "#4488DD",
+  "#DD55AA",
+  "#DDBB33",
+  "#5AABAC",
+  "#CC3030",
+  "#AACC30",
+  "#3355CC",
+  "#FF6622",
+];
+
+const TOOLS: {
+  group: string;
+  label: string;
+  link: string;
+  color: string;
+  subtext: string;
+}[] = [
+  {
+    group: "manage",
+    label: "Card Management",
+    link: "/manage",
+    color: AUDITION_PALETTE[0],
+    subtext: "organize samples & songs",
+  },
+  {
+    group: "stats",
+    label: "Song Stats",
+    link: "/stats",
+    color: AUDITION_PALETTE[1],
+    subtext: "library analysis & stats",
+  },
+  {
+    group: "preview",
+    label: "Song Preview",
+    link: "/preview",
+    color: AUDITION_PALETTE[2],
+    subtext: "arrangement preview & playback",
+  },
+  {
+    group: "score",
+    label: "Score Converter",
+    link: "/score",
+    color: AUDITION_PALETTE[3],
+    subtext: "Deluge XML → MusicXML",
+  },
+  {
+    group: "kits",
+    label: "Kit Builder",
+    link: "/kits",
+    color: AUDITION_PALETTE[4],
+    subtext: "build & edit drum kits",
+  },
+  {
+    group: "patch",
+    label: "Patch Generator",
+    link: "/patch",
+    color: AUDITION_PALETTE[5],
+    subtext: "random synth presets",
+  },
+  {
+    group: "midi",
+    label: "MIDI Import",
+    link: "/import",
+    color: AUDITION_PALETTE[6],
+    subtext: "MIDI → Deluge XML",
+  },
+  {
+    group: "backup",
+    label: "Card Backup",
+    link: "/backup",
+    color: AUDITION_PALETTE[7],
+    subtext: "git-based card backup",
+  },
+];
+
+const FUTURE_TOOLS: {
+  group: string;
+  label: string;
+  subtext: string;
+  color: string;
+}[] = [
+  {
+    group: "future-1",
+    label: "Coming Soon",
+    subtext: "",
+    color: AUDITION_PALETTE[7],
+  },
+];
+
+function soundAt(r: number, c: number): number {
+  const blockRow = Math.floor(r / 4);
+  const blockCol = Math.floor(c / 4);
+  return blockRow * 4 + blockCol;
+}
+
+const SIDEBAR_LEFT: {
+  rows: number[];
+  color: string;
+  link: string;
+  label: string;
+  group: string;
+  subtext: string;
+}[] = [
+  {
+    rows: [0, 1],
+    color: GREEN,
+    link: "/faq",
+    label: "FAQ",
+    group: "faq",
+    subtext: "open source / community",
+  },
+  {
+    rows: [2, 3],
+    color: RED,
+    link: "/songs",
+    label: "Songs",
+    group: "songs",
+    subtext: "browse all tracks",
+  },
+  {
+    rows: [4, 5],
+    color: GREEN,
+    link: "/changelog",
+    label: "Changelog",
+    group: "changelog",
+    subtext: "view updates & changes",
+  },
+  {
+    rows: [6, 7],
+    color: RED,
+    link: "https://github.com/dannybrown37/deluge",
+    label: "GitHub",
+    group: "github",
+    subtext: "view source code",
+  },
+];
+
+function sidebarLeftAt(r: number): (typeof SIDEBAR_LEFT)[number] {
+  return SIDEBAR_LEFT.find((s) => s.rows.includes(r))!;
+}
+
+function initPads() {
+  pads = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row: Pad[] = [];
+    for (let c = 0; c < COLS; c++) {
+      const idx = soundAt(r, c);
+      let color = OFF;
+      let glowIntensity = 0;
+      let active = false;
+      let label: string | undefined;
+      let group: string | undefined;
+      let soundIndex: number | undefined;
+      let velocity: number | undefined;
+
+      if (idx < PAD_SOUNDS.length) {
+        const sound = PAD_SOUNDS[idx];
+        const localR = r % 4,
+          localC = c % 4;
+        velocity = velocityForPosition(localR, localC);
+        color = sound.color;
+        glowIntensity = glowForVelocity(velocity);
+        active = true;
+        label = sound.name;
+        group = `sound-${idx}`;
+        soundIndex = idx;
+      }
+
+      row.push({
+        row: r,
+        col: c,
+        color,
+        glowIntensity,
+        active,
+        label,
+        group,
+        soundIndex,
+        velocity,
+      });
     }
+    pads.push(row);
   }
 
-  function updateVolume() { homeAudio.updateVolume(knobValues[6]); padEffects?.updateVolume(knobValues[6]); }
-  function updateReverb() { homeAudio.updateReverb(knobValues[4]); padEffects?.updateReverb(knobValues[4]); }
-  function updateDelay() { homeAudio.updateDelay(knobValues[0], knobValues[1]); padEffects?.updateDelay(knobValues[0], knobValues[1]); }
-  function updateFilter() { homeAudio.updateFilter(knobValues[2], knobValues[3]); padEffects?.updateFilter(knobValues[2], knobValues[3]); }
-  function updatePlaybackRate() { homeAudio.updatePlaybackRate(knobValues[5]); }
+  sidebarPads = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row: Pad[] = [];
+    for (let c = 0; c < SIDEBAR_COLS; c++) {
+      let color = OFF;
+      let glowIntensity = 0;
+      let active = false;
+      let link: string | undefined;
+      let label: string | undefined;
+      let group: string | undefined;
 
-  function getPlaybackRate(): number {
-    const v = knobValues[5];
-    if (v <= 64) return 0.5 + (v / 64) * 0.5;
-    return 1.0 + ((v - 64) / 63) * 1.0;
+      if (c === 0) {
+        const s = sidebarLeftAt(r);
+        color = s.color;
+        glowIntensity = 0.5;
+        active = true;
+        link = s.link;
+        label = s.label;
+        group = s.group;
+      } else {
+        const toolIdx = r;
+        if (toolIdx < TOOLS.length) {
+          const tool = TOOLS[toolIdx];
+          color = tool.color;
+          glowIntensity = 0.5;
+          active = true;
+          link = tool.link;
+          label = tool.label;
+          group = tool.group;
+        } else {
+          const futureIdx = toolIdx - TOOLS.length;
+          if (futureIdx < FUTURE_TOOLS.length) {
+            const f = FUTURE_TOOLS[futureIdx];
+            color = f.color;
+            glowIntensity = 0.15;
+            active = false;
+            label = f.label;
+            group = f.group;
+          }
+        }
+      }
+
+      row.push({
+        row: r,
+        col: c,
+        color,
+        glowIntensity,
+        active,
+        link,
+        label,
+        group,
+      });
+    }
+    sidebarPads.push(row);
   }
+}
 
-  async function togglePlay() {
-    await initAudio();
-    await homeAudio.togglePlay(getPlaybackRate());
+function handlePadHover(pad: Pad) {
+  if (!pad.label) return;
+  hoveredPad = true;
+  screenText = pad.label.toUpperCase();
+  if (pad.soundIndex !== undefined && pad.velocity !== undefined) {
+    const pct = Math.round(pad.velocity * 100);
+    screenSubtext = `velocity ${pct}%`;
+    return;
+  }
+  const allTools = [...TOOLS, ...FUTURE_TOOLS];
+  const match = allTools.find((t) => t.group === pad.group);
+  if (match) {
+    screenSubtext = match.subtext;
+  } else {
+    const sidebarMatch = SIDEBAR_LEFT.find((s) => s.group === pad.group);
+    if (sidebarMatch) screenSubtext = sidebarMatch.subtext;
+    else screenSubtext = "";
+  }
+}
+
+function handlePadLeave() {
+  hoveredPad = false;
+  screenText = idleText();
+  screenSubtext = isPlaying
+    ? homeAudio.formatTime(homeAudio.elapsed, homeAudio.duration)
+    : idleSubtext();
+}
+
+function ensurePadAudio() {
+  if (!padAudioCtx) {
+    padAudioCtx = new AudioContext();
+    padEffects = new PadEffectsChain(padAudioCtx);
+    padEffects.updateVolume(knobValues[6]);
+    padEffects.updateFilter(knobValues[2], knobValues[3]);
+    padEffects.updateReverb(knobValues[4]);
+    padEffects.updateDelay(knobValues[0], knobValues[1]);
+  }
+  if (padAudioCtx.state === "suspended") padAudioCtx.resume();
+}
+
+function handlePadClick(pad: Pad) {
+  if (pad.soundIndex !== undefined && pad.velocity !== undefined) {
+    ensurePadAudio();
+    PAD_SOUNDS[pad.soundIndex].play(
+      padAudioCtx!,
+      padEffects!.input,
+      pad.velocity,
+    );
+    return;
+  }
+  if (pad.link) {
+    if (pad.link.startsWith("http"))
+      window.open(pad.link, "_blank", "noopener");
+    else navigate(pad.link);
+  }
+}
+
+function handleKnobStart(idx: number, e: MouseEvent | TouchEvent) {
+  draggingKnob = idx;
+  const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+  dragStartY = clientY;
+  dragStartAngle = knobAngles[idx];
+  e.preventDefault();
+}
+
+function initVisualizer() {
+  if (visualizer || !vizCanvas) return;
+  visualizer = new AudioVisualizer(vizCanvas);
+  visualizer.resize();
+  vizPaused = visualizer.paused;
+  visualizer.start();
+}
+
+function connectVisualizerToAudio() {
+  if (!visualizer || visualizer.connected || !homeAudio.analyserNode) return;
+  visualizer.connect(homeAudio.analyserNode);
+}
+
+async function initAudio() {
+  await homeAudio.initAudio();
+  applyKnobs();
+  connectVisualizerToAudio();
+  if (
+    songs.length > 0 &&
+    homeAudio.loadedSongIndex !== homeAudio.currentSongIndex
+  )
+    await loadSong(homeAudio.currentSongIndex);
+}
+
+async function loadSong(idx: number) {
+  screenText = "LOADING";
+  screenSubtext = songs[idx]?.name ?? "";
+  const ok = await homeAudio.loadSong(idx);
+  if (ok) {
     syncFromAudio();
-    if (!homeAudio.isPlaying && homeAudio.playOffset > 0) {
-      screenText = idleText();
-      screenSubtext = `paused · ${homeAudio.formatTime(homeAudio.playOffset, homeAudio.duration)}`;
-    } else if (!homeAudio.isPlaying) {
-      screenText = idleText();
-      screenSubtext = idleSubtext();
-    }
+    screenText = homeAudio.currentSong!.name.toUpperCase();
+    screenSubtext = "press play";
+  } else {
+    screenText = "ERROR";
+    screenSubtext = "load failed";
   }
+}
 
-  function handleKnobMove(e: MouseEvent | TouchEvent) {
-    if (draggingKnob === null) return;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    const delta = (dragStartY - clientY) * 1.5;
-    knobAngles[draggingKnob] = Math.max(-135, Math.min(135, dragStartAngle + delta));
-    knobValues[draggingKnob] = Math.round(((knobAngles[draggingKnob] + 135) / 270) * 127);
-    screenText = knobMeta[draggingKnob].name.toUpperCase();
-    screenSubtext = `${knobValues[draggingKnob]}`;
-    if (draggingKnob === 0 || draggingKnob === 1) updateDelay();
-    if (draggingKnob === 4) updateReverb();
-    if (draggingKnob === 6) updateVolume();
-    if (draggingKnob === 5) updatePlaybackRate();
-    if (draggingKnob === 2 || draggingKnob === 3) updateFilter();
+function resetKnobs() {
+  knobValues = [...DEFAULT_KNOB_VALUES];
+  knobAngles = knobValues.map((v) => (v / 127) * 270 - 135);
+  updateVolume();
+  updateFilter();
+  updateReverb();
+  updateDelay();
+  updatePlaybackRate();
+}
+
+function handleLoad() {
+  if (songs.length === 0) return;
+  browsing = !browsing;
+  if (browsing) {
+    browseIndex = browseSongs.findIndex(
+      (b) => b.realIndex === currentSongIndex,
+    );
+    screenText = "LOAD SONG";
+    screenSubtext = `${songs.length} songs`;
+  } else {
+    screenText = idleText();
+    screenSubtext = idleSubtext();
   }
+}
 
-  function handleKnobEnd() {
-    if (draggingKnob !== null) {
-      draggingKnob = null;
-      holdKnobDisplay();
-    }
+function handleReset() {
+  resetKnobs();
+  screenText = idleText();
+  screenSubtext = "knobs reset";
+}
+
+function songSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+async function chooseSong(idx: number) {
+  browsing = false;
+  await initAudio();
+  resetKnobs();
+  await loadSong(idx);
+  const song = songs[idx];
+  if (song) navigate(`/songs/${songSlug(song.name)}`);
+}
+
+function handleOutsideClick(e: MouseEvent) {
+  if (!browsing) return;
+  const t = e.target as HTMLElement;
+  if (t.closest(".song-browser") || t.closest(".load-btn")) return;
+  browsing = false;
+  screenSubtext = idleSubtext();
+}
+
+function handleBrowseKeys(e: KeyboardEvent) {
+  if (!browsing) return;
+  if (e.key === "Escape") {
+    browsing = false;
+    screenSubtext = idleSubtext();
+    return;
   }
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    browseIndex = (browseIndex + 1) % browseSongs.length;
+  }
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    browseIndex = (browseIndex - 1 + browseSongs.length) % browseSongs.length;
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    chooseSong(browseSongs[browseIndex]?.realIndex ?? 0);
+  }
+}
 
-  function handleKnobWheel(idx: number, e: WheelEvent) {
-    const delta = e.deltaY > 0 ? -5 : 5;
-    knobAngles[idx] = Math.max(-135, Math.min(135, knobAngles[idx] + delta));
-    knobValues[idx] = Math.round(((knobAngles[idx] + 135) / 270) * 127);
-    screenText = knobMeta[idx].name.toUpperCase();
-    screenSubtext = `${knobValues[idx]}`;
-    if (idx === 0 || idx === 1) updateDelay();
-    if (idx === 4) updateReverb();
-    if (idx === 6) updateVolume();
-    if (idx === 5) updatePlaybackRate();
-    if (idx === 2 || idx === 3) updateFilter();
+function applyKnobs() {
+  homeAudio.updateVolume(knobValues[6]);
+  homeAudio.updateFilter(knobValues[2], knobValues[3]);
+  homeAudio.updateReverb(knobValues[4]);
+  homeAudio.updateDelay(knobValues[0], knobValues[1]);
+  homeAudio.updatePlaybackRate(knobValues[5]);
+  if (padEffects) {
+    padEffects.updateVolume(knobValues[6]);
+    padEffects.updateFilter(knobValues[2], knobValues[3]);
+    padEffects.updateReverb(knobValues[4]);
+    padEffects.updateDelay(knobValues[0], knobValues[1]);
+  }
+}
+
+function updateVolume() {
+  homeAudio.updateVolume(knobValues[6]);
+  padEffects?.updateVolume(knobValues[6]);
+}
+function updateReverb() {
+  homeAudio.updateReverb(knobValues[4]);
+  padEffects?.updateReverb(knobValues[4]);
+}
+function updateDelay() {
+  homeAudio.updateDelay(knobValues[0], knobValues[1]);
+  padEffects?.updateDelay(knobValues[0], knobValues[1]);
+}
+function updateFilter() {
+  homeAudio.updateFilter(knobValues[2], knobValues[3]);
+  padEffects?.updateFilter(knobValues[2], knobValues[3]);
+}
+function updatePlaybackRate() {
+  homeAudio.updatePlaybackRate(knobValues[5]);
+}
+
+function getPlaybackRate(): number {
+  const v = knobValues[5];
+  if (v <= 64) return 0.5 + (v / 64) * 0.5;
+  return 1.0 + ((v - 64) / 63) * 1.0;
+}
+
+async function togglePlay() {
+  await initAudio();
+  await homeAudio.togglePlay(getPlaybackRate());
+  syncFromAudio();
+  if (!homeAudio.isPlaying && homeAudio.playOffset > 0) {
+    screenText = idleText();
+    screenSubtext = `paused · ${homeAudio.formatTime(homeAudio.playOffset, homeAudio.duration)}`;
+  } else if (!homeAudio.isPlaying) {
+    screenText = idleText();
+    screenSubtext = idleSubtext();
+  }
+}
+
+function handleKnobMove(e: MouseEvent | TouchEvent) {
+  if (draggingKnob === null) return;
+  const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+  const delta = (dragStartY - clientY) * 1.5;
+  knobAngles[draggingKnob] = Math.max(
+    -135,
+    Math.min(135, dragStartAngle + delta),
+  );
+  knobValues[draggingKnob] = Math.round(
+    ((knobAngles[draggingKnob] + 135) / 270) * 127,
+  );
+  screenText = knobMeta[draggingKnob].name.toUpperCase();
+  screenSubtext = `${knobValues[draggingKnob]}`;
+  if (draggingKnob === 0 || draggingKnob === 1) updateDelay();
+  if (draggingKnob === 4) updateReverb();
+  if (draggingKnob === 6) updateVolume();
+  if (draggingKnob === 5) updatePlaybackRate();
+  if (draggingKnob === 2 || draggingKnob === 3) updateFilter();
+}
+
+function handleKnobEnd() {
+  if (draggingKnob !== null) {
+    draggingKnob = null;
     holdKnobDisplay();
   }
+}
 
-  onMount(() => {
-    mounted = true;
-    // A /songs/[slug] visit leaves its navigate-on-advance hook on the shared
-    // player; the home page advances in place instead.
-    homeAudio.onNavigate = null;
-    initPads();
-    fetchSongList();
+function handleKnobWheel(idx: number, e: WheelEvent) {
+  const delta = e.deltaY > 0 ? -5 : 5;
+  knobAngles[idx] = Math.max(-135, Math.min(135, knobAngles[idx] + delta));
+  knobValues[idx] = Math.round(((knobAngles[idx] + 135) / 270) * 127);
+  screenText = knobMeta[idx].name.toUpperCase();
+  screenSubtext = `${knobValues[idx]}`;
+  if (idx === 0 || idx === 1) updateDelay();
+  if (idx === 4) updateReverb();
+  if (idx === 6) updateVolume();
+  if (idx === 5) updatePlaybackRate();
+  if (idx === 2 || idx === 3) updateFilter();
+  holdKnobDisplay();
+}
 
-    requestAnimationFrame(() => { measureAvailable(); });
-    initVisualizer();
-    connectVisualizerToAudio();
-    function onResize() {
-      measureAvailable();
-      visualizer?.resize();
-    }
+onMount(() => {
+  mounted = true;
+  // A /songs/[slug] visit leaves its navigate-on-advance hook on the shared
+  // player; the home page advances in place instead.
+  homeAudio.onNavigate = null;
+  initPads();
+  fetchSongList();
 
-    unsubscribe = homeAudio.subscribe(() => {
-      syncFromAudio();
-    });
-
-    if (homeAudio.isPlaying || homeAudio.songLoaded) {
-      syncFromAudio();
-    }
-
-    window.addEventListener('resize', onResize);
-    window.addEventListener('keydown', handleBrowseKeys);
-    window.addEventListener('mousedown', handleOutsideClick);
-    window.addEventListener('mousemove', handleKnobMove);
-    window.addEventListener('mouseup', handleKnobEnd);
-    window.addEventListener('touchmove', handleKnobMove, { passive: false });
-    window.addEventListener('touchend', handleKnobEnd);
-
-    return () => {
-      unsubscribe?.();
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('keydown', handleBrowseKeys);
-      window.removeEventListener('mousedown', handleOutsideClick);
-      window.removeEventListener('mousemove', handleKnobMove);
-      window.removeEventListener('mouseup', handleKnobEnd);
-      window.removeEventListener('touchmove', handleKnobMove);
-      window.removeEventListener('touchend', handleKnobEnd);
-      if (knobDisplayTimer) clearTimeout(knobDisplayTimer);
-      if (padAudioCtx) { try { padAudioCtx.close(); } catch {} padAudioCtx = null; padEffects = null; }
-      visualizer?.destroy(); visualizer = null;
-    };
+  requestAnimationFrame(() => {
+    measureAvailable();
   });
+  initVisualizer();
+  connectVisualizerToAudio();
+  function onResize() {
+    measureAvailable();
+    visualizer?.resize();
+  }
+
+  unsubscribe = homeAudio.subscribe(() => {
+    syncFromAudio();
+  });
+
+  if (homeAudio.isPlaying || homeAudio.songLoaded) {
+    syncFromAudio();
+  }
+
+  window.addEventListener("resize", onResize);
+  window.addEventListener("keydown", handleBrowseKeys);
+  window.addEventListener("mousedown", handleOutsideClick);
+  window.addEventListener("mousemove", handleKnobMove);
+  window.addEventListener("mouseup", handleKnobEnd);
+  window.addEventListener("touchmove", handleKnobMove, { passive: false });
+  window.addEventListener("touchend", handleKnobEnd);
+
+  return () => {
+    unsubscribe?.();
+    window.removeEventListener("resize", onResize);
+    window.removeEventListener("keydown", handleBrowseKeys);
+    window.removeEventListener("mousedown", handleOutsideClick);
+    window.removeEventListener("mousemove", handleKnobMove);
+    window.removeEventListener("mouseup", handleKnobEnd);
+    window.removeEventListener("touchmove", handleKnobMove);
+    window.removeEventListener("touchend", handleKnobEnd);
+    if (knobDisplayTimer) clearTimeout(knobDisplayTimer);
+    if (padAudioCtx) {
+      try {
+        padAudioCtx.close();
+      } catch {}
+      padAudioCtx = null;
+      padEffects = null;
+    }
+    visualizer?.destroy();
+    visualizer = null;
+  };
+});
 </script>
 
 <div class="deluge-layout">

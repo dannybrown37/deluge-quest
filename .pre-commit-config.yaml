@@ -13,13 +13,16 @@ repos:
         fail_fast: true
 
   - repo: https://github.com/dannybrown37/git-a-grip
-    rev: v0.12.0
+    rev: v0.13.0
     hooks:
       - id: commitizen-early
       - id: block-private-terms
       - id: zizmor
       - id: ruff-check
       - id: ruff-format
+      - id: biome
+        args: [--dir=web]
+        files: ^web/
 
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.17.0
@@ -51,12 +54,3 @@ repos:
     rev: v3.13.1-1
     hooks:
       - id: shfmt
-
-  - repo: local
-    hooks:
-      - id: eslint
-        name: eslint
-        entry: bash -c 'cd web && npx eslint .'
-        language: system
-        files: ^web/.*\.(ts|svelte|astro)$
-        pass_filenames: false

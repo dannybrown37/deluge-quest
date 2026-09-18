@@ -40,10 +40,18 @@ export class SequencerEngine {
     this.onStopCb = opts.onStop;
   }
 
-  get pattern(): boolean[][] { return this._pattern; }
-  get bpm(): number { return this._bpm; }
-  get isPlaying(): boolean { return this._isPlaying; }
-  get currentStep(): number { return this._currentStep; }
+  get pattern(): boolean[][] {
+    return this._pattern;
+  }
+  get bpm(): number {
+    return this._bpm;
+  }
+  get isPlaying(): boolean {
+    return this._isPlaying;
+  }
+  get currentStep(): number {
+    return this._currentStep;
+  }
 
   toggleStep(row: number, step: number): void {
     const r = this._pattern[row];
@@ -71,14 +79,24 @@ export class SequencerEngine {
     this.sampleBuffers.splice(idx, 1);
     const gain = this.rowGains.splice(idx, 1)[0];
     if (gain) {
-      try { gain.disconnect(); } catch { /* already disconnected */ }
+      try {
+        gain.disconnect();
+      } catch {
+        /* already disconnected */
+      }
     }
   }
 
   setPattern(pattern: boolean[][]): void {
     this._pattern = pattern.map((row) => [...row]);
-    const buffers = new Array<AudioBuffer | null>(this._pattern.length).fill(null);
-    for (let i = 0; i < Math.min(buffers.length, this.sampleBuffers.length); i++) {
+    const buffers = new Array<AudioBuffer | null>(this._pattern.length).fill(
+      null,
+    );
+    for (
+      let i = 0;
+      i < Math.min(buffers.length, this.sampleBuffers.length);
+      i++
+    ) {
       buffers[i] = this.sampleBuffers[i];
     }
     this.sampleBuffers = buffers;
@@ -88,7 +106,10 @@ export class SequencerEngine {
     return this._pattern.map((row) => [...row]);
   }
 
-  async loadSample(rowIndex: number, handle: FileSystemFileHandle): Promise<void> {
+  async loadSample(
+    rowIndex: number,
+    handle: FileSystemFileHandle,
+  ): Promise<void> {
     const ctx = this.ensureContext();
     try {
       const file = await handle.getFile();
@@ -108,7 +129,7 @@ export class SequencerEngine {
   }
 
   private stepDurationSec(): number {
-    return (60 / this._bpm) / 4;
+    return 60 / this._bpm / 4;
   }
 
   play(): void {
@@ -143,7 +164,11 @@ export class SequencerEngine {
     this._isPlaying = false;
     this._currentStep = 0;
     if (this.ctx) {
-      try { this.ctx.close(); } catch { /* already closed */ }
+      try {
+        this.ctx.close();
+      } catch {
+        /* already closed */
+      }
     }
     this.ctx = null;
     this.masterGain = null;
@@ -157,7 +182,10 @@ export class SequencerEngine {
 
   private startScheduler(): void {
     this.stopScheduler();
-    this.scheduleTimer = window.setInterval(() => this.scheduleChunk(), SCHEDULE_INTERVAL_MS);
+    this.scheduleTimer = window.setInterval(
+      () => this.scheduleChunk(),
+      SCHEDULE_INTERVAL_MS,
+    );
     this.scheduleChunk();
   }
 

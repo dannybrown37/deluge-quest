@@ -1,847 +1,1032 @@
 <script lang="ts">
-  import {
-    type Kit,
-    type KitRow,
-    createEmptyKit,
-    createEmptyRow,
-    parseKitXml,
-    generateKitXml,
-  } from "../lib/kitXml";
-  import { cardStore } from "../lib/cardStore";
-  import { trackToolAction } from "../lib/analytics";
-  import { SequencerEngine, NUM_STEPS } from "../lib/sequencerAudio";
-  import { tick } from "svelte";
+import { tick } from "svelte";
+import { trackToolAction } from "../lib/analytics";
+import { cardStore } from "../lib/cardStore";
+import {
+  createEmptyKit,
+  createEmptyRow,
+  generateKitXml,
+  type Kit,
+  type KitRow,
+  parseKitXml,
+} from "../lib/kitXml";
+import { NUM_STEPS, SequencerEngine } from "../lib/sequencerAudio";
 
-  type Pane = "browser" | "kit";
-  type Mode = "normal" | "rename" | "help" | "search";
+type Pane = "browser" | "kit";
+type Mode = "normal" | "rename" | "help" | "search";
 
-  let kit: Kit = $state(createEmptyKit());
-  let mode: Mode = $state("normal");
-  let activePane: Pane = $state("browser");
-  let pendingD = $state(false);
-  let renameValue = $state("");
-  let playingAudio: { index: number; audio: HTMLAudioElement; url: string } | null = $state(null);
-  let loadedFileName = $state("");
-  let hasUnsavedChanges = $state(false);
-  let showNewKitModal = $state(false);
-  let undoStack: { rows: KitRow[]; selectedIndex: number }[] = $state([]);
+let kit: Kit = $state(createEmptyKit());
+let mode: Mode = $state("normal");
+let activePane: Pane = $state("browser");
+let pendingD = $state(false);
+let renameValue = $state("");
+let playingAudio: {
+  index: number;
+  audio: HTMLAudioElement;
+  url: string;
+} | null = $state(null);
+let loadedFileName = $state("");
+let hasUnsavedChanges = $state(false);
+let showNewKitModal = $state(false);
+let undoStack: { rows: KitRow[]; selectedIndex: number }[] = $state([]);
 
-  let samplesDir: FileSystemDirectoryHandle | null = $state(null);
-  let reconnectAvailable = $state(false);
-  let rootEntries: TreeEntry[] = $state([]);
-  let flatEntries: TreeEntry[] = $state([]);
-  let browseIndex = $state(0);
-  let searchQuery = $state("");
-  let searchInput: HTMLInputElement | undefined = $state();
-  let renameInput: HTMLInputElement | undefined = $state();
-  let containerEl: HTMLDivElement | undefined = $state();
-  let browserListEl: HTMLDivElement | undefined = $state();
-  let kitListEl: HTMLDivElement | undefined = $state();
+let samplesDir: FileSystemDirectoryHandle | null = $state(null);
+let reconnectAvailable = $state(false);
+let rootEntries: TreeEntry[] = $state([]);
+let flatEntries: TreeEntry[] = $state([]);
+let browseIndex = $state(0);
+let searchQuery = $state("");
+let searchInput: HTMLInputElement | undefined = $state();
+let renameInput: HTMLInputElement | undefined = $state();
+let containerEl: HTMLDivElement | undefined = $state();
+let browserListEl: HTMLDivElement | undefined = $state();
+let kitListEl: HTMLDivElement | undefined = $state();
 
-  interface TreeEntry {
-    name: string;
-    path: string;
-    kind: "file" | "directory";
-    handle: FileSystemHandle;
-    depth: number;
-    expanded: boolean;
-    children: TreeEntry[] | null;
-    parent: TreeEntry | null;
+interface TreeEntry {
+  name: string;
+  path: string;
+  kind: "file" | "directory";
+  handle: FileSystemHandle;
+  depth: number;
+  expanded: boolean;
+  children: TreeEntry[] | null;
+  parent: TreeEntry | null;
+}
+
+let newRowIndex = $state(-1);
+
+let sequencerOpen = $state(false);
+let sequencerPlaying = $state(false);
+let currentStep = $state(-1);
+let seqBpm = $state(120);
+let engine: SequencerEngine | null = $state(null);
+let seqFocusRow = $state(0);
+let seqFocusStep = $state(0);
+
+let selectedRow = $derived(
+  kit.selectedIndex >= 0 && kit.selectedIndex < kit.rows.length
+    ? kit.rows[kit.selectedIndex]
+    : null,
+);
+
+let visibleEntries = $derived.by(() => {
+  if (!searchQuery) return flatEntries;
+  const q = searchQuery.toLowerCase();
+  const matchingFiles = new Set<TreeEntry>();
+  const ancestorsOfMatches = new Set<TreeEntry>();
+  for (const e of flatEntries) {
+    if (e.kind === "file" && e.name.toLowerCase().includes(q)) {
+      matchingFiles.add(e);
+      let p = e.parent;
+      while (p) {
+        ancestorsOfMatches.add(p);
+        p = p.parent;
+      }
+    }
   }
-
-  let newRowIndex = $state(-1);
-
-  let sequencerOpen = $state(false);
-  let sequencerPlaying = $state(false);
-  let currentStep = $state(-1);
-  let seqBpm = $state(120);
-  let engine: SequencerEngine | null = $state(null);
-  let seqFocusRow = $state(0);
-  let seqFocusStep = $state(0);
-
-  let selectedRow = $derived(
-    kit.selectedIndex >= 0 && kit.selectedIndex < kit.rows.length
-      ? kit.rows[kit.selectedIndex]
-      : null
+  return flatEntries.filter(
+    (e) => matchingFiles.has(e) || ancestorsOfMatches.has(e),
   );
+});
 
-  let visibleEntries = $derived.by(() => {
-    if (!searchQuery) return flatEntries;
-    const q = searchQuery.toLowerCase();
-    const matchingFiles = new Set<TreeEntry>();
-    const ancestorsOfMatches = new Set<TreeEntry>();
-    for (const e of flatEntries) {
-      if (e.kind === "file" && e.name.toLowerCase().includes(q)) {
-        matchingFiles.add(e);
-        let p = e.parent;
-        while (p) { ancestorsOfMatches.add(p); p = p.parent; }
-      }
-    }
-    return flatEntries.filter(
-      (e) => matchingFiles.has(e) || ancestorsOfMatches.has(e)
-    );
-  });
-
-  let breadcrumbAncestors = $derived.by(() => {
-    const entry = visibleEntries[browseIndex];
-    if (!entry) return [];
-    const chain: TreeEntry[] = [];
-    let p = entry.kind === "directory" ? entry : entry.parent;
-    while (p) { chain.unshift(p); p = p.parent; }
-    return chain;
-  });
-
-  let browsePosition = $derived.by(() => {
-    const entry = visibleEntries[browseIndex];
-    if (!entry) return null;
-    const folder = entry.kind === "directory" ? entry : entry.parent;
-    if (!folder) return null;
-    const siblings = visibleEntries.filter(
-      (e) => e.parent === folder
-    );
-    const idx = siblings.indexOf(entry);
-    return { index: idx + 1, total: siblings.length };
-  });
-
-  let showStickyHeader = $state(false);
-  let keyboardNav = false;
-
-  const LOOP_MODES: KitRow["loopMode"][] = ["once", "loop", "cut"];
-  const POLY_MODES: KitRow["polyphonic"][] = ["auto", "choke", "mono", "poly"];
-  const LOOP_LABELS: Record<KitRow["loopMode"], string> = { once: "ONE", loop: "LOOP", cut: "CUT" };
-  const POLY_LABELS: Record<KitRow["polyphonic"], string> = { auto: "AUTO", choke: "CHOKE", mono: "MONO", poly: "POLY" };
-
-  // --- Cache management ---
-
-  function saveKitToCache() {
-    const cacheData = {
-      name: kit.name,
-      rows: kit.rows.map(r => ({
-        name: r.name,
-        samplePath: r.samplePath,
-        volume: r.volume,
-        pan: r.pan,
-        loopMode: r.loopMode,
-        polyphonic: r.polyphonic,
-      })),
-      selectedIndex: kit.selectedIndex,
-    };
-    localStorage.setItem("kit-builder-cache", JSON.stringify(cacheData));
+let breadcrumbAncestors = $derived.by(() => {
+  const entry = visibleEntries[browseIndex];
+  if (!entry) return [];
+  const chain: TreeEntry[] = [];
+  let p = entry.kind === "directory" ? entry : entry.parent;
+  while (p) {
+    chain.unshift(p);
+    p = p.parent;
   }
+  return chain;
+});
 
-  function loadKitFromCache(): Kit | null {
-    try {
-      const cached = localStorage.getItem("kit-builder-cache");
-      return cached ? JSON.parse(cached) : null;
-    } catch { return null; }
+let browsePosition = $derived.by(() => {
+  const entry = visibleEntries[browseIndex];
+  if (!entry) return null;
+  const folder = entry.kind === "directory" ? entry : entry.parent;
+  if (!folder) return null;
+  const siblings = visibleEntries.filter((e) => e.parent === folder);
+  const idx = siblings.indexOf(entry);
+  return { index: idx + 1, total: siblings.length };
+});
+
+let showStickyHeader = $state(false);
+let keyboardNav = false;
+
+const LOOP_MODES: KitRow["loopMode"][] = ["once", "loop", "cut"];
+const POLY_MODES: KitRow["polyphonic"][] = ["auto", "choke", "mono", "poly"];
+const LOOP_LABELS: Record<KitRow["loopMode"], string> = {
+  once: "ONE",
+  loop: "LOOP",
+  cut: "CUT",
+};
+const POLY_LABELS: Record<KitRow["polyphonic"], string> = {
+  auto: "AUTO",
+  choke: "CHOKE",
+  mono: "MONO",
+  poly: "POLY",
+};
+
+// --- Cache management ---
+
+function saveKitToCache() {
+  const cacheData = {
+    name: kit.name,
+    rows: kit.rows.map((r) => ({
+      name: r.name,
+      samplePath: r.samplePath,
+      volume: r.volume,
+      pan: r.pan,
+      loopMode: r.loopMode,
+      polyphonic: r.polyphonic,
+    })),
+    selectedIndex: kit.selectedIndex,
+  };
+  localStorage.setItem("kit-builder-cache", JSON.stringify(cacheData));
+}
+
+function loadKitFromCache(): Kit | null {
+  try {
+    const cached = localStorage.getItem("kit-builder-cache");
+    return cached ? JSON.parse(cached) : null;
+  } catch {
+    return null;
   }
+}
 
-  function clearKitCache() {
-    localStorage.removeItem("kit-builder-cache");
+function clearKitCache() {
+  localStorage.removeItem("kit-builder-cache");
+}
+
+(() => {
+  const cached = loadKitFromCache();
+  if (cached && cached.rows.length > 0) {
+    kit = cached;
+    hasUnsavedChanges = false;
   }
+  loadSeqFromCache();
+})();
 
-  (() => {
-    const cached = loadKitFromCache();
-    if (cached && cached.rows.length > 0) {
-      kit = cached;
-      hasUnsavedChanges = false;
-    }
-    loadSeqFromCache();
-  })();
-
-  // Auto-save to cache whenever kit changes
-  $effect(() => {
-    void kit.rows;
-    void kit.name;
-    void kit.selectedIndex;
-    if (kit.rows.length > 0) {
-      saveKitToCache();
-      hasUnsavedChanges = true;
-    }
-  });
-
-  function getOrCreateEngine(): SequencerEngine {
-    if (!engine) {
-      engine = new SequencerEngine({
-        bpm: seqBpm,
-        onStep: (step: number) => { currentStep = step; },
-        onStop: () => { sequencerPlaying = false; currentStep = -1; },
-      });
-      for (let i = 0; i < kit.rows.length; i++) engine.addRow();
-    }
-    return engine;
+// Auto-save to cache whenever kit changes
+$effect(() => {
+  void kit.rows;
+  void kit.name;
+  void kit.selectedIndex;
+  if (kit.rows.length > 0) {
+    saveKitToCache();
+    hasUnsavedChanges = true;
   }
+});
 
-  function toggleSequencer() {
-    sequencerOpen = !sequencerOpen;
-    if (sequencerOpen) getOrCreateEngine();
-  }
-
-  async function seqPlay() {
-    const eng = getOrCreateEngine();
-    if (sequencerPlaying) {
-      eng.stop();
-      sequencerPlaying = false;
-      currentStep = -1;
-    } else {
-      eng.setBpm(seqBpm);
-      await loadSequencerSamples();
-      eng.play();
-      sequencerPlaying = true;
-    }
-  }
-
-  let seqVersion = $state(0);
-
-  function seqToggleStep(row: number, step: number) {
-    const eng = getOrCreateEngine();
-    eng.toggleStep(row, step);
-    seqVersion++;
-    saveSeqToCache();
-  }
-
-  function seqClearRow(row: number) {
-    const eng = getOrCreateEngine();
-    eng.clearRow(row);
-    seqVersion++;
-    saveSeqToCache();
-  }
-
-  function seqClearAll() {
-    const eng = getOrCreateEngine();
-    eng.clearAll();
-    seqVersion++;
-    saveSeqToCache();
-  }
-
-  function seqUpdateBpm(newBpm: number) {
-    seqBpm = Math.max(40, Math.min(300, newBpm));
-    engine?.setBpm(seqBpm);
-  }
-
-  function syncEngineRows() {
-    if (!engine) return;
-    const engRows = engine.pattern.length;
-    const kitRows = kit.rows.length;
-    if (engRows < kitRows) {
-      for (let i = engRows; i < kitRows; i++) engine.addRow();
-    } else if (engRows > kitRows) {
-      for (let i = engRows - 1; i >= kitRows; i--) engine.removeRow(i);
-    }
-  }
-
-  async function loadSequencerSamples() {
-    if (!engine) return;
-    for (let i = 0; i < kit.rows.length; i++) {
-      const fh = kit.rows[i].fileHandle;
-      if (fh) await engine.loadSample(i, fh);
-    }
-  }
-
-  $effect(() => {
-    void kit.rows.length;
-    syncEngineRows();
-  });
-
-  function saveSeqToCache() {
-    if (!engine) return;
-    localStorage.setItem("kit-builder-seq", JSON.stringify({
-      pattern: engine.getPattern(),
+function getOrCreateEngine(): SequencerEngine {
+  if (!engine) {
+    engine = new SequencerEngine({
       bpm: seqBpm,
-    }));
-  }
-
-  function loadSeqFromCache() {
-    try {
-      const raw = localStorage.getItem("kit-builder-seq");
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      if (data.pattern) {
-        const eng = getOrCreateEngine();
-        eng.setPattern(data.pattern);
-      }
-      if (data.bpm) seqBpm = data.bpm;
-    } catch { /* ignore */ }
-  }
-
-  $effect(() => { containerEl?.focus(); });
-
-  $effect(() => {
-    void browseIndex;
-    void kit.selectedIndex;
-    const block = keyboardNav ? "center" as const : "nearest" as const;
-    keyboardNav = false;
-    if (activePane === "browser" && browserListEl) {
-      const sel = browserListEl.querySelector(".browse-entry--selected");
-      sel?.scrollIntoView({ block, behavior: "smooth" });
-    }
-    if (activePane === "kit" && kitListEl) {
-      const sel = kitListEl.querySelector(".kit-row--selected");
-      sel?.scrollIntoView({ block, behavior: "smooth" });
-    }
-  });
-
-  $effect(() => {
-    if (!browserListEl) return;
-    const entry = visibleEntries[browseIndex];
-    if (!entry) { showStickyHeader = false; return; }
-    const folder = entry.kind === "directory" && entry.expanded ? entry : entry.parent;
-    if (!folder) { showStickyHeader = false; return; }
-    const folderIdx = visibleEntries.indexOf(folder);
-    if (folderIdx < 0) { showStickyHeader = false; return; }
-    const allEntryEls = browserListEl.querySelectorAll(".browse-entry");
-    const folderEl = allEntryEls[folderIdx] as HTMLElement | undefined;
-    if (!folderEl) { showStickyHeader = false; return; }
-    const listRect = browserListEl.getBoundingClientRect();
-    const folderRect = folderEl.getBoundingClientRect();
-    showStickyHeader = folderRect.bottom < listRect.top;
-  });
-
-  // --- Directory browsing ---
-
-  async function openSamplesDir() {
-    try {
-      samplesDir = await (window as any).showDirectoryPicker({ mode: "read" });
-    } catch { return; }
-    rootEntries = await listDirectory(samplesDir!, "", 0, null);
-    rebuildFlat();
-    browseIndex = 0;
-    activePane = "browser";
-    trackToolAction("kits", "open_samples");
-    await resolveFileHandles();
-  }
-
-  async function resolveFileHandles() {
-    if (!samplesDir) return;
-    const dirName = samplesDir.name;
-    for (const row of kit.rows) {
-      if (row.fileHandle || !row.samplePath) continue;
-      const prefix = dirName + "/";
-      if (!row.samplePath.startsWith(prefix)) continue;
-      const relPath = row.samplePath.slice(prefix.length);
-      const parts = relPath.split("/");
-      try {
-        let dir: FileSystemDirectoryHandle = samplesDir;
-        for (let i = 0; i < parts.length - 1; i++) {
-          dir = await dir.getDirectoryHandle(parts[i]);
-        }
-        row.fileHandle = await dir.getFileHandle(parts[parts.length - 1]);
-      } catch { /* file not found — leave row without handle */ }
-    }
-  }
-
-  /** Loads the SAMPLES/ dir from an already-picked SD card root (from /stats or /manage) instead of prompting again. */
-  async function loadSamplesFromRoot(root: FileSystemDirectoryHandle) {
-    try {
-      samplesDir = await (root as any).getDirectoryHandle("SAMPLES");
-    } catch { return; }
-    rootEntries = await listDirectory(samplesDir!, "", 0, null);
-    rebuildFlat();
-    browseIndex = 0;
-    activePane = "browser";
-    await resolveFileHandles();
-  }
-
-  async function tryAutoLoadFromCardStore() {
-    try {
-      const handle = await cardStore.reconnectHandleOnly();
-      if (handle) {
-        await loadSamplesFromRoot(handle);
-      } else if (await cardStore.hasPersistedHandle()) {
-        reconnectAvailable = true;
-      }
-    } catch {}
-  }
-
-  async function reconnectSamplesDir() {
-    try {
-      const handle = await cardStore.reconnectHandleOnly(true);
-      if (handle) {
-        reconnectAvailable = false;
-        await loadSamplesFromRoot(handle);
-      }
-    } catch {}
-  }
-
-  tryAutoLoadFromCardStore();
-
-  async function listDirectory(
-    dir: FileSystemDirectoryHandle, parentPath: string, depth: number, parent: TreeEntry | null
-  ): Promise<TreeEntry[]> {
-    const entries: TreeEntry[] = [];
-    for await (const [name, handle] of (dir as any).entries()) {
-      const path = parentPath ? `${parentPath}/${name}` : name;
-      entries.push({ name, path, kind: handle.kind, handle, depth, expanded: false, children: null, parent });
-    }
-    entries.sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
-      return a.name.localeCompare(b.name);
+      onStep: (step: number) => {
+        currentStep = step;
+      },
+      onStop: () => {
+        sequencerPlaying = false;
+        currentStep = -1;
+      },
     });
-    return entries;
+    for (let i = 0; i < kit.rows.length; i++) engine.addRow();
   }
+  return engine;
+}
 
-  function rebuildFlat() {
-    const result: TreeEntry[] = [];
-    function walk(entries: TreeEntry[]) {
-      for (const e of entries) {
-        result.push(e);
-        if (e.expanded && e.children) walk(e.children);
-      }
-    }
-    walk(rootEntries);
-    flatEntries = result;
-  }
+function toggleSequencer() {
+  sequencerOpen = !sequencerOpen;
+  if (sequencerOpen) getOrCreateEngine();
+}
 
-  async function expandEntry(entry: TreeEntry) {
-    if (entry.kind !== "directory" || entry.expanded) return;
-    entry.children = await listDirectory(entry.handle as FileSystemDirectoryHandle, entry.path, entry.depth + 1, entry);
-    entry.expanded = true;
-    rebuildFlat();
-  }
-
-  function collapseEntry(entry: TreeEntry) {
-    if (entry.kind !== "directory" || !entry.expanded) return;
-    entry.expanded = false;
-    rebuildFlat();
-    browseIndex = Math.min(browseIndex, visibleEntries.length - 1);
-  }
-
-  const AUDIO_EXT = /\.(wav|mp3|ogg|flac|aif|aiff)$/i;
-
-  async function addSampleToKit(entry: TreeEntry) {
-    if (entry.kind !== "file") return;
-    pushUndo();
-    const dirName = samplesDir?.name ?? "SAMPLES";
-    const row = createEmptyRow(
-      entry.name.replace(/\.[^.]+$/, "").toUpperCase().slice(0, 16),
-      `${dirName}/${entry.path}`
-    );
-    row.fileHandle = entry.handle as FileSystemFileHandle;
-    kit.rows.push(row);
-    kit.selectedIndex = kit.rows.length - 1;
-    newRowIndex = kit.rows.length - 1;
-    await tick();
-    if (kitListEl) {
-      kitListEl.scrollTop = kitListEl.scrollHeight;
-    }
-    setTimeout(() => { newRowIndex = -1; }, 1500);
-  }
-
-  let pendingFolderAdd: { entry: TreeEntry; count: number } | null = $state(null);
-
-  async function countFolderAudioFiles(dir: FileSystemDirectoryHandle): Promise<number> {
-    let count = 0;
-    for await (const [name, handle] of (dir as any).entries()) {
-      if (handle.kind === "file" && AUDIO_EXT.test(name)) count++;
-      else if (handle.kind === "directory") count += await countFolderAudioFiles(handle as FileSystemDirectoryHandle);
-    }
-    return count;
-  }
-
-  async function addFolderToKit(entry: TreeEntry) {
-    if (entry.kind !== "directory") return;
-    const count = await countFolderAudioFiles(entry.handle as FileSystemDirectoryHandle);
-    if (count === 0) return;
-    if (count > 16) {
-      pendingFolderAdd = { entry, count };
-      return;
-    }
-    await doAddFolder(entry);
-  }
-
-  async function doAddFolder(entry: TreeEntry) {
-    pushUndo();
-    const dir = entry.handle as FileSystemDirectoryHandle;
-    const files: { name: string; path: string; handle: FileSystemFileHandle }[] = [];
-    async function collect(d: FileSystemDirectoryHandle, prefix: string) {
-      for await (const [name, handle] of (d as any).entries()) {
-        const path = prefix ? `${prefix}/${name}` : name;
-        if (handle.kind === "file" && AUDIO_EXT.test(name)) {
-          files.push({ name, path, handle: handle as FileSystemFileHandle });
-        } else if (handle.kind === "directory") {
-          await collect(handle as FileSystemDirectoryHandle, path);
-        }
-      }
-    }
-    await collect(dir, entry.path);
-    files.sort((a, b) => a.name.localeCompare(b.name));
-    if (files.length === 0) return;
-    const dirName = samplesDir?.name ?? "SAMPLES";
-    for (const f of files) {
-      const row = createEmptyRow(
-        f.name.replace(/\.[^.]+$/, "").toUpperCase().slice(0, 16),
-        `${dirName}/${f.path}`
-      );
-      row.fileHandle = f.handle;
-      kit.rows.push(row);
-    }
-    kit.selectedIndex = kit.rows.length - 1;
-    newRowIndex = kit.rows.length - 1;
-    await tick();
-    if (kitListEl) {
-      kitListEl.scrollTop = kitListEl.scrollHeight;
-    }
-    setTimeout(() => { newRowIndex = -1; }, 1500);
-  }
-
-  // --- Audio preview ---
-
-  async function auditionBrowserEntry(entry: TreeEntry) {
-    if (entry.kind !== "file") return;
-    stopPlayback();
-    try {
-      const fh = entry.handle as FileSystemFileHandle;
-      const file = await fh.getFile();
-      if (!file.type.startsWith("audio/") && !file.name.match(/\.(wav|mp3|ogg|flac|aif|aiff)$/i)) return;
-      const url = URL.createObjectURL(file);
-      const audio = new Audio(url);
-      audio.onended = () => { stopPlayback(); };
-      audio.play();
-      playingAudio = { index: -1, audio, url };
-    } catch { /* ignore */ }
-  }
-
-  async function auditionKitRow(i: number) {
-    stopPlayback();
-    const row = kit.rows[i];
-    if (!row?.fileHandle) return;
-    try {
-      const file = await row.fileHandle.getFile();
-      const url = URL.createObjectURL(file);
-      const audio = new Audio(url);
-      audio.onended = () => { stopPlayback(); };
-      audio.play();
-      playingAudio = { index: i, audio, url };
-    } catch { /* ignore */ }
-  }
-
-  function stopPlayback() {
-    if (!playingAudio) return;
-    playingAudio.audio.pause();
-    URL.revokeObjectURL(playingAudio.url);
-    playingAudio = null;
-  }
-
-  // --- Kit row operations ---
-
-  function moveRow(dir: number) {
-    const i = kit.selectedIndex;
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= kit.rows.length) return;
-    pushUndo();
-    [kit.rows[i], kit.rows[j]] = [kit.rows[j], kit.rows[i]];
-    kit.selectedIndex = j;
-    if (engine) {
-      const p = engine.getPattern();
-      if (p[i] && p[j]) {
-        [p[i], p[j]] = [p[j], p[i]];
-        engine.setPattern(p);
-        seqVersion++;
-        saveSeqToCache();
-      }
-    }
-  }
-
-  function pushUndo() {
-    undoStack.push({
-      rows: kit.rows.map(r => ({ ...r })),
-      selectedIndex: kit.selectedIndex,
-    });
-    if (undoStack.length > 50) undoStack.shift();
-  }
-
-  function undo() {
-    const prev = undoStack.pop();
-    if (!prev) return;
-    kit.rows = prev.rows;
-    kit.selectedIndex = prev.selectedIndex;
-  }
-
-  function deleteRow() {
-    if (kit.selectedIndex < 0 || kit.rows.length === 0) return;
-    pushUndo();
-    engine?.removeRow(kit.selectedIndex);
-    kit.rows.splice(kit.selectedIndex, 1);
-    if (kit.selectedIndex >= kit.rows.length) kit.selectedIndex = kit.rows.length - 1;
-    seqVersion++;
-    saveSeqToCache();
-  }
-
-  function deduplicateRows() {
-    if (kit.rows.length === 0) return;
-    const seen = new Set<string>();
-    const before = kit.rows.length;
-    const kept: KitRow[] = [];
-    for (const row of kit.rows) {
-      const key = row.samplePath || row.name;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      kept.push(row);
-    }
-    if (kept.length === before) return;
-    pushUndo();
-    kit.rows = kept;
-    if (kit.selectedIndex >= kit.rows.length) kit.selectedIndex = kit.rows.length - 1;
-  }
-
-  function startRename() {
-    if (!selectedRow) return;
-    renameValue = selectedRow.name;
-    mode = "rename";
-    setTimeout(() => renameInput?.focus(), 0);
-  }
-
-  function confirmRename() {
-    if (selectedRow && renameValue.trim()) selectedRow.name = renameValue.trim().toUpperCase();
-    mode = "normal";
-    setTimeout(() => containerEl?.focus(), 0);
-  }
-
-  function cycleLoopMode() {
-    if (!selectedRow) return;
-    selectedRow.loopMode = LOOP_MODES[(LOOP_MODES.indexOf(selectedRow.loopMode) + 1) % LOOP_MODES.length];
-  }
-
-  function cyclePolyMode() {
-    if (!selectedRow) return;
-    selectedRow.polyphonic = POLY_MODES[(POLY_MODES.indexOf(selectedRow.polyphonic) + 1) % POLY_MODES.length];
-  }
-
-  function adjustVolume(delta: number) {
-    if (!selectedRow) return;
-    selectedRow.volume = Math.max(0, Math.min(100, selectedRow.volume + delta));
-  }
-
-  function adjustPan(delta: number) {
-    if (!selectedRow) return;
-    selectedRow.pan = Math.max(-50, Math.min(50, selectedRow.pan + delta));
-  }
-
-  // --- Export / Import ---
-
-  function exportKit() {
-    const xml = generateKitXml(kit);
-    const blob = new Blob([xml], { type: "application/xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${kit.name || "Kit"}.XML`;
-    a.click();
-    URL.revokeObjectURL(url);
-    hasUnsavedChanges = false;
-    trackToolAction("kits", "export", { rows: kit.rows.length });
-  }
-
-  async function loadKitFile(file: File) {
-    try {
-      const text = await file.text();
-      kit = parseKitXml(text);
-      kit.name = file.name.replace(/\.xml$/i, "");
-      loadedFileName = file.name;
-      trackToolAction("kits", "load_kit");
-      hasUnsavedChanges = false;
-      saveKitToCache();
-      await resolveFileHandles();
-      await loadSequencerSamples();
-    } catch (err: any) {
-      console.error("Failed to parse kit XML:", err);
-    }
-  }
-
-  function startNewKit() {
-    if (hasUnsavedChanges && kit.rows.length > 0) {
-      showNewKitModal = true;
-    } else {
-      confirmNewKit();
-    }
-  }
-
-  function confirmNewKit() {
-    kit = createEmptyKit();
-    loadedFileName = "";
-    hasUnsavedChanges = false;
-    clearKitCache();
-    showNewKitModal = false;
-    engine?.dispose();
-    engine = null;
+async function seqPlay() {
+  const eng = getOrCreateEngine();
+  if (sequencerPlaying) {
+    eng.stop();
     sequencerPlaying = false;
     currentStep = -1;
-    seqVersion++;
-    localStorage.removeItem("kit-builder-seq");
+  } else {
+    eng.setBpm(seqBpm);
+    await loadSequencerSamples();
+    eng.play();
+    sequencerPlaying = true;
   }
+}
 
-  function handleFileInput(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (file) loadKitFile(file);
-    input.value = "";
+let seqVersion = $state(0);
+
+function seqToggleStep(row: number, step: number) {
+  const eng = getOrCreateEngine();
+  eng.toggleStep(row, step);
+  seqVersion++;
+  saveSeqToCache();
+}
+
+function seqClearRow(row: number) {
+  const eng = getOrCreateEngine();
+  eng.clearRow(row);
+  seqVersion++;
+  saveSeqToCache();
+}
+
+function seqClearAll() {
+  const eng = getOrCreateEngine();
+  eng.clearAll();
+  seqVersion++;
+  saveSeqToCache();
+}
+
+function seqUpdateBpm(newBpm: number) {
+  seqBpm = Math.max(40, Math.min(300, newBpm));
+  engine?.setBpm(seqBpm);
+}
+
+function syncEngineRows() {
+  if (!engine) return;
+  const engRows = engine.pattern.length;
+  const kitRows = kit.rows.length;
+  if (engRows < kitRows) {
+    for (let i = engRows; i < kitRows; i++) engine.addRow();
+  } else if (engRows > kitRows) {
+    for (let i = engRows - 1; i >= kitRows; i--) engine.removeRow(i);
   }
+}
 
-  function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    const file = e.dataTransfer?.files?.[0];
-    if (file?.name.toLowerCase().endsWith(".xml")) loadKitFile(file);
+async function loadSequencerSamples() {
+  if (!engine) return;
+  for (let i = 0; i < kit.rows.length; i++) {
+    const fh = kit.rows[i].fileHandle;
+    if (fh) await engine.loadSample(i, fh);
   }
+}
 
-  // --- Keyboard ---
+$effect(() => {
+  void kit.rows.length;
+  syncEngineRows();
+});
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (pendingFolderAdd) {
-      if (e.key === "Escape") { pendingFolderAdd = null; e.preventDefault(); }
-      else if (e.key === "Enter") { const entry = pendingFolderAdd.entry; pendingFolderAdd = null; doAddFolder(entry); e.preventDefault(); }
-      return;
-    }
-    if (showNewKitModal) {
-      if (e.key === "Escape") { showNewKitModal = false; e.preventDefault(); }
-      return;
-    }
-    if (mode === "help") {
-      if (e.key === "Escape" || e.key === "?") { mode = "normal"; e.preventDefault(); }
-      return;
-    }
-    if (mode === "rename") {
-      if (e.key === "Enter") { confirmRename(); e.preventDefault(); }
-      else if (e.key === "Escape") { mode = "normal"; setTimeout(() => containerEl?.focus(), 0); e.preventDefault(); }
-      return;
-    }
-    if (mode === "search") {
-      if (e.key === "Escape") { searchQuery = ""; mode = "normal"; setTimeout(() => containerEl?.focus(), 0); e.preventDefault(); }
-      else if (e.key === "Enter") { mode = "normal"; setTimeout(() => containerEl?.focus(), 0); e.preventDefault(); }
-      return;
-    }
+function saveSeqToCache() {
+  if (!engine) return;
+  localStorage.setItem(
+    "kit-builder-seq",
+    JSON.stringify({
+      pattern: engine.getPattern(),
+      bpm: seqBpm,
+    }),
+  );
+}
 
-    if (e.key === "?") { mode = "help"; e.preventDefault(); return; }
-    if (e.key === "s" && !e.ctrlKey && !e.metaKey) {
-      toggleSequencer();
-      e.preventDefault();
-      return;
+function loadSeqFromCache() {
+  try {
+    const raw = localStorage.getItem("kit-builder-seq");
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.pattern) {
+      const eng = getOrCreateEngine();
+      eng.setPattern(data.pattern);
     }
-    if (e.key === "Tab") {
-      activePane = activePane === "browser" ? "kit" : "browser";
-      e.preventDefault();
-      return;
-    }
-
-    if (e.key === "u") { undo(); e.preventDefault(); return; }
-
-
-    if (activePane === "browser") handleBrowserKey(e);
-    else handleKitKey(e);
+    if (data.bpm) seqBpm = data.bpm;
+  } catch {
+    /* ignore */
   }
+}
 
-  function handleBrowserKey(e: KeyboardEvent) {
-    const entries = visibleEntries;
-    const entry = entries[browseIndex];
+$effect(() => {
+  containerEl?.focus();
+});
 
-    if (e.key === "j" || e.key === "ArrowDown") {
-      keyboardNav = true;
-      browseIndex = Math.min(browseIndex + 1, entries.length - 1);
-      e.preventDefault();
-    } else if (e.key === "k" || e.key === "ArrowUp") {
-      keyboardNav = true;
-      browseIndex = Math.max(browseIndex - 1, 0);
-      e.preventDefault();
-    } else if (e.key === "G") {
-      keyboardNav = true;
-      browseIndex = entries.length - 1;
-      e.preventDefault();
-    } else if (e.key === "g") {
-      keyboardNav = true;
-      browseIndex = 0;
-      e.preventDefault();
-    } else if (e.key === "l" || e.key === "ArrowRight") {
-      if (entry) expandEntry(entry);
-      e.preventDefault();
-    } else if (e.key === "h" || e.key === "ArrowLeft") {
-      if (entry) {
-        if (entry.kind === "directory" && entry.expanded) collapseEntry(entry);
-        else if (entry.parent) {
-          keyboardNav = true;
-          const pi = entries.indexOf(entry.parent);
-          if (pi >= 0) browseIndex = pi;
-        }
+$effect(() => {
+  void browseIndex;
+  void kit.selectedIndex;
+  const block = keyboardNav ? ("center" as const) : ("nearest" as const);
+  keyboardNav = false;
+  if (activePane === "browser" && browserListEl) {
+    const sel = browserListEl.querySelector(".browse-entry--selected");
+    sel?.scrollIntoView({ block, behavior: "smooth" });
+  }
+  if (activePane === "kit" && kitListEl) {
+    const sel = kitListEl.querySelector(".kit-row--selected");
+    sel?.scrollIntoView({ block, behavior: "smooth" });
+  }
+});
+
+$effect(() => {
+  if (!browserListEl) return;
+  const entry = visibleEntries[browseIndex];
+  if (!entry) {
+    showStickyHeader = false;
+    return;
+  }
+  const folder =
+    entry.kind === "directory" && entry.expanded ? entry : entry.parent;
+  if (!folder) {
+    showStickyHeader = false;
+    return;
+  }
+  const folderIdx = visibleEntries.indexOf(folder);
+  if (folderIdx < 0) {
+    showStickyHeader = false;
+    return;
+  }
+  const allEntryEls = browserListEl.querySelectorAll(".browse-entry");
+  const folderEl = allEntryEls[folderIdx] as HTMLElement | undefined;
+  if (!folderEl) {
+    showStickyHeader = false;
+    return;
+  }
+  const listRect = browserListEl.getBoundingClientRect();
+  const folderRect = folderEl.getBoundingClientRect();
+  showStickyHeader = folderRect.bottom < listRect.top;
+});
+
+// --- Directory browsing ---
+
+async function openSamplesDir() {
+  try {
+    samplesDir = await (window as any).showDirectoryPicker({ mode: "read" });
+  } catch {
+    return;
+  }
+  rootEntries = await listDirectory(samplesDir!, "", 0, null);
+  rebuildFlat();
+  browseIndex = 0;
+  activePane = "browser";
+  trackToolAction("kits", "open_samples");
+  await resolveFileHandles();
+}
+
+async function resolveFileHandles() {
+  if (!samplesDir) return;
+  const dirName = samplesDir.name;
+  for (const row of kit.rows) {
+    if (row.fileHandle || !row.samplePath) continue;
+    const prefix = dirName + "/";
+    if (!row.samplePath.startsWith(prefix)) continue;
+    const relPath = row.samplePath.slice(prefix.length);
+    const parts = relPath.split("/");
+    try {
+      let dir: FileSystemDirectoryHandle = samplesDir;
+      for (let i = 0; i < parts.length - 1; i++) {
+        dir = await dir.getDirectoryHandle(parts[i]);
       }
-      e.preventDefault();
-    } else if (e.key === "Enter" || e.key === "a") {
-      if (entry) {
-        if (entry.kind === "directory") addFolderToKit(entry);
-        else addSampleToKit(entry);
+      row.fileHandle = await dir.getFileHandle(parts[parts.length - 1]);
+    } catch {
+      /* file not found — leave row without handle */
+    }
+  }
+}
+
+/** Loads the SAMPLES/ dir from an already-picked SD card root (from /stats or /manage) instead of prompting again. */
+async function loadSamplesFromRoot(root: FileSystemDirectoryHandle) {
+  try {
+    samplesDir = await (root as any).getDirectoryHandle("SAMPLES");
+  } catch {
+    return;
+  }
+  rootEntries = await listDirectory(samplesDir!, "", 0, null);
+  rebuildFlat();
+  browseIndex = 0;
+  activePane = "browser";
+  await resolveFileHandles();
+}
+
+async function tryAutoLoadFromCardStore() {
+  try {
+    const handle = await cardStore.reconnectHandleOnly();
+    if (handle) {
+      await loadSamplesFromRoot(handle);
+    } else if (await cardStore.hasPersistedHandle()) {
+      reconnectAvailable = true;
+    }
+  } catch {}
+}
+
+async function reconnectSamplesDir() {
+  try {
+    const handle = await cardStore.reconnectHandleOnly(true);
+    if (handle) {
+      reconnectAvailable = false;
+      await loadSamplesFromRoot(handle);
+    }
+  } catch {}
+}
+
+tryAutoLoadFromCardStore();
+
+async function listDirectory(
+  dir: FileSystemDirectoryHandle,
+  parentPath: string,
+  depth: number,
+  parent: TreeEntry | null,
+): Promise<TreeEntry[]> {
+  const entries: TreeEntry[] = [];
+  for await (const [name, handle] of (dir as any).entries()) {
+    const path = parentPath ? `${parentPath}/${name}` : name;
+    entries.push({
+      name,
+      path,
+      kind: handle.kind,
+      handle,
+      depth,
+      expanded: false,
+      children: null,
+      parent,
+    });
+  }
+  entries.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  return entries;
+}
+
+function rebuildFlat() {
+  const result: TreeEntry[] = [];
+  function walk(entries: TreeEntry[]) {
+    for (const e of entries) {
+      result.push(e);
+      if (e.expanded && e.children) walk(e.children);
+    }
+  }
+  walk(rootEntries);
+  flatEntries = result;
+}
+
+async function expandEntry(entry: TreeEntry) {
+  if (entry.kind !== "directory" || entry.expanded) return;
+  entry.children = await listDirectory(
+    entry.handle as FileSystemDirectoryHandle,
+    entry.path,
+    entry.depth + 1,
+    entry,
+  );
+  entry.expanded = true;
+  rebuildFlat();
+}
+
+function collapseEntry(entry: TreeEntry) {
+  if (entry.kind !== "directory" || !entry.expanded) return;
+  entry.expanded = false;
+  rebuildFlat();
+  browseIndex = Math.min(browseIndex, visibleEntries.length - 1);
+}
+
+const AUDIO_EXT = /\.(wav|mp3|ogg|flac|aif|aiff)$/i;
+
+async function addSampleToKit(entry: TreeEntry) {
+  if (entry.kind !== "file") return;
+  pushUndo();
+  const dirName = samplesDir?.name ?? "SAMPLES";
+  const row = createEmptyRow(
+    entry.name
+      .replace(/\.[^.]+$/, "")
+      .toUpperCase()
+      .slice(0, 16),
+    `${dirName}/${entry.path}`,
+  );
+  row.fileHandle = entry.handle as FileSystemFileHandle;
+  kit.rows.push(row);
+  kit.selectedIndex = kit.rows.length - 1;
+  newRowIndex = kit.rows.length - 1;
+  await tick();
+  if (kitListEl) {
+    kitListEl.scrollTop = kitListEl.scrollHeight;
+  }
+  setTimeout(() => {
+    newRowIndex = -1;
+  }, 1500);
+}
+
+let pendingFolderAdd: { entry: TreeEntry; count: number } | null = $state(null);
+
+async function countFolderAudioFiles(
+  dir: FileSystemDirectoryHandle,
+): Promise<number> {
+  let count = 0;
+  for await (const [name, handle] of (dir as any).entries()) {
+    if (handle.kind === "file" && AUDIO_EXT.test(name)) count++;
+    else if (handle.kind === "directory")
+      count += await countFolderAudioFiles(handle as FileSystemDirectoryHandle);
+  }
+  return count;
+}
+
+async function addFolderToKit(entry: TreeEntry) {
+  if (entry.kind !== "directory") return;
+  const count = await countFolderAudioFiles(
+    entry.handle as FileSystemDirectoryHandle,
+  );
+  if (count === 0) return;
+  if (count > 16) {
+    pendingFolderAdd = { entry, count };
+    return;
+  }
+  await doAddFolder(entry);
+}
+
+async function doAddFolder(entry: TreeEntry) {
+  pushUndo();
+  const dir = entry.handle as FileSystemDirectoryHandle;
+  const files: { name: string; path: string; handle: FileSystemFileHandle }[] =
+    [];
+  async function collect(d: FileSystemDirectoryHandle, prefix: string) {
+    for await (const [name, handle] of (d as any).entries()) {
+      const path = prefix ? `${prefix}/${name}` : name;
+      if (handle.kind === "file" && AUDIO_EXT.test(name)) {
+        files.push({ name, path, handle: handle as FileSystemFileHandle });
+      } else if (handle.kind === "directory") {
+        await collect(handle as FileSystemDirectoryHandle, path);
       }
+    }
+  }
+  await collect(dir, entry.path);
+  files.sort((a, b) => a.name.localeCompare(b.name));
+  if (files.length === 0) return;
+  const dirName = samplesDir?.name ?? "SAMPLES";
+  for (const f of files) {
+    const row = createEmptyRow(
+      f.name
+        .replace(/\.[^.]+$/, "")
+        .toUpperCase()
+        .slice(0, 16),
+      `${dirName}/${f.path}`,
+    );
+    row.fileHandle = f.handle;
+    kit.rows.push(row);
+  }
+  kit.selectedIndex = kit.rows.length - 1;
+  newRowIndex = kit.rows.length - 1;
+  await tick();
+  if (kitListEl) {
+    kitListEl.scrollTop = kitListEl.scrollHeight;
+  }
+  setTimeout(() => {
+    newRowIndex = -1;
+  }, 1500);
+}
+
+// --- Audio preview ---
+
+async function auditionBrowserEntry(entry: TreeEntry) {
+  if (entry.kind !== "file") return;
+  stopPlayback();
+  try {
+    const fh = entry.handle as FileSystemFileHandle;
+    const file = await fh.getFile();
+    if (
+      !file.type.startsWith("audio/") &&
+      !file.name.match(/\.(wav|mp3|ogg|flac|aif|aiff)$/i)
+    )
+      return;
+    const url = URL.createObjectURL(file);
+    const audio = new Audio(url);
+    audio.onended = () => {
+      stopPlayback();
+    };
+    audio.play();
+    playingAudio = { index: -1, audio, url };
+  } catch {
+    /* ignore */
+  }
+}
+
+async function auditionKitRow(i: number) {
+  stopPlayback();
+  const row = kit.rows[i];
+  if (!row?.fileHandle) return;
+  try {
+    const file = await row.fileHandle.getFile();
+    const url = URL.createObjectURL(file);
+    const audio = new Audio(url);
+    audio.onended = () => {
+      stopPlayback();
+    };
+    audio.play();
+    playingAudio = { index: i, audio, url };
+  } catch {
+    /* ignore */
+  }
+}
+
+function stopPlayback() {
+  if (!playingAudio) return;
+  playingAudio.audio.pause();
+  URL.revokeObjectURL(playingAudio.url);
+  playingAudio = null;
+}
+
+// --- Kit row operations ---
+
+function moveRow(dir: number) {
+  const i = kit.selectedIndex;
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= kit.rows.length) return;
+  pushUndo();
+  [kit.rows[i], kit.rows[j]] = [kit.rows[j], kit.rows[i]];
+  kit.selectedIndex = j;
+  if (engine) {
+    const p = engine.getPattern();
+    if (p[i] && p[j]) {
+      [p[i], p[j]] = [p[j], p[i]];
+      engine.setPattern(p);
+      seqVersion++;
+      saveSeqToCache();
+    }
+  }
+}
+
+function pushUndo() {
+  undoStack.push({
+    rows: kit.rows.map((r) => ({ ...r })),
+    selectedIndex: kit.selectedIndex,
+  });
+  if (undoStack.length > 50) undoStack.shift();
+}
+
+function undo() {
+  const prev = undoStack.pop();
+  if (!prev) return;
+  kit.rows = prev.rows;
+  kit.selectedIndex = prev.selectedIndex;
+}
+
+function deleteRow() {
+  if (kit.selectedIndex < 0 || kit.rows.length === 0) return;
+  pushUndo();
+  engine?.removeRow(kit.selectedIndex);
+  kit.rows.splice(kit.selectedIndex, 1);
+  if (kit.selectedIndex >= kit.rows.length)
+    kit.selectedIndex = kit.rows.length - 1;
+  seqVersion++;
+  saveSeqToCache();
+}
+
+function deduplicateRows() {
+  if (kit.rows.length === 0) return;
+  const seen = new Set<string>();
+  const before = kit.rows.length;
+  const kept: KitRow[] = [];
+  for (const row of kit.rows) {
+    const key = row.samplePath || row.name;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(row);
+  }
+  if (kept.length === before) return;
+  pushUndo();
+  kit.rows = kept;
+  if (kit.selectedIndex >= kit.rows.length)
+    kit.selectedIndex = kit.rows.length - 1;
+}
+
+function startRename() {
+  if (!selectedRow) return;
+  renameValue = selectedRow.name;
+  mode = "rename";
+  setTimeout(() => renameInput?.focus(), 0);
+}
+
+function confirmRename() {
+  if (selectedRow && renameValue.trim())
+    selectedRow.name = renameValue.trim().toUpperCase();
+  mode = "normal";
+  setTimeout(() => containerEl?.focus(), 0);
+}
+
+function cycleLoopMode() {
+  if (!selectedRow) return;
+  selectedRow.loopMode =
+    LOOP_MODES[
+      (LOOP_MODES.indexOf(selectedRow.loopMode) + 1) % LOOP_MODES.length
+    ];
+}
+
+function cyclePolyMode() {
+  if (!selectedRow) return;
+  selectedRow.polyphonic =
+    POLY_MODES[
+      (POLY_MODES.indexOf(selectedRow.polyphonic) + 1) % POLY_MODES.length
+    ];
+}
+
+function adjustVolume(delta: number) {
+  if (!selectedRow) return;
+  selectedRow.volume = Math.max(0, Math.min(100, selectedRow.volume + delta));
+}
+
+function adjustPan(delta: number) {
+  if (!selectedRow) return;
+  selectedRow.pan = Math.max(-50, Math.min(50, selectedRow.pan + delta));
+}
+
+// --- Export / Import ---
+
+function exportKit() {
+  const xml = generateKitXml(kit);
+  const blob = new Blob([xml], { type: "application/xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${kit.name || "Kit"}.XML`;
+  a.click();
+  URL.revokeObjectURL(url);
+  hasUnsavedChanges = false;
+  trackToolAction("kits", "export", { rows: kit.rows.length });
+}
+
+async function loadKitFile(file: File) {
+  try {
+    const text = await file.text();
+    kit = parseKitXml(text);
+    kit.name = file.name.replace(/\.xml$/i, "");
+    loadedFileName = file.name;
+    trackToolAction("kits", "load_kit");
+    hasUnsavedChanges = false;
+    saveKitToCache();
+    await resolveFileHandles();
+    await loadSequencerSamples();
+  } catch (err: any) {
+    console.error("Failed to parse kit XML:", err);
+  }
+}
+
+function startNewKit() {
+  if (hasUnsavedChanges && kit.rows.length > 0) {
+    showNewKitModal = true;
+  } else {
+    confirmNewKit();
+  }
+}
+
+function confirmNewKit() {
+  kit = createEmptyKit();
+  loadedFileName = "";
+  hasUnsavedChanges = false;
+  clearKitCache();
+  showNewKitModal = false;
+  engine?.dispose();
+  engine = null;
+  sequencerPlaying = false;
+  currentStep = -1;
+  seqVersion++;
+  localStorage.removeItem("kit-builder-seq");
+}
+
+function handleFileInput(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file) loadKitFile(file);
+  input.value = "";
+}
+
+function handleDrop(e: DragEvent) {
+  e.preventDefault();
+  const file = e.dataTransfer?.files?.[0];
+  if (file?.name.toLowerCase().endsWith(".xml")) loadKitFile(file);
+}
+
+// --- Keyboard ---
+
+function handleKeydown(e: KeyboardEvent) {
+  if (pendingFolderAdd) {
+    if (e.key === "Escape") {
+      pendingFolderAdd = null;
       e.preventDefault();
-    } else if (e.key === " ") {
-      if (entry) {
-        if (entry.kind === "directory") {
-          if (entry.expanded) collapseEntry(entry);
-          else expandEntry(entry);
-        } else {
-          auditionBrowserEntry(entry);
-        }
-      }
+    } else if (e.key === "Enter") {
+      const entry = pendingFolderAdd.entry;
+      pendingFolderAdd = null;
+      doAddFolder(entry);
       e.preventDefault();
-    } else if (e.key === "/") {
-      mode = "search";
-      setTimeout(() => searchInput?.focus(), 0);
+    }
+    return;
+  }
+  if (showNewKitModal) {
+    if (e.key === "Escape") {
+      showNewKitModal = false;
+      e.preventDefault();
+    }
+    return;
+  }
+  if (mode === "help") {
+    if (e.key === "Escape" || e.key === "?") {
+      mode = "normal";
+      e.preventDefault();
+    }
+    return;
+  }
+  if (mode === "rename") {
+    if (e.key === "Enter") {
+      confirmRename();
       e.preventDefault();
     } else if (e.key === "Escape") {
-      if (searchQuery) { searchQuery = ""; }
-      else { stopPlayback(); }
-      e.preventDefault();
-    } else if (e.key === "o") {
-      openSamplesDir();
+      mode = "normal";
+      setTimeout(() => containerEl?.focus(), 0);
       e.preventDefault();
     }
+    return;
+  }
+  if (mode === "search") {
+    if (e.key === "Escape") {
+      searchQuery = "";
+      mode = "normal";
+      setTimeout(() => containerEl?.focus(), 0);
+      e.preventDefault();
+    } else if (e.key === "Enter") {
+      mode = "normal";
+      setTimeout(() => containerEl?.focus(), 0);
+      e.preventDefault();
+    }
+    return;
   }
 
-  function handleKitKey(e: KeyboardEvent) {
-    const { key } = e;
-    if (key === "j" || key === "ArrowDown") {
-      keyboardNav = true;
-      if (kit.rows.length > 0) kit.selectedIndex = Math.min(kit.selectedIndex + 1, kit.rows.length - 1);
-      e.preventDefault();
-    } else if (key === "k" || key === "ArrowUp") {
-      keyboardNav = true;
-      if (kit.rows.length > 0) kit.selectedIndex = Math.max(kit.selectedIndex - 1, 0);
-      e.preventDefault();
-    } else if (key === "J") { moveRow(1); e.preventDefault();
-    } else if (key === "K") { moveRow(-1); e.preventDefault();
-    } else if (key === "G" && pendingD) {
-      if (kit.rows.length > 0 && kit.selectedIndex >= 0) {
-        pushUndo();
-        const count = kit.rows.length - kit.selectedIndex;
-        for (let i = 0; i < count; i++) engine?.removeRow(kit.selectedIndex);
-        kit.rows.splice(kit.selectedIndex);
-        if (kit.selectedIndex >= kit.rows.length) kit.selectedIndex = kit.rows.length - 1;
-        seqVersion++;
-        saveSeqToCache();
-      }
-      pendingD = false; e.preventDefault();
-    } else if (key === "g" && pendingD) {
-      if (kit.rows.length > 0 && kit.selectedIndex >= 0) {
-        pushUndo();
-        for (let i = 0; i <= kit.selectedIndex; i++) engine?.removeRow(0);
-        kit.rows.splice(0, kit.selectedIndex + 1);
-        kit.selectedIndex = 0;
-        seqVersion++;
-        saveSeqToCache();
-      }
-      pendingD = false; e.preventDefault();
-    } else if (key === "d") {
-      if (pendingD) { deleteRow(); pendingD = false; }
-      else { pendingD = true; setTimeout(() => pendingD = false, 500); }
-      e.preventDefault();
-    } else if (key === "r") { startRename(); e.preventDefault();
-    } else if (key === " ") { if (kit.selectedIndex >= 0) auditionKitRow(kit.selectedIndex); e.preventDefault();
-    } else if (key === "l") { cycleLoopMode(); e.preventDefault();
-    } else if (key === "p") { cyclePolyMode(); e.preventDefault();
-    } else if (key === "e") { exportKit(); e.preventDefault();
-    } else if (key === "D") { deduplicateRows(); e.preventDefault();
-    } else if (key === "=" || key === "+") { adjustVolume(5); e.preventDefault();
-    } else if (key === "-") { adjustVolume(-5); e.preventDefault();
-    } else if (key === ">") { adjustPan(5); e.preventDefault();
-    } else if (key === "<") { adjustPan(-5); e.preventDefault();
-    } else if (key === "Escape") { kit.selectedIndex = -1; pendingD = false; e.preventDefault();
-    } else if (key !== "Shift" && key !== "Control" && key !== "Alt" && key !== "Meta") { pendingD = false; }
+  if (e.key === "?") {
+    mode = "help";
+    e.preventDefault();
+    return;
   }
+  if (e.key === "s" && !e.ctrlKey && !e.metaKey) {
+    toggleSequencer();
+    e.preventDefault();
+    return;
+  }
+  if (e.key === "Tab") {
+    activePane = activePane === "browser" ? "kit" : "browser";
+    e.preventDefault();
+    return;
+  }
+
+  if (e.key === "u") {
+    undo();
+    e.preventDefault();
+    return;
+  }
+
+  if (activePane === "browser") handleBrowserKey(e);
+  else handleKitKey(e);
+}
+
+function handleBrowserKey(e: KeyboardEvent) {
+  const entries = visibleEntries;
+  const entry = entries[browseIndex];
+
+  if (e.key === "j" || e.key === "ArrowDown") {
+    keyboardNav = true;
+    browseIndex = Math.min(browseIndex + 1, entries.length - 1);
+    e.preventDefault();
+  } else if (e.key === "k" || e.key === "ArrowUp") {
+    keyboardNav = true;
+    browseIndex = Math.max(browseIndex - 1, 0);
+    e.preventDefault();
+  } else if (e.key === "G") {
+    keyboardNav = true;
+    browseIndex = entries.length - 1;
+    e.preventDefault();
+  } else if (e.key === "g") {
+    keyboardNav = true;
+    browseIndex = 0;
+    e.preventDefault();
+  } else if (e.key === "l" || e.key === "ArrowRight") {
+    if (entry) expandEntry(entry);
+    e.preventDefault();
+  } else if (e.key === "h" || e.key === "ArrowLeft") {
+    if (entry) {
+      if (entry.kind === "directory" && entry.expanded) collapseEntry(entry);
+      else if (entry.parent) {
+        keyboardNav = true;
+        const pi = entries.indexOf(entry.parent);
+        if (pi >= 0) browseIndex = pi;
+      }
+    }
+    e.preventDefault();
+  } else if (e.key === "Enter" || e.key === "a") {
+    if (entry) {
+      if (entry.kind === "directory") addFolderToKit(entry);
+      else addSampleToKit(entry);
+    }
+    e.preventDefault();
+  } else if (e.key === " ") {
+    if (entry) {
+      if (entry.kind === "directory") {
+        if (entry.expanded) collapseEntry(entry);
+        else expandEntry(entry);
+      } else {
+        auditionBrowserEntry(entry);
+      }
+    }
+    e.preventDefault();
+  } else if (e.key === "/") {
+    mode = "search";
+    setTimeout(() => searchInput?.focus(), 0);
+    e.preventDefault();
+  } else if (e.key === "Escape") {
+    if (searchQuery) {
+      searchQuery = "";
+    } else {
+      stopPlayback();
+    }
+    e.preventDefault();
+  } else if (e.key === "o") {
+    openSamplesDir();
+    e.preventDefault();
+  }
+}
+
+function handleKitKey(e: KeyboardEvent) {
+  const { key } = e;
+  if (key === "j" || key === "ArrowDown") {
+    keyboardNav = true;
+    if (kit.rows.length > 0)
+      kit.selectedIndex = Math.min(kit.selectedIndex + 1, kit.rows.length - 1);
+    e.preventDefault();
+  } else if (key === "k" || key === "ArrowUp") {
+    keyboardNav = true;
+    if (kit.rows.length > 0)
+      kit.selectedIndex = Math.max(kit.selectedIndex - 1, 0);
+    e.preventDefault();
+  } else if (key === "J") {
+    moveRow(1);
+    e.preventDefault();
+  } else if (key === "K") {
+    moveRow(-1);
+    e.preventDefault();
+  } else if (key === "G" && pendingD) {
+    if (kit.rows.length > 0 && kit.selectedIndex >= 0) {
+      pushUndo();
+      const count = kit.rows.length - kit.selectedIndex;
+      for (let i = 0; i < count; i++) engine?.removeRow(kit.selectedIndex);
+      kit.rows.splice(kit.selectedIndex);
+      if (kit.selectedIndex >= kit.rows.length)
+        kit.selectedIndex = kit.rows.length - 1;
+      seqVersion++;
+      saveSeqToCache();
+    }
+    pendingD = false;
+    e.preventDefault();
+  } else if (key === "g" && pendingD) {
+    if (kit.rows.length > 0 && kit.selectedIndex >= 0) {
+      pushUndo();
+      for (let i = 0; i <= kit.selectedIndex; i++) engine?.removeRow(0);
+      kit.rows.splice(0, kit.selectedIndex + 1);
+      kit.selectedIndex = 0;
+      seqVersion++;
+      saveSeqToCache();
+    }
+    pendingD = false;
+    e.preventDefault();
+  } else if (key === "d") {
+    if (pendingD) {
+      deleteRow();
+      pendingD = false;
+    } else {
+      pendingD = true;
+      setTimeout(() => (pendingD = false), 500);
+    }
+    e.preventDefault();
+  } else if (key === "r") {
+    startRename();
+    e.preventDefault();
+  } else if (key === " ") {
+    if (kit.selectedIndex >= 0) auditionKitRow(kit.selectedIndex);
+    e.preventDefault();
+  } else if (key === "l") {
+    cycleLoopMode();
+    e.preventDefault();
+  } else if (key === "p") {
+    cyclePolyMode();
+    e.preventDefault();
+  } else if (key === "e") {
+    exportKit();
+    e.preventDefault();
+  } else if (key === "D") {
+    deduplicateRows();
+    e.preventDefault();
+  } else if (key === "=" || key === "+") {
+    adjustVolume(5);
+    e.preventDefault();
+  } else if (key === "-") {
+    adjustVolume(-5);
+    e.preventDefault();
+  } else if (key === ">") {
+    adjustPan(5);
+    e.preventDefault();
+  } else if (key === "<") {
+    adjustPan(-5);
+    e.preventDefault();
+  } else if (key === "Escape") {
+    kit.selectedIndex = -1;
+    pendingD = false;
+    e.preventDefault();
+  } else if (
+    key !== "Shift" &&
+    key !== "Control" &&
+    key !== "Alt" &&
+    key !== "Meta"
+  ) {
+    pendingD = false;
+  }
+}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->

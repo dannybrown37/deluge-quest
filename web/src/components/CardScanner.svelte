@@ -1,1196 +1,1356 @@
 <script lang="ts">
-  import { TRASH_DIR, getOrCreateDir, moveToTrash } from "../lib/softDelete";
-  import { cardStore, walkHandle } from "../lib/cardStore";
-  import { trackToolAction } from "../lib/analytics";
-  import { getChannelLabels, setChannelLabel, removeChannelLabel, formatChannel } from "../lib/channelLabels";
-
-  type State = "idle" | "indexing" | "processing" | "done" | "error";
-
-  interface MissingRef {
-    sample: string;
-    referencedBy: string[];
-  }
-
-  interface DuplicateGroup {
-    hash: string;
-    size: number;
-    files: string[];
-  }
-
-  interface InvalidXmlFile {
-    path: string;
-    autoFixable: boolean;
-  }
-
-  interface CardReport {
-    totalSamples: number;
-    totalSamplesBytes: number;
-    totalReferences: number;
-    unusedSamples: string[];
-    missingReferences: MissingRef[];
-    unusedPresets: string[];
-    reclaimableBytes: number;
-    duplicates: DuplicateGroup[];
-    duplicateWastedBytes: number;
-    songsByType: {
-      delugeOnly: string[];
-      mixed: string[];
-      externalOnly: string[];
-    };
-    invalidXml: InvalidXmlFile[];
-  }
-
-  const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
-  const XML_DIRS = ["SONGS", "KITS", "SYNTHS"];
-  const FILE_ATTRS = ["fileName", "filePath"];
-  const SOFT_DELETE_DIR = "SOFT_DELETE";
-  const REPAIR_BACKUP_DIR = "REPAIR_BACKUP";
-  const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR, REPAIR_BACKUP_DIR]);
-
-  /** SOFT_DELETE/ and REPAIR_BACKUP/ are app-managed, not card content — never scan, report, or count them. */
-  function isAppManagedPath(relPath: string): boolean {
-    return APP_MANAGED_DIRS.has(relPath.toUpperCase().split("/")[0]);
-  }
-
-  let state: State = $state("idle");
-  let errorMsg = $state("");
-  let report: CardReport | null = $state(null);
-  let dragOver = $state(false);
-  let cardName = $state("");
-  let listCategory = $state<"samples" | "songs" | "analysis">("samples");
-  let progress = $state("");
-  let progressPct = $state(0);
-  let canWrite = $state(false);
-  let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
-  let movedFiles = $state(new Set<string>());
-  let movingFiles = $state(new Set<string>());
-  let movedSongs = $state(new Map<string, string>());
-  let movingSongs = $state(new Set<string>());
-  let songViewMode = $state<"flat" | "folders">("flat");
-  let expandedSongDirs = $state(new Set<string>());
-  let fileHandles = $state(new Map<string, File>());
-  let usingCardStore = $state(false);
-  let reconnectAvailable = $state(false);
-  let playingFile = $state<string | null>(null);
-  let currentAudio = $state<HTMLAudioElement | null>(null);
-  let songMidiChannels = $state(new Map<string, number[]>());
-  let songFirmwareVersions = $state(new Map<string, string>());
-  let filterSongChannels = $state<Set<number>>(new Set());
-  let filterSongChannelMode = $state<"or" | "and" | "only">("or");
-  let showSongChannelLabelEditor = $state(false);
-  let songChannelLabels = $state<Record<number, string>>(getChannelLabels());
-  let customSongFolders = $state<string[]>(loadCustomSongFolders());
-  let showMoveToFolderPanel = $state(false);
-  let moveToFolderName = $state("");
-  let movingToFolder = $state(false);
-
-  let refSources = $state(new Map<string, Set<string>>());
-  let allSamplePaths = $state<string[]>([]);
-  let allSampleSizes = $state(new Map<string, number>());
-  let xmlTexts = $state(new Map<string, string>());
-  let expandedRefs = $state(new Set<string>());
-
-  let movedCount = $derived(movedFiles.size);
-  let hasFileSystemAccess = $derived(typeof window !== "undefined" && "showDirectoryPicker" in window);
-
-  function ext(name: string): string {
-    const i = name.lastIndexOf(".");
-    return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
-  }
-
-  function topDir(path: string): string {
-    const i = path.indexOf("/");
-    return i >= 0 ? path.slice(0, i) : path;
-  }
-
-  /**
-   * Some firmware versions write duplicate attributes on the same element (observed on
-   * c1.2.1, e.g. repeated isPlaying/length/colourOffset on audioTrack clips) — not
-   * well-formed XML, so DOMParser rejects the whole document. Keep the last value per
-   * attribute, matching how the firmware likely intended incremental writes to land.
-   */
-  function dedupeAttributes(xml: string): string {
-    return xml.replace(/<[^!?/][^>]*>/gs, (tag) => {
-      const head = tag.match(/^<\/?[\w:.-]+/)?.[0];
-      if (!head) return tag;
-      const selfClose = /\/\s*>$/.test(tag);
-      const seen = new Map<string, string>();
-      const attrRe = /([\w:.-]+)="([^"]*)"/g;
-      let m: RegExpExecArray | null;
-      while ((m = attrRe.exec(tag)) !== null) seen.set(m[1], m[2]);
-      if (seen.size === 0) return tag;
-      const attrs = [...seen.entries()].map(([k, v]) => `${k}="${v}"`).join(" ");
-      return `${head} ${attrs}${selfClose ? " />" : ">"}`;
-    });
-  }
-
-  function parseSongXml(xmlText: string): Document {
-    const parser = new DOMParser();
-    let doc = parser.parseFromString(xmlText, "text/xml");
-    if (doc.querySelector("parsererror")) {
-      doc = parser.parseFromString(dedupeAttributes(xmlText), "text/xml");
-    }
-    return doc;
-  }
-
-  function normalizePath(p: string): string {
-    return p.replace(/^\//, "").toUpperCase();
-  }
-
-  function extractFileRefs(xmlText: string): Set<string> {
-    const refs = new Set<string>();
-    const doc = parseSongXml(xmlText);
-    if (doc.querySelector("parsererror")) return refs;
-    const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_ELEMENT);
-    let node: Node | null = walker.currentNode;
-    while (node) {
-      if (node instanceof Element) {
-        for (const attr of FILE_ATTRS) {
-          const val = node.getAttribute(attr)?.trim();
-          if (val) refs.add(val);
-        }
-      }
-      node = walker.nextNode();
-    }
-    return refs;
-  }
-
-  function classifyInstrumentGear(xmlText: string): "delugeOnly" | "mixed" | "externalOnly" | null {
-    const doc = parseSongXml(xmlText);
-    if (doc.querySelector("parsererror")) return null;
-    // Tag names vary by firmware: older exports use midiChannel/cvChannel/audioOutput,
-    // firmware c1.2.1+ uses midi/cv/audioTrack. Check both.
-    const hasExternal = doc.querySelector("midi, midiChannel, cv, cvChannel") !== null;
-    const hasInternal = doc.querySelector("sound, kit") !== null;
-    if (hasInternal && hasExternal) return "mixed";
-    if (hasExternal) return "externalOnly";
-    // No external-gear signal at all — native to the Deluge, whether it's synths/kits,
-    // audio-only clips (audioTrack/audioOutput), or an empty song.
-    return "delugeOnly";
-  }
-
-  function extractMidiChannels(xmlText: string): number[] {
-    const doc = parseSongXml(xmlText);
-    if (doc.querySelector("parsererror")) return [];
-    const channels = new Set<number>();
-    for (const el of doc.querySelectorAll("midi, midiChannel")) {
-      const ch = el.getAttribute("channel");
-      if (ch != null) channels.add(parseInt(ch, 10) + 1);
-    }
-    return [...channels].sort((a, b) => a - b);
-  }
-
-  function extractFirmwareVersion(xmlText: string): string {
-    const doc = parseSongXml(xmlText);
-    if (doc.querySelector("parsererror")) return "";
-    return doc.documentElement.getAttribute("firmwareVersion") ?? "";
-  }
-
-  function extractPresetRefs(xmlText: string): Set<string> {
-    const names = new Set<string>();
-    const doc = parseSongXml(xmlText);
-    if (doc.querySelector("parsererror")) return names;
-    const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_ELEMENT);
-    let node: Node | null = walker.currentNode;
-    while (node) {
-      if (node instanceof Element) {
-        const pname = node.getAttribute("presetName")?.trim();
-        if (pname) names.add(pname);
-        const pslot = node.getAttribute("presetSlot");
-        if (pslot !== null) {
-          const tag = node.tagName.toLowerCase();
-          if (tag === "kit" || tag === "sound") {
-            const sub = node.getAttribute("presetSubSlot") ?? "";
-            const folder = tag === "kit" ? "KITS" : "SYNTHS";
-            names.add(`${folder}/${pslot}/${sub}`);
-          }
-        }
-      }
-      node = walker.nextNode();
-    }
-    return names;
-  }
-
-  async function scanFromHandle() {
-    state = "indexing";
-    progress = "Indexing card";
-    progressPct = 0;
-    await cardStore.pickDirectory((stage, done, total) => {
-      progress = total > 0 ? `${stage} (${done}/${total})` : stage;
-      progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
-    });
-    await runScanFromCardStore();
-  }
-
-  async function reconnectFromCardStore() {
-    state = "indexing";
-    progress = "Reconnecting";
-    progressPct = 0;
-    const ok = await cardStore.requestReconnect((stage, done, total) => {
-      progress = total > 0 ? `${stage} (${done}/${total})` : stage;
-      progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
-    });
-    if (ok) {
-      await runScanFromCardStore();
-    } else {
-      state = "idle";
-    }
-  }
-
-  /** Clears all move/fix tracking state — must run at the start of every fresh scan, not just
-   * full reset(), or stale entries from a prior run can silently no-op legitimate actions. */
-  function resetActionState() {
-    movedFiles = new Set();
-    movingFiles = new Set();
-    movedSongs = new Map();
-    movingSongs = new Set();
-    fixedXmlFiles = new Set();
-    fixingXmlFiles = new Set();
-    xmlFixErrors = new Map();
-  }
-
-  async function runScanFromCardStore() {
-    resetActionState();
-    rootHandle = cardStore.rootHandle;
-    canWrite = true;
-    cardName = rootHandle?.name ?? "";
-
-    if (cardStore.sampleIndex.size === 0) {
-      state = "error";
-      errorMsg = "Not a Deluge SD card: no SAMPLES directory found. Select the SD card root folder.";
-      return;
-    }
-
-    state = "processing";
-    progress = "Scanning XML references...";
-    await new Promise(r => setTimeout(r, 0));
-
-    const allSamples = new Map<string, number>();
-    const sampleHandles = new Map<string, File>();
-    for (const info of cardStore.sampleIndex.values()) {
-      allSamples.set(info.path, info.size);
-    }
-
-    const xmlEntries: [string, string][] = [
-      ...[...cardStore.songXmls.entries()],
-      ...[...cardStore.presetIndex.entries()],
-    ];
-
-    const getSampleFile = async (path: string) => {
-      const cached = sampleHandles.get(path);
-      if (cached) return cached;
-      const info = cardStore.sampleIndex.get(path.toLowerCase());
-      if (!info) throw new Error(`Sample not indexed: ${path}`);
-      const file = await info.handle.getFile();
-      sampleHandles.set(path, file);
-      return file;
-    };
-
-    await computeReport(allSamples, xmlEntries, getSampleFile);
-    fileHandles = sampleHandles;
-    usingCardStore = true;
-  }
-
-  async function scanCard(files: File[]) {
-    canWrite = false;
-    rootHandle = null;
-    state = "processing";
-    progress = "Indexing files...";
-
-    await new Promise(r => setTimeout(r, 0));
-
-    const filesByPath = new Map<string, File>();
-    let rootPrefix = "";
-
-    const firstPath = files[0] && ((files[0] as any).webkitRelativePath as string);
-    if (firstPath) {
-      rootPrefix = firstPath.split("/")[0] + "/";
-      cardName = firstPath.split("/")[0];
-    }
-
-    for (const f of files) {
-      const rel = (f as any).webkitRelativePath as string || f.name;
-      if (isAppManagedPath(stripRootPrefix(rel, rootPrefix))) continue;
-      filesByPath.set(rel, f);
-    }
-
-    const hasSamples = [...filesByPath.keys()].some(p => {
-      const rel = stripRootPrefix(p, rootPrefix);
-      return rel.toUpperCase().startsWith("SAMPLES/");
-    });
-    if (!hasSamples) {
-      state = "error";
-      errorMsg = "Not a Deluge SD card: no SAMPLES directory found. Select the SD card root folder.";
-      return;
-    }
-
-    const allSamples = new Map<string, number>();
-    const handles = new Map<string, File>();
-    for (const [path, file] of filesByPath) {
-      const rel = stripRootPrefix(path, rootPrefix);
-      if (rel.toUpperCase().startsWith("SAMPLES/") && AUDIO_EXTENSIONS.has(ext(rel))) {
-        allSamples.set(rel, file.size);
-        handles.set(rel, file);
-      }
-    }
-    fileHandles = handles;
-    usingCardStore = false;
-    resetActionState();
-
-    progress = "Scanning XML references...";
-    await new Promise(r => setTimeout(r, 0));
-
-    const xmlEntries: [string, string][] = [];
-    const xmlFilePairs: [string, File][] = [];
-    for (const [path, file] of filesByPath) {
-      const rel = stripRootPrefix(path, rootPrefix);
-      const dir = topDir(rel).toUpperCase();
-      if (XML_DIRS.includes(dir) && ext(rel) === "xml") xmlFilePairs.push([rel, file]);
-    }
-    let xmlDone = 0;
-    for (const [rel, file] of xmlFilePairs) {
-      xmlEntries.push([rel, await file.text()]);
-      xmlDone++;
-      if (xmlDone % 20 === 0) {
-        progress = `Scanning XML references... ${xmlDone}/${xmlFilePairs.length}`;
-        await new Promise(r => setTimeout(r, 0));
-      }
-    }
-
-    await computeReport(allSamples, xmlEntries, async (rel) => {
-      const file = handles.get(rel);
-      if (!file) throw new Error(`Sample not indexed: ${rel}`);
-      return file;
-    });
-  }
-
-  function stripRootPrefix(p: string, rootPrefix: string): string {
-    return rootPrefix && p.startsWith(rootPrefix) ? p.slice(rootPrefix.length) : p;
-  }
-
-  /** Shared analysis: reference scanning, missing/unused detection, preset usage, duplicate hashing. */
-  async function computeReport(
-    allSamples: Map<string, number>,
-    xmlEntries: [string, string][],
-    getSampleFile: (relPath: string) => Promise<File>,
-  ) {
-    const localRefSources = new Map<string, Set<string>>();
-    const songsByType = { delugeOnly: [] as string[], mixed: [] as string[], externalOnly: [] as string[] };
-    const invalidXml: InvalidXmlFile[] = [];
-    const localXmlTexts = new Map<string, string>();
-    const localSongMidiChannels = new Map<string, number[]>();
-    const localSongFirmwareVersions = new Map<string, string>();
-
-    for (const [rel, text] of xmlEntries) {
-      localXmlTexts.set(rel, text);
-      const wellFormed = new DOMParser().parseFromString(text, "text/xml").querySelector("parsererror") === null;
-      if (!wellFormed) {
-        const autoFixable = new DOMParser().parseFromString(dedupeAttributes(text), "text/xml").querySelector("parsererror") === null;
-        invalidXml.push({ path: rel, autoFixable });
-      }
-
-      for (const ref of extractFileRefs(text)) {
-        if (!localRefSources.has(ref)) localRefSources.set(ref, new Set());
-        localRefSources.get(ref)!.add(rel);
-      }
-      if (topDir(rel).toUpperCase() === "SONGS") {
-        const gearType = classifyInstrumentGear(text);
-        if (gearType) songsByType[gearType].push(rel);
-        const midiChs = extractMidiChannels(text);
-        if (midiChs.length > 0) localSongMidiChannels.set(rel, midiChs);
-        const firmwareVersion = extractFirmwareVersion(text);
-        if (firmwareVersion) localSongFirmwareVersions.set(rel, firmwareVersion);
-      }
-    }
-    invalidXml.sort((a, b) => a.path.localeCompare(b.path));
-
-    const sampleRefs = new Map<string, Set<string>>();
-    for (const [ref, sources] of localRefSources) {
-      if (normalizePath(ref).startsWith("SAMPLES/")) sampleRefs.set(ref, sources);
-    }
-    const normToSample = new Map<string, string>();
-    for (const k of allSamples.keys()) normToSample.set(normalizePath(k), k);
-    const normRefs = new Set([...sampleRefs.keys()].map(normalizePath));
-    const unused = [...normToSample.entries()]
-      .filter(([norm]) => !normRefs.has(norm))
-      .map(([, orig]) => orig)
-      .sort();
-    const normKeys = new Set(normToSample.keys());
-    const missing: MissingRef[] = [...sampleRefs.entries()]
-      .filter(([r]) => !normKeys.has(normalizePath(r)))
-      .map(([r, sources]) => ({ sample: r, referencedBy: [...sources].sort() }))
-      .sort((a, b) => a.sample.localeCompare(b.sample));
-    const totalBytes = [...allSamples.values()].reduce((a, b) => a + b, 0);
-    const reclaimable = unused.reduce((sum, k) => sum + (allSamples.get(k) ?? 0), 0);
-
-    progress = "Checking presets...";
-    await new Promise(r => setTimeout(r, 0));
-
-    const presetNames = new Set<string>();
-    for (const [rel, text] of xmlEntries) {
-      if (topDir(rel).toUpperCase() === "SONGS") {
-        for (const name of extractPresetRefs(text)) {
-          presetNames.add(name);
-        }
-      }
-    }
-
-    const unusedPresets: string[] = [];
-    for (const [rel] of xmlEntries) {
-      const dir = topDir(rel).toUpperCase();
-      if (dir === "KITS" || dir === "SYNTHS") {
-        const basename = rel.split("/").pop() ?? "";
-        const stem = basename.replace(/\.xml$/i, "");
-        const isUsed = [...presetNames].some(n => n === stem || n.includes(stem));
-        if (!isUsed) {
-          unusedPresets.push(rel);
-        }
-      }
-    }
-    unusedPresets.sort();
-
-    progress = "Finding duplicates (grouping by size)...";
-    await new Promise(r => setTimeout(r, 0));
-
-    const sizeGroups = new Map<number, string[]>();
-    for (const [path, size] of allSamples) {
-      const group = sizeGroups.get(size);
-      if (group) group.push(path);
-      else sizeGroups.set(size, [path]);
-    }
-
-    const candidatePaths: string[] = [];
-    for (const [size, paths] of sizeGroups) {
-      if (paths.length < 2 || size === 0) continue;
-      candidatePaths.push(...paths);
-    }
-
-    const hashGroups = new Map<string, { size: number; files: string[] }>();
-    let hashDone = 0;
-    const totalToHash = candidatePaths.length;
-
-    for (const path of candidatePaths) {
-      const file = await getSampleFile(path);
-      const buf = await file.arrayBuffer();
-      const hashBuf = await crypto.subtle.digest("SHA-256", buf);
-      const hashArr = new Uint8Array(hashBuf);
-      const hash = Array.from(hashArr, b => b.toString(16).padStart(2, "0")).join("");
-
-      const existing = hashGroups.get(hash);
-      if (existing) {
-        existing.files.push(path);
-      } else {
-        hashGroups.set(hash, { size: file.size, files: [path] });
-      }
-
-      hashDone++;
-      if (hashDone % 50 === 0) {
-        progress = `Finding duplicates (hashing ${hashDone}/${totalToHash})...`;
-        await new Promise(r => setTimeout(r, 0));
-      }
-    }
-
-    const duplicates: DuplicateGroup[] = [];
-    let duplicateWastedBytes = 0;
-    for (const [hash, { size, files }] of hashGroups) {
-      if (files.length < 2) continue;
-      files.sort();
-      duplicates.push({ hash, size, files });
-      duplicateWastedBytes += size * (files.length - 1);
-    }
-    duplicates.sort((a, b) => (b.size * (b.files.length - 1)) - (a.size * (a.files.length - 1)));
-
-    songsByType.delugeOnly.sort();
-    songsByType.mixed.sort();
-    songsByType.externalOnly.sort();
-
-    refSources = localRefSources;
-    allSamplePaths = [...allSamples.keys()].sort();
-    allSampleSizes = allSamples;
-    xmlTexts = localXmlTexts;
-    songMidiChannels = localSongMidiChannels;
-    songFirmwareVersions = localSongFirmwareVersions;
-
-    report = {
-      totalSamples: allSamples.size,
-      totalSamplesBytes: totalBytes,
-      totalReferences: sampleRefs.size,
-      unusedSamples: unused,
-      missingReferences: missing,
-      unusedPresets,
-      reclaimableBytes: reclaimable,
-      duplicates,
-      duplicateWastedBytes,
-      songsByType,
-      invalidXml,
-    };
-    state = "done";
-    saveToSession();
-    trackToolAction("manage", "scan");
-  }
-
-  async function moveSample(samplePath: string) {
-    if (!rootHandle || movedFiles.has(samplePath) || movingFiles.has(samplePath)) return;
-
-    const next = new Set(movingFiles);
-    next.add(samplePath);
-    movingFiles = next;
-
-    try {
-      await moveToTrash(rootHandle, samplePath);
-
-      const moved = new Set(movedFiles);
-      moved.add(samplePath);
-      movedFiles = moved;
-      trackToolAction("manage", "delete_sample");
-    } catch (e: any) {
-      console.error(`Failed to move ${samplePath}:`, e);
-    } finally {
-      const rm = new Set(movingFiles);
-      rm.delete(samplePath);
-      movingFiles = rm;
-    }
-  }
-
-  const SONG_CATEGORY_DIRS = ["DELUGE_ONLY", "EXTERNAL_GEAR"];
-  const CUSTOM_FOLDERS_KEY = "deluge-song-folders";
-
-  function loadCustomSongFolders(): string[] {
-    try {
-      const raw = localStorage.getItem(CUSTOM_FOLDERS_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function saveCustomSongFolder(name: string) {
-    if (customSongFolders.includes(name)) return;
-    const next = [...customSongFolders, name];
-    customSongFolders = next;
-    try {
-      localStorage.setItem(CUSTOM_FOLDERS_KEY, JSON.stringify(next));
-    } catch {}
-  }
-
-  function sanitizeFolderName(name: string): string {
-    return name.toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-  }
-
-  /** Removes dirPath and any now-empty ancestors, stopping at (not including) stopAt. */
-  async function removeEmptyDirsUpTo(root: FileSystemDirectoryHandle, dirPath: string, stopAt: string) {
-    let path = dirPath;
-    while (path && path !== stopAt) {
-      const parts = path.split("/");
-      const name = parts.pop()!;
-      const parentPath = parts.join("/");
-      const parentHandle = parentPath ? await getOrCreateDir(root, parentPath) : root;
-
-      const dirHandle: any = await parentHandle.getDirectoryHandle(name, { create: true });
-      let isEmpty = true;
-      for await (const _ of dirHandle.values()) {
-        isEmpty = false;
-        break;
-      }
-      if (!isEmpty) return;
-
-      await parentHandle.removeEntry(name);
-      path = parentPath;
-    }
-  }
-
-  async function moveSongToCategory(songPath: string, category: string) {
-    if (!rootHandle || movedSongs.has(songPath) || movingSongs.has(songPath)) return;
-
-    const next = new Set(movingSongs);
-    next.add(songPath);
-    movingSongs = next;
-
-    try {
-      const parts = songPath.split("/");
-      parts.shift(); // drop leading "SONGS"
-      if (SONG_CATEGORY_DIRS.includes(parts[0]) || customSongFolders.includes(parts[0])) parts.shift();
-      const fileName = parts.pop()!;
-      const relDir = parts.join("/");
-
-      const sourceParts = songPath.split("/");
-      const sourceFileName = sourceParts.pop()!;
-      const sourceDir = sourceParts.join("/");
-      const destDirPath = ["SONGS", category, relDir].filter(Boolean).join("/");
-
-      if (sourceDir === destDirPath && sourceFileName === fileName) {
-        const moved = new Map(movedSongs);
-        moved.set(songPath, "already sorted");
-        movedSongs = moved;
-        return;
-      }
-
-      const sourceDirHandle = await getOrCreateDir(rootHandle, sourceDir);
-      const sourceFileHandle = await sourceDirHandle.getFileHandle(sourceFileName);
-      const file = await sourceFileHandle.getFile();
-      const data = await file.arrayBuffer();
-
-      const destDirHandle = await getOrCreateDir(rootHandle, destDirPath);
-      const destFileHandle = await destDirHandle.getFileHandle(fileName, { create: true });
-      const writable = await destFileHandle.createWritable();
-      await writable.write(data);
-      await writable.close();
-
-      await sourceDirHandle.removeEntry(sourceFileName);
-      await removeEmptyDirsUpTo(rootHandle, sourceDir, "SONGS");
-
-      const destPath = [destDirPath, fileName].join("/");
-      const moved = new Map(movedSongs);
-      moved.set(songPath, `→ ${destPath}`);
-      movedSongs = moved;
-    } catch (e: any) {
-      console.error(`Failed to move ${songPath}:`, e);
-    } finally {
-      const rm = new Set(movingSongs);
-      rm.delete(songPath);
-      movingSongs = rm;
-    }
-  }
-
-  async function sortAllSongs() {
-    if (!rootHandle || !report) return;
-    const all = [
-      ...report.songsByType.delugeOnly.map(s => ({ path: s, category: "DELUGE_ONLY" as const })),
-      ...report.songsByType.mixed.map(s => ({ path: s, category: "EXTERNAL_GEAR" as const })),
-      ...report.songsByType.externalOnly.map(s => ({ path: s, category: "EXTERNAL_GEAR" as const })),
-    ];
-    for (const { path, category } of all) {
-      if (!movedSongs.has(path)) await moveSongToCategory(path, category);
-    }
-    trackToolAction("manage", "sort_songs");
-  }
-
-  let filteredSongsForMove = $derived([...filteredDelugeOnlySongs, ...filteredExternalSongs]);
-
-  let defaultMoveToFolderName = $derived.by(() => {
-    if (filterSongChannels.size !== 1) return "";
-    const ch = [...filterSongChannels][0];
-    return sanitizeFolderName(formatChannel(ch, songChannelLabels));
+import { trackToolAction } from "../lib/analytics";
+import { cardStore, walkHandle } from "../lib/cardStore";
+import {
+  formatChannel,
+  getChannelLabels,
+  removeChannelLabel,
+  setChannelLabel,
+} from "../lib/channelLabels";
+import { getOrCreateDir, moveToTrash, TRASH_DIR } from "../lib/softDelete";
+
+type State = "idle" | "indexing" | "processing" | "done" | "error";
+
+interface MissingRef {
+  sample: string;
+  referencedBy: string[];
+}
+
+interface DuplicateGroup {
+  hash: string;
+  size: number;
+  files: string[];
+}
+
+interface InvalidXmlFile {
+  path: string;
+  autoFixable: boolean;
+}
+
+interface CardReport {
+  totalSamples: number;
+  totalSamplesBytes: number;
+  totalReferences: number;
+  unusedSamples: string[];
+  missingReferences: MissingRef[];
+  unusedPresets: string[];
+  reclaimableBytes: number;
+  duplicates: DuplicateGroup[];
+  duplicateWastedBytes: number;
+  songsByType: {
+    delugeOnly: string[];
+    mixed: string[];
+    externalOnly: string[];
+  };
+  invalidXml: InvalidXmlFile[];
+}
+
+const AUDIO_EXTENSIONS = new Set(["wav", "aif", "aiff"]);
+const XML_DIRS = ["SONGS", "KITS", "SYNTHS"];
+const FILE_ATTRS = ["fileName", "filePath"];
+const SOFT_DELETE_DIR = "SOFT_DELETE";
+const REPAIR_BACKUP_DIR = "REPAIR_BACKUP";
+const APP_MANAGED_DIRS = new Set([SOFT_DELETE_DIR, REPAIR_BACKUP_DIR]);
+
+/** SOFT_DELETE/ and REPAIR_BACKUP/ are app-managed, not card content — never scan, report, or count them. */
+function isAppManagedPath(relPath: string): boolean {
+  return APP_MANAGED_DIRS.has(relPath.toUpperCase().split("/")[0]);
+}
+
+let state: State = $state("idle");
+let errorMsg = $state("");
+let report: CardReport | null = $state(null);
+let dragOver = $state(false);
+let cardName = $state("");
+let listCategory = $state<"samples" | "songs" | "analysis">("samples");
+let progress = $state("");
+let progressPct = $state(0);
+let canWrite = $state(false);
+let rootHandle = $state<FileSystemDirectoryHandle | null>(null);
+let movedFiles = $state(new Set<string>());
+let movingFiles = $state(new Set<string>());
+let movedSongs = $state(new Map<string, string>());
+let movingSongs = $state(new Set<string>());
+let songViewMode = $state<"flat" | "folders">("flat");
+let expandedSongDirs = $state(new Set<string>());
+let fileHandles = $state(new Map<string, File>());
+let usingCardStore = $state(false);
+let reconnectAvailable = $state(false);
+let playingFile = $state<string | null>(null);
+let currentAudio = $state<HTMLAudioElement | null>(null);
+let songMidiChannels = $state(new Map<string, number[]>());
+let songFirmwareVersions = $state(new Map<string, string>());
+let filterSongChannels = $state<Set<number>>(new Set());
+let filterSongChannelMode = $state<"or" | "and" | "only">("or");
+let showSongChannelLabelEditor = $state(false);
+let songChannelLabels = $state<Record<number, string>>(getChannelLabels());
+let customSongFolders = $state<string[]>(loadCustomSongFolders());
+let showMoveToFolderPanel = $state(false);
+let moveToFolderName = $state("");
+let movingToFolder = $state(false);
+
+let refSources = $state(new Map<string, Set<string>>());
+let allSamplePaths = $state<string[]>([]);
+let allSampleSizes = $state(new Map<string, number>());
+let xmlTexts = $state(new Map<string, string>());
+let expandedRefs = $state(new Set<string>());
+
+let movedCount = $derived(movedFiles.size);
+let hasFileSystemAccess = $derived(
+  typeof window !== "undefined" && "showDirectoryPicker" in window,
+);
+
+function ext(name: string): string {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
+}
+
+function topDir(path: string): string {
+  const i = path.indexOf("/");
+  return i >= 0 ? path.slice(0, i) : path;
+}
+
+/**
+ * Some firmware versions write duplicate attributes on the same element (observed on
+ * c1.2.1, e.g. repeated isPlaying/length/colourOffset on audioTrack clips) — not
+ * well-formed XML, so DOMParser rejects the whole document. Keep the last value per
+ * attribute, matching how the firmware likely intended incremental writes to land.
+ */
+function dedupeAttributes(xml: string): string {
+  return xml.replace(/<[^!?/][^>]*>/gs, (tag) => {
+    const head = tag.match(/^<\/?[\w:.-]+/)?.[0];
+    if (!head) return tag;
+    const selfClose = /\/\s*>$/.test(tag);
+    const seen = new Map<string, string>();
+    const attrRe = /([\w:.-]+)="([^"]*)"/g;
+    let m: RegExpExecArray | null;
+    while ((m = attrRe.exec(tag)) !== null) seen.set(m[1], m[2]);
+    if (seen.size === 0) return tag;
+    const attrs = [...seen.entries()].map(([k, v]) => `${k}="${v}"`).join(" ");
+    return `${head} ${attrs}${selfClose ? " />" : ">"}`;
   });
+}
 
-  async function moveFilteredSongsToFolder() {
-    const folderName = sanitizeFolderName(moveToFolderName);
-    if (!rootHandle || !folderName || filteredSongsForMove.length === 0) return;
-
-    movingToFolder = true;
-    try {
-      for (const path of filteredSongsForMove) {
-        if (!movedSongs.has(path)) await moveSongToCategory(path, folderName);
-      }
-      saveCustomSongFolder(folderName);
-      trackToolAction("manage", "sort_songs");
-    } finally {
-      movingToFolder = false;
-      showMoveToFolderPanel = false;
-      moveToFolderName = "";
-    }
+function parseSongXml(xmlText: string): Document {
+  const parser = new DOMParser();
+  let doc = parser.parseFromString(xmlText, "text/xml");
+  if (doc.querySelector("parsererror")) {
+    doc = parser.parseFromString(dedupeAttributes(xmlText), "text/xml");
   }
+  return doc;
+}
 
-  function toggleRefExpand(path: string) {
-    const next = new Set(expandedRefs);
-    if (next.has(path)) next.delete(path);
-    else next.add(path);
-    expandedRefs = next;
-  }
+function normalizePath(p: string): string {
+  return p.replace(/^\//, "").toUpperCase();
+}
 
-  let fixedXmlFiles = $state(new Set<string>());
-  let fixingXmlFiles = $state(new Set<string>());
-  let xmlFixErrors = $state(new Map<string, string>());
-  async function fixXmlFile(path: string) {
-    if (!rootHandle || fixedXmlFiles.has(path) || fixingXmlFiles.has(path)) return;
-
-    const next = new Set(fixingXmlFiles);
-    next.add(path);
-    fixingXmlFiles = next;
-
-    try {
-      const parts = path.split("/");
-      const fileName = parts.pop()!;
-      const dirPath = parts.join("/");
-
-      const dirHandle = await getOrCreateDir(rootHandle, dirPath);
-      const fileHandle = await dirHandle.getFileHandle(fileName);
-      const file = await fileHandle.getFile();
-      const rawText = await file.text();
-
-      const fixedText = dedupeAttributes(rawText);
-      const stillBroken = new DOMParser().parseFromString(fixedText, "text/xml").querySelector("parsererror") !== null;
-      if (stillBroken) {
-        throw new Error("Automatic fix did not produce valid XML — needs manual review");
-      }
-
-      const backupDirHandle = await getOrCreateDir(rootHandle, `${REPAIR_BACKUP_DIR}/${dirPath}`);
-      const backupFileHandle = await backupDirHandle.getFileHandle(fileName, { create: true });
-      const backupWritable = await backupFileHandle.createWritable();
-      await backupWritable.write(rawText);
-      await backupWritable.close();
-
-      const destWritable = await (await dirHandle.getFileHandle(fileName, { create: true })).createWritable();
-      await destWritable.write(fixedText);
-      await destWritable.close();
-
-      const fixed = new Set(fixedXmlFiles);
-      fixed.add(path);
-      fixedXmlFiles = fixed;
-      const errs = new Map(xmlFixErrors);
-      errs.delete(path);
-      xmlFixErrors = errs;
-    } catch (e: any) {
-      console.error(`Failed to fix ${path}:`, e);
-      const errs = new Map(xmlFixErrors);
-      errs.set(path, e.message || "Fix failed");
-      xmlFixErrors = errs;
-    } finally {
-      const rm = new Set(fixingXmlFiles);
-      rm.delete(path);
-      fixingXmlFiles = rm;
-    }
-  }
-
-  async function fixAllXml() {
-    if (!rootHandle || !report) return;
-    for (const { path, autoFixable } of report.invalidXml) {
-      if (autoFixable && !fixedXmlFiles.has(path)) await fixXmlFile(path);
-    }
-    trackToolAction("manage", "fix_all_xml");
-  }
-
-  function allCardFiles(): { path: string; size: number; lastModified: number }[] {
-    const files: { path: string; size: number; lastModified: number }[] = [];
-    for (const [path, xml] of cardStore.songXmls) {
-      const mod = cardStore.songLastModified.get(path) ?? 0;
-      files.push({ path, size: new Blob([xml]).size, lastModified: mod });
-    }
-    for (const [path, xml] of cardStore.presetIndex) {
-      files.push({ path, size: new Blob([xml]).size, lastModified: 0 });
-    }
-    for (const info of cardStore.sampleIndex.values()) {
-      files.push({ path: info.path, size: info.size, lastModified: 0 });
-    }
-    return files;
-  }
-
-
-  function formatBytes(n: number): string {
-    if (n < 1024) return `${n} B`;
-    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  }
-
-  async function openDirectoryPicker() {
-    try {
-      await scanFromHandle();
-    } catch (e: any) {
-      if (e.name !== "AbortError") {
-        state = "error";
-        errorMsg = e.message || "Failed to open directory";
+function extractFileRefs(xmlText: string): Set<string> {
+  const refs = new Set<string>();
+  const doc = parseSongXml(xmlText);
+  if (doc.querySelector("parsererror")) return refs;
+  const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_ELEMENT);
+  let node: Node | null = walker.currentNode;
+  while (node) {
+    if (node instanceof Element) {
+      for (const attr of FILE_ATTRS) {
+        const val = node.getAttribute(attr)?.trim();
+        if (val) refs.add(val);
       }
     }
+    node = walker.nextNode();
+  }
+  return refs;
+}
+
+function classifyInstrumentGear(
+  xmlText: string,
+): "delugeOnly" | "mixed" | "externalOnly" | null {
+  const doc = parseSongXml(xmlText);
+  if (doc.querySelector("parsererror")) return null;
+  // Tag names vary by firmware: older exports use midiChannel/cvChannel/audioOutput,
+  // firmware c1.2.1+ uses midi/cv/audioTrack. Check both.
+  const hasExternal =
+    doc.querySelector("midi, midiChannel, cv, cvChannel") !== null;
+  const hasInternal = doc.querySelector("sound, kit") !== null;
+  if (hasInternal && hasExternal) return "mixed";
+  if (hasExternal) return "externalOnly";
+  // No external-gear signal at all — native to the Deluge, whether it's synths/kits,
+  // audio-only clips (audioTrack/audioOutput), or an empty song.
+  return "delugeOnly";
+}
+
+function extractMidiChannels(xmlText: string): number[] {
+  const doc = parseSongXml(xmlText);
+  if (doc.querySelector("parsererror")) return [];
+  const channels = new Set<number>();
+  for (const el of doc.querySelectorAll("midi, midiChannel")) {
+    const ch = el.getAttribute("channel");
+    if (ch != null) channels.add(parseInt(ch, 10) + 1);
+  }
+  return [...channels].sort((a, b) => a - b);
+}
+
+function extractFirmwareVersion(xmlText: string): string {
+  const doc = parseSongXml(xmlText);
+  if (doc.querySelector("parsererror")) return "";
+  return doc.documentElement.getAttribute("firmwareVersion") ?? "";
+}
+
+function extractPresetRefs(xmlText: string): Set<string> {
+  const names = new Set<string>();
+  const doc = parseSongXml(xmlText);
+  if (doc.querySelector("parsererror")) return names;
+  const walker = doc.createTreeWalker(doc, NodeFilter.SHOW_ELEMENT);
+  let node: Node | null = walker.currentNode;
+  while (node) {
+    if (node instanceof Element) {
+      const pname = node.getAttribute("presetName")?.trim();
+      if (pname) names.add(pname);
+      const pslot = node.getAttribute("presetSlot");
+      if (pslot !== null) {
+        const tag = node.tagName.toLowerCase();
+        if (tag === "kit" || tag === "sound") {
+          const sub = node.getAttribute("presetSubSlot") ?? "";
+          const folder = tag === "kit" ? "KITS" : "SYNTHS";
+          names.add(`${folder}/${pslot}/${sub}`);
+        }
+      }
+    }
+    node = walker.nextNode();
+  }
+  return names;
+}
+
+async function scanFromHandle() {
+  state = "indexing";
+  progress = "Indexing card";
+  progressPct = 0;
+  await cardStore.pickDirectory((stage, done, total) => {
+    progress = total > 0 ? `${stage} (${done}/${total})` : stage;
+    progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+  });
+  await runScanFromCardStore();
+}
+
+async function reconnectFromCardStore() {
+  state = "indexing";
+  progress = "Reconnecting";
+  progressPct = 0;
+  const ok = await cardStore.requestReconnect((stage, done, total) => {
+    progress = total > 0 ? `${stage} (${done}/${total})` : stage;
+    progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+  });
+  if (ok) {
+    await runScanFromCardStore();
+  } else {
+    state = "idle";
+  }
+}
+
+/** Clears all move/fix tracking state — must run at the start of every fresh scan, not just
+ * full reset(), or stale entries from a prior run can silently no-op legitimate actions. */
+function resetActionState() {
+  movedFiles = new Set();
+  movingFiles = new Set();
+  movedSongs = new Map();
+  movingSongs = new Set();
+  fixedXmlFiles = new Set();
+  fixingXmlFiles = new Set();
+  xmlFixErrors = new Map();
+}
+
+async function runScanFromCardStore() {
+  resetActionState();
+  rootHandle = cardStore.rootHandle;
+  canWrite = true;
+  cardName = rootHandle?.name ?? "";
+
+  if (cardStore.sampleIndex.size === 0) {
+    state = "error";
+    errorMsg =
+      "Not a Deluge SD card: no SAMPLES directory found. Select the SD card root folder.";
+    return;
   }
 
-  function handleInputChange(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const files = input.files;
-    if (files?.length) scanCard(Array.from(files));
+  state = "processing";
+  progress = "Scanning XML references...";
+  await new Promise((r) => setTimeout(r, 0));
+
+  const allSamples = new Map<string, number>();
+  const sampleHandles = new Map<string, File>();
+  for (const info of cardStore.sampleIndex.values()) {
+    allSamples.set(info.path, info.size);
   }
 
-  async function readEntryRecursive(entry: FileSystemEntry): Promise<File[]> {
-    if (entry.isFile) {
-      return new Promise((resolve) => {
-        (entry as FileSystemFileEntry).file(
-          (f) => resolve([f]),
-          () => resolve([]),
-        );
-      });
+  const xmlEntries: [string, string][] = [
+    ...[...cardStore.songXmls.entries()],
+    ...[...cardStore.presetIndex.entries()],
+  ];
+
+  const getSampleFile = async (path: string) => {
+    const cached = sampleHandles.get(path);
+    if (cached) return cached;
+    const info = cardStore.sampleIndex.get(path.toLowerCase());
+    if (!info) throw new Error(`Sample not indexed: ${path}`);
+    const file = await info.handle.getFile();
+    sampleHandles.set(path, file);
+    return file;
+  };
+
+  await computeReport(allSamples, xmlEntries, getSampleFile);
+  fileHandles = sampleHandles;
+  usingCardStore = true;
+}
+
+async function scanCard(files: File[]) {
+  canWrite = false;
+  rootHandle = null;
+  state = "processing";
+  progress = "Indexing files...";
+
+  await new Promise((r) => setTimeout(r, 0));
+
+  const filesByPath = new Map<string, File>();
+  let rootPrefix = "";
+
+  const firstPath =
+    files[0] && ((files[0] as any).webkitRelativePath as string);
+  if (firstPath) {
+    rootPrefix = firstPath.split("/")[0] + "/";
+    cardName = firstPath.split("/")[0];
+  }
+
+  for (const f of files) {
+    const rel = ((f as any).webkitRelativePath as string) || f.name;
+    if (isAppManagedPath(stripRootPrefix(rel, rootPrefix))) continue;
+    filesByPath.set(rel, f);
+  }
+
+  const hasSamples = [...filesByPath.keys()].some((p) => {
+    const rel = stripRootPrefix(p, rootPrefix);
+    return rel.toUpperCase().startsWith("SAMPLES/");
+  });
+  if (!hasSamples) {
+    state = "error";
+    errorMsg =
+      "Not a Deluge SD card: no SAMPLES directory found. Select the SD card root folder.";
+    return;
+  }
+
+  const allSamples = new Map<string, number>();
+  const handles = new Map<string, File>();
+  for (const [path, file] of filesByPath) {
+    const rel = stripRootPrefix(path, rootPrefix);
+    if (
+      rel.toUpperCase().startsWith("SAMPLES/") &&
+      AUDIO_EXTENSIONS.has(ext(rel))
+    ) {
+      allSamples.set(rel, file.size);
+      handles.set(rel, file);
     }
-    if (entry.isDirectory) {
-      if (APP_MANAGED_DIRS.has(entry.name.toUpperCase())) return [];
-      const reader = (entry as FileSystemDirectoryEntry).createReader();
-      const entries = await new Promise<FileSystemEntry[]>((resolve) => {
-        const all: FileSystemEntry[] = [];
-        const readBatch = () => {
-          reader.readEntries((batch) => {
-            if (batch.length === 0) { resolve(all); return; }
-            all.push(...batch);
-            readBatch();
-          }, () => resolve(all));
-        };
-        readBatch();
-      });
-      const nested = await Promise.all(entries.map(readEntryRecursive));
-      return nested.flat();
+  }
+  fileHandles = handles;
+  usingCardStore = false;
+  resetActionState();
+
+  progress = "Scanning XML references...";
+  await new Promise((r) => setTimeout(r, 0));
+
+  const xmlEntries: [string, string][] = [];
+  const xmlFilePairs: [string, File][] = [];
+  for (const [path, file] of filesByPath) {
+    const rel = stripRootPrefix(path, rootPrefix);
+    const dir = topDir(rel).toUpperCase();
+    if (XML_DIRS.includes(dir) && ext(rel) === "xml")
+      xmlFilePairs.push([rel, file]);
+  }
+  let xmlDone = 0;
+  for (const [rel, file] of xmlFilePairs) {
+    xmlEntries.push([rel, await file.text()]);
+    xmlDone++;
+    if (xmlDone % 20 === 0) {
+      progress = `Scanning XML references... ${xmlDone}/${xmlFilePairs.length}`;
+      await new Promise((r) => setTimeout(r, 0));
     }
+  }
+
+  await computeReport(allSamples, xmlEntries, async (rel) => {
+    const file = handles.get(rel);
+    if (!file) throw new Error(`Sample not indexed: ${rel}`);
+    return file;
+  });
+}
+
+function stripRootPrefix(p: string, rootPrefix: string): string {
+  return rootPrefix && p.startsWith(rootPrefix)
+    ? p.slice(rootPrefix.length)
+    : p;
+}
+
+/** Shared analysis: reference scanning, missing/unused detection, preset usage, duplicate hashing. */
+async function computeReport(
+  allSamples: Map<string, number>,
+  xmlEntries: [string, string][],
+  getSampleFile: (relPath: string) => Promise<File>,
+) {
+  const localRefSources = new Map<string, Set<string>>();
+  const songsByType = {
+    delugeOnly: [] as string[],
+    mixed: [] as string[],
+    externalOnly: [] as string[],
+  };
+  const invalidXml: InvalidXmlFile[] = [];
+  const localXmlTexts = new Map<string, string>();
+  const localSongMidiChannels = new Map<string, number[]>();
+  const localSongFirmwareVersions = new Map<string, string>();
+
+  for (const [rel, text] of xmlEntries) {
+    localXmlTexts.set(rel, text);
+    const wellFormed =
+      new DOMParser()
+        .parseFromString(text, "text/xml")
+        .querySelector("parsererror") === null;
+    if (!wellFormed) {
+      const autoFixable =
+        new DOMParser()
+          .parseFromString(dedupeAttributes(text), "text/xml")
+          .querySelector("parsererror") === null;
+      invalidXml.push({ path: rel, autoFixable });
+    }
+
+    for (const ref of extractFileRefs(text)) {
+      if (!localRefSources.has(ref)) localRefSources.set(ref, new Set());
+      localRefSources.get(ref)!.add(rel);
+    }
+    if (topDir(rel).toUpperCase() === "SONGS") {
+      const gearType = classifyInstrumentGear(text);
+      if (gearType) songsByType[gearType].push(rel);
+      const midiChs = extractMidiChannels(text);
+      if (midiChs.length > 0) localSongMidiChannels.set(rel, midiChs);
+      const firmwareVersion = extractFirmwareVersion(text);
+      if (firmwareVersion) localSongFirmwareVersions.set(rel, firmwareVersion);
+    }
+  }
+  invalidXml.sort((a, b) => a.path.localeCompare(b.path));
+
+  const sampleRefs = new Map<string, Set<string>>();
+  for (const [ref, sources] of localRefSources) {
+    if (normalizePath(ref).startsWith("SAMPLES/")) sampleRefs.set(ref, sources);
+  }
+  const normToSample = new Map<string, string>();
+  for (const k of allSamples.keys()) normToSample.set(normalizePath(k), k);
+  const normRefs = new Set([...sampleRefs.keys()].map(normalizePath));
+  const unused = [...normToSample.entries()]
+    .filter(([norm]) => !normRefs.has(norm))
+    .map(([, orig]) => orig)
+    .sort();
+  const normKeys = new Set(normToSample.keys());
+  const missing: MissingRef[] = [...sampleRefs.entries()]
+    .filter(([r]) => !normKeys.has(normalizePath(r)))
+    .map(([r, sources]) => ({ sample: r, referencedBy: [...sources].sort() }))
+    .sort((a, b) => a.sample.localeCompare(b.sample));
+  const totalBytes = [...allSamples.values()].reduce((a, b) => a + b, 0);
+  const reclaimable = unused.reduce(
+    (sum, k) => sum + (allSamples.get(k) ?? 0),
+    0,
+  );
+
+  progress = "Checking presets...";
+  await new Promise((r) => setTimeout(r, 0));
+
+  const presetNames = new Set<string>();
+  for (const [rel, text] of xmlEntries) {
+    if (topDir(rel).toUpperCase() === "SONGS") {
+      for (const name of extractPresetRefs(text)) {
+        presetNames.add(name);
+      }
+    }
+  }
+
+  const unusedPresets: string[] = [];
+  for (const [rel] of xmlEntries) {
+    const dir = topDir(rel).toUpperCase();
+    if (dir === "KITS" || dir === "SYNTHS") {
+      const basename = rel.split("/").pop() ?? "";
+      const stem = basename.replace(/\.xml$/i, "");
+      const isUsed = [...presetNames].some(
+        (n) => n === stem || n.includes(stem),
+      );
+      if (!isUsed) {
+        unusedPresets.push(rel);
+      }
+    }
+  }
+  unusedPresets.sort();
+
+  progress = "Finding duplicates (grouping by size)...";
+  await new Promise((r) => setTimeout(r, 0));
+
+  const sizeGroups = new Map<number, string[]>();
+  for (const [path, size] of allSamples) {
+    const group = sizeGroups.get(size);
+    if (group) group.push(path);
+    else sizeGroups.set(size, [path]);
+  }
+
+  const candidatePaths: string[] = [];
+  for (const [size, paths] of sizeGroups) {
+    if (paths.length < 2 || size === 0) continue;
+    candidatePaths.push(...paths);
+  }
+
+  const hashGroups = new Map<string, { size: number; files: string[] }>();
+  let hashDone = 0;
+  const totalToHash = candidatePaths.length;
+
+  for (const path of candidatePaths) {
+    const file = await getSampleFile(path);
+    const buf = await file.arrayBuffer();
+    const hashBuf = await crypto.subtle.digest("SHA-256", buf);
+    const hashArr = new Uint8Array(hashBuf);
+    const hash = Array.from(hashArr, (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+
+    const existing = hashGroups.get(hash);
+    if (existing) {
+      existing.files.push(path);
+    } else {
+      hashGroups.set(hash, { size: file.size, files: [path] });
+    }
+
+    hashDone++;
+    if (hashDone % 50 === 0) {
+      progress = `Finding duplicates (hashing ${hashDone}/${totalToHash})...`;
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  const duplicates: DuplicateGroup[] = [];
+  let duplicateWastedBytes = 0;
+  for (const [hash, { size, files }] of hashGroups) {
+    if (files.length < 2) continue;
+    files.sort();
+    duplicates.push({ hash, size, files });
+    duplicateWastedBytes += size * (files.length - 1);
+  }
+  duplicates.sort(
+    (a, b) => b.size * (b.files.length - 1) - a.size * (a.files.length - 1),
+  );
+
+  songsByType.delugeOnly.sort();
+  songsByType.mixed.sort();
+  songsByType.externalOnly.sort();
+
+  refSources = localRefSources;
+  allSamplePaths = [...allSamples.keys()].sort();
+  allSampleSizes = allSamples;
+  xmlTexts = localXmlTexts;
+  songMidiChannels = localSongMidiChannels;
+  songFirmwareVersions = localSongFirmwareVersions;
+
+  report = {
+    totalSamples: allSamples.size,
+    totalSamplesBytes: totalBytes,
+    totalReferences: sampleRefs.size,
+    unusedSamples: unused,
+    missingReferences: missing,
+    unusedPresets,
+    reclaimableBytes: reclaimable,
+    duplicates,
+    duplicateWastedBytes,
+    songsByType,
+    invalidXml,
+  };
+  state = "done";
+  saveToSession();
+  trackToolAction("manage", "scan");
+}
+
+async function moveSample(samplePath: string) {
+  if (!rootHandle || movedFiles.has(samplePath) || movingFiles.has(samplePath))
+    return;
+
+  const next = new Set(movingFiles);
+  next.add(samplePath);
+  movingFiles = next;
+
+  try {
+    await moveToTrash(rootHandle, samplePath);
+
+    const moved = new Set(movedFiles);
+    moved.add(samplePath);
+    movedFiles = moved;
+    trackToolAction("manage", "delete_sample");
+  } catch (e: any) {
+    console.error(`Failed to move ${samplePath}:`, e);
+  } finally {
+    const rm = new Set(movingFiles);
+    rm.delete(samplePath);
+    movingFiles = rm;
+  }
+}
+
+const SONG_CATEGORY_DIRS = ["DELUGE_ONLY", "EXTERNAL_GEAR"];
+const CUSTOM_FOLDERS_KEY = "deluge-song-folders";
+
+function loadCustomSongFolders(): string[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_FOLDERS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
     return [];
   }
+}
 
-  async function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    dragOver = false;
-    const items = e.dataTransfer?.items;
-    if (items) {
-      const entries = Array.from(items)
-        .map(item => item.webkitGetAsEntry?.())
-        .filter((e): e is FileSystemEntry => e != null);
-      if (entries.length > 0) {
-        const allFiles = (await Promise.all(entries.map(readEntryRecursive))).flat();
-        await scanCard(allFiles);
-        return;
-      }
+function saveCustomSongFolder(name: string) {
+  if (customSongFolders.includes(name)) return;
+  const next = [...customSongFolders, name];
+  customSongFolders = next;
+  try {
+    localStorage.setItem(CUSTOM_FOLDERS_KEY, JSON.stringify(next));
+  } catch {}
+}
+
+function sanitizeFolderName(name: string): string {
+  return name.toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+}
+
+/** Removes dirPath and any now-empty ancestors, stopping at (not including) stopAt. */
+async function removeEmptyDirsUpTo(
+  root: FileSystemDirectoryHandle,
+  dirPath: string,
+  stopAt: string,
+) {
+  let path = dirPath;
+  while (path && path !== stopAt) {
+    const parts = path.split("/");
+    const name = parts.pop()!;
+    const parentPath = parts.join("/");
+    const parentHandle = parentPath
+      ? await getOrCreateDir(root, parentPath)
+      : root;
+
+    const dirHandle: any = await parentHandle.getDirectoryHandle(name, {
+      create: true,
+    });
+    let isEmpty = true;
+    for await (const _ of dirHandle.values()) {
+      isEmpty = false;
+      break;
     }
-    const files = e.dataTransfer?.files;
-    if (files?.length) await scanCard(Array.from(files));
+    if (!isEmpty) return;
+
+    await parentHandle.removeEntry(name);
+    path = parentPath;
   }
+}
 
-  function exportJson() {
-    if (!report) return;
-    trackToolAction("manage", "export_json");
-    const data = {
-      total_samples: report.totalSamples,
-      total_samples_bytes: report.totalSamplesBytes,
-      total_references: report.totalReferences,
-      unused_samples: report.unusedSamples,
-      missing_references: report.missingReferences.map(m => ({ sample: m.sample, referenced_by: m.referencedBy })),
-      unused_presets: report.unusedPresets,
-      reclaimable_bytes: report.reclaimableBytes,
-      duplicates: (report.duplicates ?? []).map(d => ({ hash: d.hash, size: d.size, files: d.files })),
-      duplicate_wasted_bytes: report.duplicateWastedBytes ?? 0,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `deluge-clean-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+async function moveSongToCategory(songPath: string, category: string) {
+  if (!rootHandle || movedSongs.has(songPath) || movingSongs.has(songPath))
+    return;
+
+  const next = new Set(movingSongs);
+  next.add(songPath);
+  movingSongs = next;
+
+  try {
+    const parts = songPath.split("/");
+    parts.shift(); // drop leading "SONGS"
+    if (
+      SONG_CATEGORY_DIRS.includes(parts[0]) ||
+      customSongFolders.includes(parts[0])
+    )
+      parts.shift();
+    const fileName = parts.pop()!;
+    const relDir = parts.join("/");
+
+    const sourceParts = songPath.split("/");
+    const sourceFileName = sourceParts.pop()!;
+    const sourceDir = sourceParts.join("/");
+    const destDirPath = ["SONGS", category, relDir].filter(Boolean).join("/");
+
+    if (sourceDir === destDirPath && sourceFileName === fileName) {
+      const moved = new Map(movedSongs);
+      moved.set(songPath, "already sorted");
+      movedSongs = moved;
+      return;
+    }
+
+    const sourceDirHandle = await getOrCreateDir(rootHandle, sourceDir);
+    const sourceFileHandle =
+      await sourceDirHandle.getFileHandle(sourceFileName);
+    const file = await sourceFileHandle.getFile();
+    const data = await file.arrayBuffer();
+
+    const destDirHandle = await getOrCreateDir(rootHandle, destDirPath);
+    const destFileHandle = await destDirHandle.getFileHandle(fileName, {
+      create: true,
+    });
+    const writable = await destFileHandle.createWritable();
+    await writable.write(data);
+    await writable.close();
+
+    await sourceDirHandle.removeEntry(sourceFileName);
+    await removeEmptyDirsUpTo(rootHandle, sourceDir, "SONGS");
+
+    const destPath = [destDirPath, fileName].join("/");
+    const moved = new Map(movedSongs);
+    moved.set(songPath, `→ ${destPath}`);
+    movedSongs = moved;
+  } catch (e: any) {
+    console.error(`Failed to move ${songPath}:`, e);
+  } finally {
+    const rm = new Set(movingSongs);
+    rm.delete(songPath);
+    movingSongs = rm;
   }
+}
 
-  const CACHE_KEY = "deluge-clean-report";
-  const CACHE_KEY_NAME = "deluge-clean-name";
-  const CACHE_KEY_MIDI_CHS = "deluge-clean-midi-channels";
-  const CACHE_KEY_FIRMWARE = "deluge-clean-firmware-versions";
-
-  function saveToSession() {
-    try {
-      sessionStorage.setItem(CACHE_KEY, JSON.stringify(report));
-      sessionStorage.setItem(CACHE_KEY_NAME, cardName);
-      sessionStorage.setItem(CACHE_KEY_MIDI_CHS, JSON.stringify([...songMidiChannels.entries()]));
-      sessionStorage.setItem(CACHE_KEY_FIRMWARE, JSON.stringify([...songFirmwareVersions.entries()]));
-    } catch {}
+async function sortAllSongs() {
+  if (!rootHandle || !report) return;
+  const all = [
+    ...report.songsByType.delugeOnly.map((s) => ({
+      path: s,
+      category: "DELUGE_ONLY" as const,
+    })),
+    ...report.songsByType.mixed.map((s) => ({
+      path: s,
+      category: "EXTERNAL_GEAR" as const,
+    })),
+    ...report.songsByType.externalOnly.map((s) => ({
+      path: s,
+      category: "EXTERNAL_GEAR" as const,
+    })),
+  ];
+  for (const { path, category } of all) {
+    if (!movedSongs.has(path)) await moveSongToCategory(path, category);
   }
+  trackToolAction("manage", "sort_songs");
+}
 
-  function restoreFromSession(): boolean {
-    try {
-      const raw = sessionStorage.getItem(CACHE_KEY);
-      if (!raw) return false;
-      const cached = JSON.parse(raw);
-      if (!cached) return false;
-      cached.duplicates ??= [];
-      cached.duplicateWastedBytes ??= 0;
-      cached.songsByType ??= { delugeOnly: [], mixed: [], externalOnly: [] };
-      cached.invalidXml ??= [];
-      report = cached;
-      cardName = sessionStorage.getItem(CACHE_KEY_NAME) ?? "";
-      try {
-        const chRaw = sessionStorage.getItem(CACHE_KEY_MIDI_CHS);
-        if (chRaw) songMidiChannels = new Map(JSON.parse(chRaw));
-        const fwRaw = sessionStorage.getItem(CACHE_KEY_FIRMWARE);
-        if (fwRaw) songFirmwareVersions = new Map(JSON.parse(fwRaw));
-      } catch {}
-      state = "done";
-      return true;
-    } catch {
-      return false;
+let filteredSongsForMove = $derived([
+  ...filteredDelugeOnlySongs,
+  ...filteredExternalSongs,
+]);
+
+let defaultMoveToFolderName = $derived.by(() => {
+  if (filterSongChannels.size !== 1) return "";
+  const ch = [...filterSongChannels][0];
+  return sanitizeFolderName(formatChannel(ch, songChannelLabels));
+});
+
+async function moveFilteredSongsToFolder() {
+  const folderName = sanitizeFolderName(moveToFolderName);
+  if (!rootHandle || !folderName || filteredSongsForMove.length === 0) return;
+
+  movingToFolder = true;
+  try {
+    for (const path of filteredSongsForMove) {
+      if (!movedSongs.has(path)) await moveSongToCategory(path, folderName);
+    }
+    saveCustomSongFolder(folderName);
+    trackToolAction("manage", "sort_songs");
+  } finally {
+    movingToFolder = false;
+    showMoveToFolderPanel = false;
+    moveToFolderName = "";
+  }
+}
+
+function toggleRefExpand(path: string) {
+  const next = new Set(expandedRefs);
+  if (next.has(path)) next.delete(path);
+  else next.add(path);
+  expandedRefs = next;
+}
+
+let fixedXmlFiles = $state(new Set<string>());
+let fixingXmlFiles = $state(new Set<string>());
+let xmlFixErrors = $state(new Map<string, string>());
+async function fixXmlFile(path: string) {
+  if (!rootHandle || fixedXmlFiles.has(path) || fixingXmlFiles.has(path))
+    return;
+
+  const next = new Set(fixingXmlFiles);
+  next.add(path);
+  fixingXmlFiles = next;
+
+  try {
+    const parts = path.split("/");
+    const fileName = parts.pop()!;
+    const dirPath = parts.join("/");
+
+    const dirHandle = await getOrCreateDir(rootHandle, dirPath);
+    const fileHandle = await dirHandle.getFileHandle(fileName);
+    const file = await fileHandle.getFile();
+    const rawText = await file.text();
+
+    const fixedText = dedupeAttributes(rawText);
+    const stillBroken =
+      new DOMParser()
+        .parseFromString(fixedText, "text/xml")
+        .querySelector("parsererror") !== null;
+    if (stillBroken) {
+      throw new Error(
+        "Automatic fix did not produce valid XML — needs manual review",
+      );
+    }
+
+    const backupDirHandle = await getOrCreateDir(
+      rootHandle,
+      `${REPAIR_BACKUP_DIR}/${dirPath}`,
+    );
+    const backupFileHandle = await backupDirHandle.getFileHandle(fileName, {
+      create: true,
+    });
+    const backupWritable = await backupFileHandle.createWritable();
+    await backupWritable.write(rawText);
+    await backupWritable.close();
+
+    const destWritable = await (
+      await dirHandle.getFileHandle(fileName, { create: true })
+    ).createWritable();
+    await destWritable.write(fixedText);
+    await destWritable.close();
+
+    const fixed = new Set(fixedXmlFiles);
+    fixed.add(path);
+    fixedXmlFiles = fixed;
+    const errs = new Map(xmlFixErrors);
+    errs.delete(path);
+    xmlFixErrors = errs;
+  } catch (e: any) {
+    console.error(`Failed to fix ${path}:`, e);
+    const errs = new Map(xmlFixErrors);
+    errs.set(path, e.message || "Fix failed");
+    xmlFixErrors = errs;
+  } finally {
+    const rm = new Set(fixingXmlFiles);
+    rm.delete(path);
+    fixingXmlFiles = rm;
+  }
+}
+
+async function fixAllXml() {
+  if (!rootHandle || !report) return;
+  for (const { path, autoFixable } of report.invalidXml) {
+    if (autoFixable && !fixedXmlFiles.has(path)) await fixXmlFile(path);
+  }
+  trackToolAction("manage", "fix_all_xml");
+}
+
+function allCardFiles(): {
+  path: string;
+  size: number;
+  lastModified: number;
+}[] {
+  const files: { path: string; size: number; lastModified: number }[] = [];
+  for (const [path, xml] of cardStore.songXmls) {
+    const mod = cardStore.songLastModified.get(path) ?? 0;
+    files.push({ path, size: new Blob([xml]).size, lastModified: mod });
+  }
+  for (const [path, xml] of cardStore.presetIndex) {
+    files.push({ path, size: new Blob([xml]).size, lastModified: 0 });
+  }
+  for (const info of cardStore.sampleIndex.values()) {
+    files.push({ path: info.path, size: info.size, lastModified: 0 });
+  }
+  return files;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+async function openDirectoryPicker() {
+  try {
+    await scanFromHandle();
+  } catch (e: any) {
+    if (e.name !== "AbortError") {
+      state = "error";
+      errorMsg = e.message || "Failed to open directory";
     }
   }
+}
 
-  async function tryReconnect() {
-    const hadCache = restoreFromSession();
-    try {
-      if (await cardStore.reconnect()) {
-        rootHandle = cardStore.rootHandle;
-        canWrite = true;
-        usingCardStore = true;
-        cardName = rootHandle?.name ?? cardName;
-        if (!hadCache) await runScanFromCardStore();
-      } else if (await cardStore.hasPersistedHandle()) {
-        reconnectAvailable = true;
-      }
-    } catch {}
-  }
+function handleInputChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = input.files;
+  if (files?.length) scanCard(Array.from(files));
+}
 
-  tryReconnect();
-
-  function reset() {
-    if (currentAudio) {
-      currentAudio.pause();
-      URL.revokeObjectURL(currentAudio.src);
-      currentAudio = null;
-      playingFile = null;
-    }
-    state = "idle";
-    report = null;
-    errorMsg = "";
-    cardName = "";
-    fileHandles = new Map();
-    rootHandle = null;
-    canWrite = false;
-    usingCardStore = false;
-    reconnectAvailable = false;
-    resetActionState();
-    try {
-      sessionStorage.removeItem(CACHE_KEY);
-      sessionStorage.removeItem(CACHE_KEY_NAME);
-    } catch {}
-  }
-
-  let unusedSet = $derived(new Set(report?.unusedSamples ?? []));
-
-  function filterByChannels(paths: string[]): string[] {
-    if (filterSongChannels.size === 0) return paths;
-    return paths.filter(p => {
-      const chs = songMidiChannels.get(p) ?? [];
-      return filterSongChannelMode === "or"
-        ? chs.some(ch => filterSongChannels.has(ch))
-        : filterSongChannelMode === "and"
-        ? [...filterSongChannels].every(ch => chs.includes(ch))
-        : chs.length > 0 && chs.every(ch => filterSongChannels.has(ch));
+async function readEntryRecursive(entry: FileSystemEntry): Promise<File[]> {
+  if (entry.isFile) {
+    return new Promise((resolve) => {
+      (entry as FileSystemFileEntry).file(
+        (f) => resolve([f]),
+        () => resolve([]),
+      );
     });
   }
+  if (entry.isDirectory) {
+    if (APP_MANAGED_DIRS.has(entry.name.toUpperCase())) return [];
+    const reader = (entry as FileSystemDirectoryEntry).createReader();
+    const entries = await new Promise<FileSystemEntry[]>((resolve) => {
+      const all: FileSystemEntry[] = [];
+      const readBatch = () => {
+        reader.readEntries(
+          (batch) => {
+            if (batch.length === 0) {
+              resolve(all);
+              return;
+            }
+            all.push(...batch);
+            readBatch();
+          },
+          () => resolve(all),
+        );
+      };
+      readBatch();
+    });
+    const nested = await Promise.all(entries.map(readEntryRecursive));
+    return nested.flat();
+  }
+  return [];
+}
 
-  let filteredDelugeOnlySongs = $derived(
-    filterByChannels([...(report?.songsByType.delugeOnly ?? [])]).sort()
-  );
-  let filteredExternalSongs = $derived(
-    filterByChannels([...(report?.songsByType.mixed ?? []), ...(report?.songsByType.externalOnly ?? [])]).sort()
-  );
+async function handleDrop(e: DragEvent) {
+  e.preventDefault();
+  dragOver = false;
+  const items = e.dataTransfer?.items;
+  if (items) {
+    const entries = Array.from(items)
+      .map((item) => item.webkitGetAsEntry?.())
+      .filter((e): e is FileSystemEntry => e != null);
+    if (entries.length > 0) {
+      const allFiles = (
+        await Promise.all(entries.map(readEntryRecursive))
+      ).flat();
+      await scanCard(allFiles);
+      return;
+    }
+  }
+  const files = e.dataTransfer?.files;
+  if (files?.length) await scanCard(Array.from(files));
+}
 
-  let allSongMidiChannels = $derived.by(() => {
-    const chs = new Set<number>();
-    for (const chList of songMidiChannels.values()) for (const ch of chList) chs.add(ch);
-    return [...chs].sort((a, b) => a - b);
+function exportJson() {
+  if (!report) return;
+  trackToolAction("manage", "export_json");
+  const data = {
+    total_samples: report.totalSamples,
+    total_samples_bytes: report.totalSamplesBytes,
+    total_references: report.totalReferences,
+    unused_samples: report.unusedSamples,
+    missing_references: report.missingReferences.map((m) => ({
+      sample: m.sample,
+      referenced_by: m.referencedBy,
+    })),
+    unused_presets: report.unusedPresets,
+    reclaimable_bytes: report.reclaimableBytes,
+    duplicates: (report.duplicates ?? []).map((d) => ({
+      hash: d.hash,
+      size: d.size,
+      files: d.files,
+    })),
+    duplicate_wasted_bytes: report.duplicateWastedBytes ?? 0,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
   });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `deluge-clean-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
-  interface SampleFile {
-    name: string;
-    path: string;
-    refs: string[];
-    isUnused: boolean;
-    size: number;
+const CACHE_KEY = "deluge-clean-report";
+const CACHE_KEY_NAME = "deluge-clean-name";
+const CACHE_KEY_MIDI_CHS = "deluge-clean-midi-channels";
+const CACHE_KEY_FIRMWARE = "deluge-clean-firmware-versions";
+
+function saveToSession() {
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(report));
+    sessionStorage.setItem(CACHE_KEY_NAME, cardName);
+    sessionStorage.setItem(
+      CACHE_KEY_MIDI_CHS,
+      JSON.stringify([...songMidiChannels.entries()]),
+    );
+    sessionStorage.setItem(
+      CACHE_KEY_FIRMWARE,
+      JSON.stringify([...songFirmwareVersions.entries()]),
+    );
+  } catch {}
+}
+
+function restoreFromSession(): boolean {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return false;
+    const cached = JSON.parse(raw);
+    if (!cached) return false;
+    cached.duplicates ??= [];
+    cached.duplicateWastedBytes ??= 0;
+    cached.songsByType ??= { delugeOnly: [], mixed: [], externalOnly: [] };
+    cached.invalidXml ??= [];
+    report = cached;
+    cardName = sessionStorage.getItem(CACHE_KEY_NAME) ?? "";
+    try {
+      const chRaw = sessionStorage.getItem(CACHE_KEY_MIDI_CHS);
+      if (chRaw) songMidiChannels = new Map(JSON.parse(chRaw));
+      const fwRaw = sessionStorage.getItem(CACHE_KEY_FIRMWARE);
+      if (fwRaw) songFirmwareVersions = new Map(JSON.parse(fwRaw));
+    } catch {}
+    state = "done";
+    return true;
+  } catch {
+    return false;
   }
+}
 
-  interface SampleFolderNode {
-    name: string;
-    files: SampleFile[];
-    children: Map<string, SampleFolderNode>;
-    totalFiles: number;
-    folderPath: string;
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  function buildSampleTree(paths: string[], refs: Map<string, Set<string>>, unused: Set<string>, extraFolders: Set<string> = new Set(), sizes: Map<string, number> = new Map()): SampleFolderNode {
-    const root: SampleFolderNode = { name: "", files: [], children: new Map(), totalFiles: paths.length, folderPath: "" };
-    for (const p of paths) {
-      const parts = p.split("/");
-      const fileName = parts.pop()!;
-      let node = root;
-      let currentPath = "";
-      for (const part of parts) {
-        currentPath = currentPath ? `${currentPath}/${part}` : part;
-        if (!node.children.has(part)) {
-          node.children.set(part, { name: part, files: [], children: new Map(), totalFiles: 0, folderPath: currentPath });
-        }
-        node = node.children.get(part)!;
-      }
-      const fileRefs = refs.get(p);
-      node.files.push({
-        name: fileName,
-        path: p,
-        refs: fileRefs ? [...fileRefs].sort() : [],
-        isUnused: unused.has(p),
-        size: sizes.get(p) ?? 0,
-      });
+async function tryReconnect() {
+  const hadCache = restoreFromSession();
+  try {
+    if (await cardStore.reconnect()) {
+      rootHandle = cardStore.rootHandle;
+      canWrite = true;
+      usingCardStore = true;
+      cardName = rootHandle?.name ?? cardName;
+      if (!hadCache) await runScanFromCardStore();
+    } else if (await cardStore.hasPersistedHandle()) {
+      reconnectAvailable = true;
     }
-    for (const folderPath of extraFolders) {
-      const parts = folderPath.split("/");
-      let node = root;
-      let currentPath = "";
-      for (const part of parts) {
-        currentPath = currentPath ? `${currentPath}/${part}` : part;
-        if (!node.children.has(part)) {
-          node.children.set(part, { name: part, files: [], children: new Map(), totalFiles: 0, folderPath: currentPath });
-        }
-        node = node.children.get(part)!;
-      }
-    }
-    function computeTotals(node: SampleFolderNode): number {
-      let total = node.files.length;
-      for (const child of node.children.values()) {
-        total += computeTotals(child);
-      }
-      node.totalFiles = total;
-      return total;
-    }
-    computeTotals(root);
-    return root;
+  } catch {}
+}
+
+tryReconnect();
+
+function reset() {
+  if (currentAudio) {
+    currentAudio.pause();
+    URL.revokeObjectURL(currentAudio.src);
+    currentAudio = null;
+    playingFile = null;
   }
+  state = "idle";
+  report = null;
+  errorMsg = "";
+  cardName = "";
+  fileHandles = new Map();
+  rootHandle = null;
+  canWrite = false;
+  usingCardStore = false;
+  reconnectAvailable = false;
+  resetActionState();
+  try {
+    sessionStorage.removeItem(CACHE_KEY);
+    sessionStorage.removeItem(CACHE_KEY_NAME);
+  } catch {}
+}
 
-  interface FolderNode {
-    name: string;
-    files: string[];
-    children: Map<string, FolderNode>;
-    totalFiles: number;
-  }
+let unusedSet = $derived(new Set(report?.unusedSamples ?? []));
 
-  function buildTree(paths: string[]): FolderNode {
-    const root: FolderNode = { name: "", files: [], children: new Map(), totalFiles: paths.length };
-    for (const p of paths) {
-      const parts = p.split("/");
-      const fileName = parts.pop()!;
-      let node = root;
-      for (const part of parts) {
-        if (!node.children.has(part)) {
-          node.children.set(part, { name: part, files: [], children: new Map(), totalFiles: 0 });
-        }
-        node = node.children.get(part)!;
+function filterByChannels(paths: string[]): string[] {
+  if (filterSongChannels.size === 0) return paths;
+  return paths.filter((p) => {
+    const chs = songMidiChannels.get(p) ?? [];
+    return filterSongChannelMode === "or"
+      ? chs.some((ch) => filterSongChannels.has(ch))
+      : filterSongChannelMode === "and"
+        ? [...filterSongChannels].every((ch) => chs.includes(ch))
+        : chs.length > 0 && chs.every((ch) => filterSongChannels.has(ch));
+  });
+}
+
+let filteredDelugeOnlySongs = $derived(
+  filterByChannels([...(report?.songsByType.delugeOnly ?? [])]).sort(),
+);
+let filteredExternalSongs = $derived(
+  filterByChannels([
+    ...(report?.songsByType.mixed ?? []),
+    ...(report?.songsByType.externalOnly ?? []),
+  ]).sort(),
+);
+
+let allSongMidiChannels = $derived.by(() => {
+  const chs = new Set<number>();
+  for (const chList of songMidiChannels.values())
+    for (const ch of chList) chs.add(ch);
+  return [...chs].sort((a, b) => a - b);
+});
+
+interface SampleFile {
+  name: string;
+  path: string;
+  refs: string[];
+  isUnused: boolean;
+  size: number;
+}
+
+interface SampleFolderNode {
+  name: string;
+  files: SampleFile[];
+  children: Map<string, SampleFolderNode>;
+  totalFiles: number;
+  folderPath: string;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function buildSampleTree(
+  paths: string[],
+  refs: Map<string, Set<string>>,
+  unused: Set<string>,
+  extraFolders: Set<string> = new Set(),
+  sizes: Map<string, number> = new Map(),
+): SampleFolderNode {
+  const root: SampleFolderNode = {
+    name: "",
+    files: [],
+    children: new Map(),
+    totalFiles: paths.length,
+    folderPath: "",
+  };
+  for (const p of paths) {
+    const parts = p.split("/");
+    const fileName = parts.pop()!;
+    let node = root;
+    let currentPath = "";
+    for (const part of parts) {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      if (!node.children.has(part)) {
+        node.children.set(part, {
+          name: part,
+          files: [],
+          children: new Map(),
+          totalFiles: 0,
+          folderPath: currentPath,
+        });
       }
-      node.files.push(fileName);
+      node = node.children.get(part)!;
     }
-    function computeTotals(node: FolderNode): number {
-      let total = node.files.length;
-      for (const child of node.children.values()) {
-        total += computeTotals(child);
-      }
-      node.totalFiles = total;
-      return total;
-    }
-    computeTotals(root);
-    return root;
+    const fileRefs = refs.get(p);
+    node.files.push({
+      name: fileName,
+      path: p,
+      refs: fileRefs ? [...fileRefs].sort() : [],
+      isUnused: unused.has(p),
+      size: sizes.get(p) ?? 0,
+    });
   }
-
-  let currentBreadcrumb = $state("");
-
-  function collectAllFolderPaths(node: SampleFolderNode): string[] {
-    const paths: string[] = [];
+  for (const folderPath of extraFolders) {
+    const parts = folderPath.split("/");
+    let node = root;
+    let currentPath = "";
+    for (const part of parts) {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      if (!node.children.has(part)) {
+        node.children.set(part, {
+          name: part,
+          files: [],
+          children: new Map(),
+          totalFiles: 0,
+          folderPath: currentPath,
+        });
+      }
+      node = node.children.get(part)!;
+    }
+  }
+  function computeTotals(node: SampleFolderNode): number {
+    let total = node.files.length;
     for (const child of node.children.values()) {
-      if (child.folderPath) paths.push(child.folderPath);
-      paths.push(...collectAllFolderPaths(child));
+      total += computeTotals(child);
     }
-    return paths;
+    node.totalFiles = total;
+    return total;
   }
+  computeTotals(root);
+  return root;
+}
 
-  let sampleSearch: string = $state("");
-  let sampleFilter: "all" | "referenced" | "unused" = $state("all");
+interface FolderNode {
+  name: string;
+  files: string[];
+  children: Map<string, FolderNode>;
+  totalFiles: number;
+}
 
-  let filteredSamplePaths = $derived.by(() => {
-    let paths = allSamplePaths;
-    if (sampleFilter === "unused") paths = paths.filter(p => unusedSet.has(p));
-    else if (sampleFilter === "referenced") paths = paths.filter(p => !unusedSet.has(p));
-    if (sampleSearch.trim()) {
-      const q = sampleSearch.trim().toLowerCase();
-      paths = paths.filter(p => p.toLowerCase().includes(q));
-    }
-    return paths;
-  });
-
-  let sampleTree = $derived(buildSampleTree(filteredSamplePaths, refSources, unusedSet, new Set(), allSampleSizes));
-  let presetsTree = $derived(buildTree(report?.unusedPresets ?? []));
-
-  let expandedDirs = $state(new Set<string>());
-
-  function collectFolderPaths(node: SampleFolderNode): string[] {
-    const paths: string[] = [];
-    for (const child of node.children.values()) {
-      if (child.folderPath) paths.push(child.folderPath);
-      paths.push(...collectFolderPaths(child));
-    }
-    return paths;
-  }
-
-  $effect(() => {
-    if (sampleSearch.trim() && filteredSamplePaths.length > 0 && filteredSamplePaths.length <= 500) {
-      const allFolders = collectFolderPaths(sampleTree);
-      const next = new Set([...expandedDirs, ...allFolders]);
-      if (next.size !== expandedDirs.size) expandedDirs = next;
-    }
-  });
-
-  function toggleDir(path: string) {
-    const next = new Set(expandedDirs);
-    if (next.has(path)) next.delete(path);
-    else next.add(path);
-    expandedDirs = next;
-  }
-
-  function toggleSongDir(path: string) {
-    const next = new Set(expandedSongDirs);
-    if (next.has(path)) next.delete(path);
-    else next.add(path);
-    expandedSongDirs = next;
-  }
-
-  let allSongPaths = $derived([...filteredDelugeOnlySongs, ...filteredExternalSongs]);
-  let songTree = $derived(buildTree(allSongPaths));
-
-  function toggleSongChannel(ch: number) {
-    const next = new Set(filterSongChannels);
-    if (next.has(ch)) next.delete(ch);
-    else next.add(ch);
-    filterSongChannels = next;
-  }
-
-  function handleSongLabelChange(ch: number, value: string) {
-    if (value.trim()) {
-      setChannelLabel(ch, value);
-    } else {
-      removeChannelLabel(ch);
-    }
-    songChannelLabels = getChannelLabels();
-  }
-
-  async function playSample(samplePath: string) {
-    if (currentAudio) {
-      currentAudio.pause();
-      URL.revokeObjectURL(currentAudio.src);
-      if (playingFile === samplePath) {
-        currentAudio = null;
-        playingFile = null;
-        return;
+function buildTree(paths: string[]): FolderNode {
+  const root: FolderNode = {
+    name: "",
+    files: [],
+    children: new Map(),
+    totalFiles: paths.length,
+  };
+  for (const p of paths) {
+    const parts = p.split("/");
+    const fileName = parts.pop()!;
+    let node = root;
+    for (const part of parts) {
+      if (!node.children.has(part)) {
+        node.children.set(part, {
+          name: part,
+          files: [],
+          children: new Map(),
+          totalFiles: 0,
+        });
       }
+      node = node.children.get(part)!;
     }
-    let file = fileHandles.get(samplePath);
-    if (!file && usingCardStore) {
-      const info = cardStore.sampleIndex.get(samplePath.toLowerCase());
-      file = await info?.handle.getFile();
-      if (file) fileHandles.set(samplePath, file);
-    }
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const audio = new Audio(url);
-    audio.onended = () => {
-      URL.revokeObjectURL(url);
-      playingFile = null;
-      currentAudio = null;
-    };
-    audio.onerror = () => {
-      URL.revokeObjectURL(url);
-      playingFile = null;
-      currentAudio = null;
-    };
-    audio.play();
-    currentAudio = audio;
-    playingFile = samplePath;
+    node.files.push(fileName);
   }
+  function computeTotals(node: FolderNode): number {
+    let total = node.files.length;
+    for (const child of node.children.values()) {
+      total += computeTotals(child);
+    }
+    node.totalFiles = total;
+    return total;
+  }
+  computeTotals(root);
+  return root;
+}
+
+let currentBreadcrumb = $state("");
+
+function collectAllFolderPaths(node: SampleFolderNode): string[] {
+  const paths: string[] = [];
+  for (const child of node.children.values()) {
+    if (child.folderPath) paths.push(child.folderPath);
+    paths.push(...collectAllFolderPaths(child));
+  }
+  return paths;
+}
+
+let sampleSearch: string = $state("");
+let sampleFilter: "all" | "referenced" | "unused" = $state("all");
+
+let filteredSamplePaths = $derived.by(() => {
+  let paths = allSamplePaths;
+  if (sampleFilter === "unused") paths = paths.filter((p) => unusedSet.has(p));
+  else if (sampleFilter === "referenced")
+    paths = paths.filter((p) => !unusedSet.has(p));
+  if (sampleSearch.trim()) {
+    const q = sampleSearch.trim().toLowerCase();
+    paths = paths.filter((p) => p.toLowerCase().includes(q));
+  }
+  return paths;
+});
+
+let sampleTree = $derived(
+  buildSampleTree(
+    filteredSamplePaths,
+    refSources,
+    unusedSet,
+    new Set(),
+    allSampleSizes,
+  ),
+);
+let presetsTree = $derived(buildTree(report?.unusedPresets ?? []));
+
+let expandedDirs = $state(new Set<string>());
+
+function collectFolderPaths(node: SampleFolderNode): string[] {
+  const paths: string[] = [];
+  for (const child of node.children.values()) {
+    if (child.folderPath) paths.push(child.folderPath);
+    paths.push(...collectFolderPaths(child));
+  }
+  return paths;
+}
+
+$effect(() => {
+  if (
+    sampleSearch.trim() &&
+    filteredSamplePaths.length > 0 &&
+    filteredSamplePaths.length <= 500
+  ) {
+    const allFolders = collectFolderPaths(sampleTree);
+    const next = new Set([...expandedDirs, ...allFolders]);
+    if (next.size !== expandedDirs.size) expandedDirs = next;
+  }
+});
+
+function toggleDir(path: string) {
+  const next = new Set(expandedDirs);
+  if (next.has(path)) next.delete(path);
+  else next.add(path);
+  expandedDirs = next;
+}
+
+function toggleSongDir(path: string) {
+  const next = new Set(expandedSongDirs);
+  if (next.has(path)) next.delete(path);
+  else next.add(path);
+  expandedSongDirs = next;
+}
+
+let allSongPaths = $derived([
+  ...filteredDelugeOnlySongs,
+  ...filteredExternalSongs,
+]);
+let songTree = $derived(buildTree(allSongPaths));
+
+function toggleSongChannel(ch: number) {
+  const next = new Set(filterSongChannels);
+  if (next.has(ch)) next.delete(ch);
+  else next.add(ch);
+  filterSongChannels = next;
+}
+
+function handleSongLabelChange(ch: number, value: string) {
+  if (value.trim()) {
+    setChannelLabel(ch, value);
+  } else {
+    removeChannelLabel(ch);
+  }
+  songChannelLabels = getChannelLabels();
+}
+
+async function playSample(samplePath: string) {
+  if (currentAudio) {
+    currentAudio.pause();
+    URL.revokeObjectURL(currentAudio.src);
+    if (playingFile === samplePath) {
+      currentAudio = null;
+      playingFile = null;
+      return;
+    }
+  }
+  let file = fileHandles.get(samplePath);
+  if (!file && usingCardStore) {
+    const info = cardStore.sampleIndex.get(samplePath.toLowerCase());
+    file = await info?.handle.getFile();
+    if (file) fileHandles.set(samplePath, file);
+  }
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const audio = new Audio(url);
+  audio.onended = () => {
+    URL.revokeObjectURL(url);
+    playingFile = null;
+    currentAudio = null;
+  };
+  audio.onerror = () => {
+    URL.revokeObjectURL(url);
+    playingFile = null;
+    currentAudio = null;
+  };
+  audio.play();
+  currentAudio = audio;
+  playingFile = samplePath;
+}
 </script>
 
 {#if state === "idle"}

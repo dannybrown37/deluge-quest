@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { HomeAudioPlayer } from './homeAudio';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { HomeAudioPlayer } from "./homeAudio";
 
-vi.mock('./analytics', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./analytics')>();
+vi.mock("./analytics", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./analytics")>();
   return { ...actual, track: vi.fn(), trackSong: vi.fn() };
 });
 
@@ -11,12 +11,14 @@ let rafNextId: number;
 function stubRAF() {
   rafCallbacks = new Map();
   rafNextId = 0;
-  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
     const id = ++rafNextId;
     rafCallbacks.set(id, cb);
     return id;
   });
-  vi.stubGlobal('cancelAnimationFrame', (id: number) => { rafCallbacks.delete(id); });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+    rafCallbacks.delete(id);
+  });
 }
 function flushRAF(time = 0) {
   const entries = [...rafCallbacks.entries()];
@@ -29,13 +31,15 @@ function stubPerformance() {
   // Starts nonzero: homeAudio.ts treats a lastTickAt of exactly 0 as "clock
   // stopped" and skips accrual on the first tick after that sentinel value.
   perfNow = 1000;
-  vi.stubGlobal('performance', { now: () => perfNow });
+  vi.stubGlobal("performance", { now: () => perfNow });
 }
-function advancePerf(ms: number) { perfNow += ms; }
+function advancePerf(ms: number) {
+  perfNow += ms;
+}
 
 function createMockBiquadFilter() {
   return {
-    type: 'lowpass',
+    type: "lowpass",
     frequency: { value: 350, setTargetAtTime: vi.fn() },
     Q: { value: 0, setTargetAtTime: vi.fn() },
     gain: { value: 0 },
@@ -45,7 +49,12 @@ function createMockBiquadFilter() {
 
 function createMockGain() {
   return {
-    gain: { value: 1, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), setTargetAtTime: vi.fn() },
+    gain: {
+      value: 1,
+      setValueAtTime: vi.fn(),
+      linearRampToValueAtTime: vi.fn(),
+      setTargetAtTime: vi.fn(),
+    },
     connect: vi.fn(),
     disconnect: vi.fn(),
   };
@@ -53,29 +62,42 @@ function createMockGain() {
 
 function createMockAudioElement() {
   const el: Record<string, unknown> = {
-    src: '',
+    src: "",
     crossOrigin: null,
     currentTime: 0,
     duration: 10,
     playbackRate: 1,
     paused: true,
     _listeners: {} as Record<string, ((...args: unknown[]) => void)[]>,
-    addEventListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-      const listeners = el._listeners as Record<string, ((...args: unknown[]) => void)[]>;
-      if (!listeners[event]) listeners[event] = [];
-      listeners[event].push(handler);
-    }),
-    removeEventListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-      const listeners = el._listeners as Record<string, ((...args: unknown[]) => void)[]>;
-      if (listeners[event]) {
-        listeners[event] = listeners[event].filter((h) => h !== handler);
-      }
-    }),
+    addEventListener: vi.fn(
+      (event: string, handler: (...args: unknown[]) => void) => {
+        const listeners = el._listeners as Record<
+          string,
+          ((...args: unknown[]) => void)[]
+        >;
+        if (!listeners[event]) listeners[event] = [];
+        listeners[event].push(handler);
+      },
+    ),
+    removeEventListener: vi.fn(
+      (event: string, handler: (...args: unknown[]) => void) => {
+        const listeners = el._listeners as Record<
+          string,
+          ((...args: unknown[]) => void)[]
+        >;
+        if (listeners[event]) {
+          listeners[event] = listeners[event].filter((h) => h !== handler);
+        }
+      },
+    ),
     play: vi.fn(() => Promise.resolve()),
     pause: vi.fn(),
     load: vi.fn(() => {
-      const listeners = el._listeners as Record<string, ((...args: unknown[]) => void)[]>;
-      const handlers = listeners['canplaythrough'] || [];
+      const listeners = el._listeners as Record<
+        string,
+        ((...args: unknown[]) => void)[]
+      >;
+      const handlers = listeners["canplaythrough"] || [];
       for (const h of handlers) h();
     }),
   };
@@ -84,7 +106,7 @@ function createMockAudioElement() {
 
 function createMockAudioContext() {
   return {
-    state: 'running',
+    state: "running",
     currentTime: 0,
     sampleRate: 44100,
     resume: vi.fn(),
@@ -110,7 +132,7 @@ function createMockAudioContext() {
   };
 }
 
-describe('HomeAudioPlayer', () => {
+describe("HomeAudioPlayer", () => {
   let homeAudio: HomeAudioPlayer;
   let mockCtx: ReturnType<typeof createMockAudioContext>;
   let filters: ReturnType<typeof createMockBiquadFilter>[];
@@ -129,13 +151,19 @@ describe('HomeAudioPlayer', () => {
 
     mockAudioEl = createMockAudioElement();
 
-    vi.stubGlobal('AudioContext', function() { return mockCtx; });
-    vi.stubGlobal('Audio', function() { return mockAudioEl; });
-    vi.stubGlobal('MediaMetadata', vi.fn());
+    // biome-ignore lint/complexity/useArrowFunction: must be constructable via `new`
+    vi.stubGlobal("AudioContext", function () {
+      return mockCtx;
+    });
+    // biome-ignore lint/complexity/useArrowFunction: must be constructable via `new`
+    vi.stubGlobal("Audio", function () {
+      return mockAudioEl;
+    });
+    vi.stubGlobal("MediaMetadata", vi.fn());
 
-    const mod = await import('./homeAudio');
+    const mod = await import("./homeAudio");
     homeAudio = mod.homeAudio;
-    const analyticsMod = await import('./analytics');
+    const analyticsMod = await import("./analytics");
     trackSpy = analyticsMod.trackSong as unknown as ReturnType<typeof vi.fn>;
   });
 
@@ -143,49 +171,53 @@ describe('HomeAudioPlayer', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sets filter cutoff to max (22050) on initAudio', async () => {
+  it("sets filter cutoff to max (22050) on initAudio", async () => {
     await homeAudio.initAudio();
-    const filter = filters.find((f) => f.type === 'lowpass');
+    const filter = filters.find((f) => f.type === "lowpass");
     expect(filter).toBeDefined();
     expect(filter!.frequency.value).toBe(22050);
   });
 
-  it('registers mediaSession handlers on togglePlay', async () => {
+  it("registers mediaSession handlers on togglePlay", async () => {
     const handlers: Record<string, (...args: unknown[]) => void> = {};
-    vi.stubGlobal('navigator', {
+    vi.stubGlobal("navigator", {
       ...globalThis.navigator,
       mediaSession: {
         metadata: null,
-        playbackState: 'none',
-        setActionHandler: vi.fn((action: string, handler: (...args: unknown[]) => void) => {
-          handlers[action] = handler;
-        }),
+        playbackState: "none",
+        setActionHandler: vi.fn(
+          (action: string, handler: (...args: unknown[]) => void) => {
+            handlers[action] = handler;
+          },
+        ),
       },
     });
 
     await homeAudio.initAudio();
     homeAudio.songLoaded = true;
-    homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+    homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
 
     await homeAudio.togglePlay();
 
-    expect(handlers['play']).toBeDefined();
-    expect(handlers['pause']).toBeDefined();
-    expect(handlers['nexttrack']).toBeDefined();
-    expect(handlers['previoustrack']).toBeDefined();
+    expect(handlers["play"]).toBeDefined();
+    expect(handlers["pause"]).toBeDefined();
+    expect(handlers["nexttrack"]).toBeDefined();
+    expect(handlers["previoustrack"]).toBeDefined();
   });
 
-  it('uses real <audio> element instead of silent keeper', async () => {
+  it("uses real <audio> element instead of silent keeper", async () => {
     await homeAudio.initAudio();
     expect(homeAudio.mediaElement).toBeDefined();
     expect(mockCtx.createMediaElementSource).toHaveBeenCalled();
-    expect((homeAudio as unknown as { keeper?: unknown }).keeper).toBeUndefined();
+    expect(
+      (homeAudio as unknown as { keeper?: unknown }).keeper,
+    ).toBeUndefined();
   });
 
-  it('plays and pauses via the media element', async () => {
+  it("plays and pauses via the media element", async () => {
     await homeAudio.initAudio();
     homeAudio.songLoaded = true;
-    homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+    homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
 
     await homeAudio.togglePlay();
     expect(mockAudioEl.play).toHaveBeenCalled();
@@ -196,13 +228,13 @@ describe('HomeAudioPlayer', () => {
     expect(homeAudio.isPlaying).toBe(false);
   });
 
-  describe('subscribe', () => {
-    it('notifies subscribers and stops after unsubscribing', async () => {
+  describe("subscribe", () => {
+    it("notifies subscribers and stops after unsubscribing", async () => {
       const listener = vi.fn();
       const unsubscribe = homeAudio.subscribe(listener);
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
       await homeAudio.togglePlay();
       expect(listener).toHaveBeenCalled();
 
@@ -213,14 +245,14 @@ describe('HomeAudioPlayer', () => {
     });
   });
 
-  describe('getters', () => {
-    it('elapsed/playOffset/duration read from the media element, defaulting to 0', () => {
+  describe("getters", () => {
+    it("elapsed/playOffset/duration read from the media element, defaulting to 0", () => {
       expect(homeAudio.elapsed).toBe(0);
       expect(homeAudio.playOffset).toBe(0);
       expect(homeAudio.duration).toBe(0);
     });
 
-    it('elapsed/playOffset/duration reflect the live media element once loaded', async () => {
+    it("elapsed/playOffset/duration reflect the live media element once loaded", async () => {
       await homeAudio.initAudio();
       mockAudioEl.currentTime = 4.5;
       mockAudioEl.duration = 10;
@@ -229,51 +261,67 @@ describe('HomeAudioPlayer', () => {
       expect(homeAudio.duration).toBe(10);
     });
 
-    it('duration falls back to 0 for a non-finite value (unloaded media)', async () => {
+    it("duration falls back to 0 for a non-finite value (unloaded media)", async () => {
       await homeAudio.initAudio();
       mockAudioEl.duration = NaN;
       expect(homeAudio.duration).toBe(0);
     });
   });
 
-  describe('fetchSongList', () => {
-    it('fetches, shuffles, and stores the song list', async () => {
-      const songs = [{ file: 'a.mp3', name: 'A' }, { file: 'b.mp3', name: 'B' }];
-      vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => songs })));
+  describe("fetchSongList", () => {
+    it("fetches, shuffles, and stores the song list", async () => {
+      const songs = [
+        { file: "a.mp3", name: "A" },
+        { file: "b.mp3", name: "B" },
+      ];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({ ok: true, json: async () => songs })),
+      );
       await homeAudio.fetchSongList();
       expect(homeAudio.songs).toHaveLength(2);
       expect(homeAudio.currentSongIndex).toBe(0);
     });
 
-    it('is a no-op once songs are already loaded', async () => {
+    it("is a no-op once songs are already loaded", async () => {
       const fetchMock = vi.fn(async () => ({ ok: true, json: async () => [] }));
-      vi.stubGlobal('fetch', fetchMock);
-      homeAudio.songs = [{ file: 'x.mp3', name: 'X' }];
+      vi.stubGlobal("fetch", fetchMock);
+      homeAudio.songs = [{ file: "x.mp3", name: "X" }];
       await homeAudio.fetchSongList();
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it('leaves songs empty when the response is not ok', async () => {
-      vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => [] })));
+    it("leaves songs empty when the response is not ok", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({ ok: false, json: async () => [] })),
+      );
       await homeAudio.fetchSongList();
       expect(homeAudio.songs).toHaveLength(0);
     });
 
-    it('swallows fetch errors', async () => {
-      vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network down'); }));
+    it("swallows fetch errors", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          throw new Error("network down");
+        }),
+      );
       await expect(homeAudio.fetchSongList()).resolves.toBeUndefined();
       expect(homeAudio.songs).toHaveLength(0);
     });
   });
 
-  describe('createImpulse', () => {
-    it('fills both channels with noise decaying toward zero', () => {
-      const randSpy = vi.spyOn(Math, 'random').mockReturnValue(1);
+  describe("createImpulse", () => {
+    it("fills both channels with noise decaying toward zero", () => {
+      const randSpy = vi.spyOn(Math, "random").mockReturnValue(1);
       const len = 100;
       const chans = [new Float32Array(len), new Float32Array(len)];
       const fakeCtx = {
         sampleRate: 10,
-        createBuffer: vi.fn(() => ({ getChannelData: (c: number) => chans[c] })),
+        createBuffer: vi.fn(() => ({
+          getChannelData: (c: number) => chans[c],
+        })),
       } as unknown as AudioContext;
 
       const buf = homeAudio.createImpulse(fakeCtx, len / 10, 2);
@@ -284,11 +332,11 @@ describe('HomeAudioPlayer', () => {
     });
   });
 
-  describe('initAudio', () => {
-    it('resumes an existing context instead of rebuilding the graph when suspended', async () => {
+  describe("initAudio", () => {
+    it("resumes an existing context instead of rebuilding the graph when suspended", async () => {
       await homeAudio.initAudio();
       const gainCallsBefore = mockCtx.createGain.mock.calls.length;
-      mockCtx.state = 'suspended';
+      mockCtx.state = "suspended";
       await homeAudio.initAudio();
       expect(mockCtx.resume).toHaveBeenCalledTimes(1);
       expect(mockCtx.createGain.mock.calls.length).toBe(gainCallsBefore);
@@ -296,35 +344,46 @@ describe('HomeAudioPlayer', () => {
   });
 
   describe('newMediaChain "ended" handling', () => {
-    it('advances to the next song when a track ends', async () => {
+    it("advances to the next song when a track ends", async () => {
       await homeAudio.initAudio();
-      const stepSpy = vi.spyOn(homeAudio, 'stepSong').mockResolvedValue(undefined);
+      const stepSpy = vi
+        .spyOn(homeAudio, "stepSong")
+        .mockResolvedValue(undefined);
       homeAudio.isPlaying = true;
-      const listeners = (mockAudioEl as unknown as { _listeners: Record<string, (() => void)[]> })._listeners;
-      listeners['ended'].at(-1)!();
+      const listeners = (
+        mockAudioEl as unknown as { _listeners: Record<string, (() => void)[]> }
+      )._listeners;
+      listeners["ended"].at(-1)!();
       expect(homeAudio.isPlaying).toBe(false);
       expect(stepSpy).toHaveBeenCalledWith(1, true);
     });
   });
 
-  describe('loadSong', () => {
-    it('resolves true and marks the song loaded on canplaythrough', async () => {
+  describe("loadSong", () => {
+    it("resolves true and marks the song loaded on canplaythrough", async () => {
       await homeAudio.initAudio();
-      const file = 'weird name, comma.mp3';
-      homeAudio.songs = [{ file, name: 'Weird' }];
+      const file = "weird name, comma.mp3";
+      homeAudio.songs = [{ file, name: "Weird" }];
       const ok = await homeAudio.loadSong(0);
       expect(ok).toBe(true);
       expect(homeAudio.songLoaded).toBe(true);
       expect(homeAudio.loadedSongIndex).toBe(0);
-      expect(mockAudioEl.src).toBe(`/audio/${encodeURIComponent(file).replace(/%2C/g, ',')}`);
+      expect(mockAudioEl.src).toBe(
+        `/audio/${encodeURIComponent(file).replace(/%2C/g, ",")}`,
+      );
     });
 
-    it('resolves false and logs on load failure', async () => {
-      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    it("resolves false and logs on load failure", async () => {
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       await homeAudio.initAudio();
-      homeAudio.songs = [{ file: 'bad.mp3', name: 'Bad' }];
+      homeAudio.songs = [{ file: "bad.mp3", name: "Bad" }];
       mockAudioEl.load = vi.fn(() => {
-        const hs = (mockAudioEl as unknown as { _listeners: Record<string, (() => void)[]> })._listeners['error'] || [];
+        const hs =
+          (
+            mockAudioEl as unknown as {
+              _listeners: Record<string, (() => void)[]>;
+            }
+          )._listeners["error"] || [];
         for (const h of hs) h();
       });
       const ok = await homeAudio.loadSong(0);
@@ -333,13 +392,16 @@ describe('HomeAudioPlayer', () => {
       errSpy.mockRestore();
     });
 
-    it('returns false immediately when there is no media element or no songs', async () => {
+    it("returns false immediately when there is no media element or no songs", async () => {
       expect(await homeAudio.loadSong(0)).toBe(false);
     });
 
-    it('pauses playback before loading a new song if currently playing', async () => {
+    it("pauses playback before loading a new song if currently playing", async () => {
       await homeAudio.initAudio();
-      homeAudio.songs = [{ file: 'a.mp3', name: 'A' }, { file: 'b.mp3', name: 'B' }];
+      homeAudio.songs = [
+        { file: "a.mp3", name: "A" },
+        { file: "b.mp3", name: "B" },
+      ];
       homeAudio.isPlaying = true;
       await homeAudio.loadSong(1);
       expect(mockAudioEl.pause).toHaveBeenCalled();
@@ -347,9 +409,12 @@ describe('HomeAudioPlayer', () => {
     });
   });
 
-  describe('stepSong', () => {
-    it('wraps the song index and notifies onNavigate', async () => {
-      homeAudio.songs = [{ file: 'a.mp3', name: 'A' }, { file: 'b.mp3', name: 'B' }];
+  describe("stepSong", () => {
+    it("wraps the song index and notifies onNavigate", async () => {
+      homeAudio.songs = [
+        { file: "a.mp3", name: "A" },
+        { file: "b.mp3", name: "B" },
+      ];
       homeAudio.currentSongIndex = 1;
       const onNavigate = vi.fn();
       homeAudio.onNavigate = onNavigate;
@@ -358,17 +423,22 @@ describe('HomeAudioPlayer', () => {
       expect(onNavigate).toHaveBeenCalledWith(homeAudio.songs[0]);
     });
 
-    it('resumes playback after stepping if it was already playing', async () => {
-      homeAudio.songs = [{ file: 'a.mp3', name: 'A' }, { file: 'b.mp3', name: 'B' }];
+    it("resumes playback after stepping if it was already playing", async () => {
+      homeAudio.songs = [
+        { file: "a.mp3", name: "A" },
+        { file: "b.mp3", name: "B" },
+      ];
       homeAudio.isPlaying = true;
-      const toggleSpy = vi.spyOn(homeAudio, 'togglePlay').mockResolvedValue(undefined);
+      const toggleSpy = vi
+        .spyOn(homeAudio, "togglePlay")
+        .mockResolvedValue(undefined);
       await homeAudio.stepSong(1);
       expect(toggleSpy).toHaveBeenCalled();
     });
   });
 
-  describe('togglePlay guards', () => {
-    it('is a no-op if the song is not yet loaded', async () => {
+  describe("togglePlay guards", () => {
+    it("is a no-op if the song is not yet loaded", async () => {
       await homeAudio.initAudio();
       homeAudio.songLoaded = false;
       await homeAudio.togglePlay();
@@ -377,32 +447,32 @@ describe('HomeAudioPlayer', () => {
     });
   });
 
-  describe('togglePlay analytics', () => {
-    it('tracks song_play only on the first play of a loaded song', async () => {
+  describe("togglePlay analytics", () => {
+    it("tracks song_play only on the first play of a loaded song", async () => {
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test', slug: 'test-song' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test", slug: "test-song" }];
 
       await homeAudio.togglePlay();
-      expect(trackSpy).toHaveBeenCalledWith('play', 'test-song');
+      expect(trackSpy).toHaveBeenCalledWith("play", "test-song");
 
       trackSpy.mockClear();
       await homeAudio.togglePlay(); // pause
       await homeAudio.togglePlay(); // play again
-      expect(trackSpy).not.toHaveBeenCalledWith('play', expect.anything());
+      expect(trackSpy).not.toHaveBeenCalledWith("play", expect.anything());
     });
   });
 
-  describe('listen-time tracking', () => {
+  describe("listen-time tracking", () => {
     beforeEach(() => {
       stubRAF();
       stubPerformance();
     });
 
-    it('accrues listen seconds and reports progress marks while playing', async () => {
+    it("accrues listen seconds and reports progress marks while playing", async () => {
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
       mockAudioEl.duration = 10;
       mockAudioEl.currentTime = 0;
 
@@ -411,39 +481,43 @@ describe('HomeAudioPlayer', () => {
       advancePerf(1000);
       flushRAF();
 
-      expect(trackSpy).toHaveBeenCalledWith('progress', 'Test', 25);
+      expect(trackSpy).toHaveBeenCalledWith("progress", "Test", 25);
     });
 
-    it('flushes unreported listen time on pause, rounded to whole seconds', async () => {
+    it("flushes unreported listen time on pause, rounded to whole seconds", async () => {
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
 
       await homeAudio.togglePlay();
       advancePerf(3200);
       flushRAF();
       await homeAudio.togglePlay(); // pause -> flushListenTime
 
-      expect(trackSpy).toHaveBeenCalledWith('listen', 'Test', 3);
+      expect(trackSpy).toHaveBeenCalledWith("listen", "Test", 3);
     });
 
-    it('does not report listen time under 1 second', async () => {
+    it("does not report listen time under 1 second", async () => {
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
 
       await homeAudio.togglePlay();
       advancePerf(400);
       flushRAF();
       await homeAudio.togglePlay();
 
-      expect(trackSpy).not.toHaveBeenCalledWith('listen', expect.anything(), expect.anything());
+      expect(trackSpy).not.toHaveBeenCalledWith(
+        "listen",
+        expect.anything(),
+        expect.anything(),
+      );
     });
 
-    it('the animation-frame tick stops rescheduling once playback stops out from under it', async () => {
+    it("the animation-frame tick stops rescheduling once playback stops out from under it", async () => {
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
 
       await homeAudio.togglePlay();
       expect(rafCallbacks.size).toBe(1);
@@ -453,108 +527,134 @@ describe('HomeAudioPlayer', () => {
     });
   });
 
-  describe('installUnloadFlush', () => {
-    it('flushes listen time when the page becomes hidden', async () => {
+  describe("installUnloadFlush", () => {
+    it("flushes listen time when the page becomes hidden", async () => {
       stubRAF();
       stubPerformance();
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
 
       await homeAudio.togglePlay();
       advancePerf(1500);
       flushRAF();
 
-      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
-      document.dispatchEvent(new Event('visibilitychange'));
-      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
 
-      expect(trackSpy).toHaveBeenCalledWith('listen', 'Test', expect.any(Number));
+      expect(trackSpy).toHaveBeenCalledWith(
+        "listen",
+        "Test",
+        expect.any(Number),
+      );
     });
 
-    it('resumes a suspended AudioContext on tab return while playing', async () => {
+    it("resumes a suspended AudioContext on tab return while playing", async () => {
       stubRAF();
       stubPerformance();
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
 
       await homeAudio.togglePlay();
       mockCtx.resume.mockClear();
-      mockCtx.state = 'suspended';
+      mockCtx.state = "suspended";
 
-      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
-      document.dispatchEvent(new Event('visibilitychange'));
-      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
-      document.dispatchEvent(new Event('visibilitychange'));
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
 
       expect(mockCtx.resume).toHaveBeenCalled();
     });
 
-    it('does not resume AudioContext on tab return when already running', async () => {
+    it("does not resume AudioContext on tab return when already running", async () => {
       stubRAF();
       stubPerformance();
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
 
       await homeAudio.togglePlay();
       mockCtx.resume.mockClear();
-      mockCtx.state = 'running';
+      mockCtx.state = "running";
 
-      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
-      document.dispatchEvent(new Event('visibilitychange'));
-      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
-      document.dispatchEvent(new Event('visibilitychange'));
+      Object.defineProperty(document, "visibilityState", {
+        value: "hidden",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+      Object.defineProperty(document, "visibilityState", {
+        value: "visible",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
 
       expect(mockCtx.resume).not.toHaveBeenCalled();
     });
 
-    it('flushes listen time on pagehide', async () => {
+    it("flushes listen time on pagehide", async () => {
       stubRAF();
       stubPerformance();
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
 
       await homeAudio.togglePlay();
       advancePerf(1500);
       flushRAF();
-      window.dispatchEvent(new Event('pagehide'));
+      window.dispatchEvent(new Event("pagehide"));
 
-      expect(trackSpy).toHaveBeenCalledWith('listen', 'Test', expect.any(Number));
+      expect(trackSpy).toHaveBeenCalledWith(
+        "listen",
+        "Test",
+        expect.any(Number),
+      );
     });
   });
 
-  describe('parameter update methods', () => {
-    it('updateVolume scales 0-127 into gain 0-1', async () => {
+  describe("parameter update methods", () => {
+    it("updateVolume scales 0-127 into gain 0-1", async () => {
       await homeAudio.initAudio();
       homeAudio.updateVolume(127);
       expect(homeAudio.gainNode!.gain.value).toBeCloseTo(1, 5);
     });
 
-    it('updateFilter maps cutoff exponentially and resonance linearly', async () => {
+    it("updateFilter maps cutoff exponentially and resonance linearly", async () => {
       await homeAudio.initAudio();
       homeAudio.updateFilter(0, 0);
       expect(homeAudio.filterNode!.frequency.value).toBeCloseTo(80, 5);
       expect(homeAudio.filterNode!.Q.value).toBeCloseTo(0.5, 5);
     });
 
-    it('updateReverb crossfades dry/wet gain', async () => {
+    it("updateReverb crossfades dry/wet gain", async () => {
       await homeAudio.initAudio();
       homeAudio.updateReverb(127);
       expect(homeAudio.dryGain!.gain.value).toBeCloseTo(0.5, 5);
       expect(homeAudio.wetGain!.gain.value).toBeCloseTo(1, 5);
     });
 
-    it('updateDelay maps time and feedback into their ranges', async () => {
+    it("updateDelay maps time and feedback into their ranges", async () => {
       await homeAudio.initAudio();
       homeAudio.updateDelay(127, 127);
       expect(homeAudio.delayNode!.delayTime.value).toBeCloseTo(0.8, 5);
       expect(homeAudio.delayFeedback!.gain.value).toBeCloseTo(0.85, 5);
     });
 
-    it('updatePlaybackRate maps 0-127 into 0.5x-2x pivoting at 64', async () => {
+    it("updatePlaybackRate maps 0-127 into 0.5x-2x pivoting at 64", async () => {
       await homeAudio.initAudio();
       homeAudio.updatePlaybackRate(0);
       expect(homeAudio.mediaElement!.playbackRate).toBeCloseTo(0.5, 5);
@@ -562,7 +662,7 @@ describe('HomeAudioPlayer', () => {
       expect(homeAudio.mediaElement!.playbackRate).toBeCloseTo(2.0, 3);
     });
 
-    it('all update methods no-op before initAudio has created any nodes', () => {
+    it("all update methods no-op before initAudio has created any nodes", () => {
       expect(() => {
         homeAudio.updateVolume(64);
         homeAudio.updateFilter(64, 64);
@@ -573,83 +673,96 @@ describe('HomeAudioPlayer', () => {
     });
   });
 
-  describe('formatTime', () => {
+  describe("formatTime", () => {
     it.each([
-      [0, 0, '0:00 / 0:00'],
-      [65, 125, '1:05 / 2:05'],
-      [5, 59, '0:05 / 0:59'],
-    ])('formatTime(%d, %d) -> %s', (current, total, expected) => {
+      [0, 0, "0:00 / 0:00"],
+      [65, 125, "1:05 / 2:05"],
+      [5, 59, "0:05 / 0:59"],
+    ])("formatTime(%d, %d) -> %s", (current, total, expected) => {
       expect(homeAudio.formatTime(current, total)).toBe(expected);
     });
   });
 
-  describe('mediaSession action handlers', () => {
+  describe("mediaSession action handlers", () => {
     async function setUpWithHandlers() {
       const handlers: Record<string, () => void> = {};
-      vi.stubGlobal('navigator', {
+      vi.stubGlobal("navigator", {
         ...globalThis.navigator,
         mediaSession: {
           metadata: null,
-          playbackState: 'none',
-          setActionHandler: vi.fn((action: string, handler: () => void) => { handlers[action] = handler; }),
+          playbackState: "none",
+          setActionHandler: vi.fn((action: string, handler: () => void) => {
+            handlers[action] = handler;
+          }),
         },
       });
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'a.mp3', name: 'A' }, { file: 'b.mp3', name: 'B' }];
+      homeAudio.songs = [
+        { file: "a.mp3", name: "A" },
+        { file: "b.mp3", name: "B" },
+      ];
       homeAudio.initMediaSession();
       return handlers;
     }
 
-    it('play/pause/stop handlers toggle playback based on current state', async () => {
+    it("play/pause/stop handlers toggle playback based on current state", async () => {
       const handlers = await setUpWithHandlers();
-      const toggleSpy = vi.spyOn(homeAudio, 'togglePlay').mockResolvedValue(undefined);
+      const toggleSpy = vi
+        .spyOn(homeAudio, "togglePlay")
+        .mockResolvedValue(undefined);
 
       homeAudio.isPlaying = false;
-      handlers['play']();
+      handlers["play"]();
       expect(toggleSpy).toHaveBeenCalledTimes(1);
 
       toggleSpy.mockClear();
       homeAudio.isPlaying = false;
-      handlers['pause'](); // already paused -> no-op
+      handlers["pause"](); // already paused -> no-op
       expect(toggleSpy).not.toHaveBeenCalled();
 
       homeAudio.isPlaying = true;
-      handlers['pause']();
+      handlers["pause"]();
       expect(toggleSpy).toHaveBeenCalledTimes(1);
 
       toggleSpy.mockClear();
       homeAudio.isPlaying = true;
-      handlers['stop']();
+      handlers["stop"]();
       expect(toggleSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('nexttrack/previoustrack step the playlist only when there is more than one song', async () => {
+    it("nexttrack/previoustrack step the playlist only when there is more than one song", async () => {
       const handlers = await setUpWithHandlers();
-      const stepSpy = vi.spyOn(homeAudio, 'stepSong').mockResolvedValue(undefined);
+      const stepSpy = vi
+        .spyOn(homeAudio, "stepSong")
+        .mockResolvedValue(undefined);
 
-      handlers['nexttrack']();
+      handlers["nexttrack"]();
       expect(stepSpy).toHaveBeenCalledWith(1);
-      handlers['previoustrack']();
+      handlers["previoustrack"]();
       expect(stepSpy).toHaveBeenCalledWith(-1);
 
       stepSpy.mockClear();
-      homeAudio.songs = [{ file: 'a.mp3', name: 'A' }];
-      handlers['nexttrack']();
-      handlers['previoustrack']();
+      homeAudio.songs = [{ file: "a.mp3", name: "A" }];
+      handlers["nexttrack"]();
+      handlers["previoustrack"]();
       expect(stepSpy).not.toHaveBeenCalled();
     });
   });
 
-  describe('reassertMediaSession', () => {
-    it('re-registers handlers and refreshes metadata when a song is loaded', async () => {
-      vi.stubGlobal('navigator', {
+  describe("reassertMediaSession", () => {
+    it("re-registers handlers and refreshes metadata when a song is loaded", async () => {
+      vi.stubGlobal("navigator", {
         ...globalThis.navigator,
-        mediaSession: { metadata: null, playbackState: 'none', setActionHandler: vi.fn() },
+        mediaSession: {
+          metadata: null,
+          playbackState: "none",
+          setActionHandler: vi.fn(),
+        },
       });
       await homeAudio.initAudio();
       homeAudio.songLoaded = true;
-      homeAudio.songs = [{ file: 'test.mp3', name: 'Test' }];
+      homeAudio.songs = [{ file: "test.mp3", name: "Test" }];
       expect(() => homeAudio.reassertMediaSession()).not.toThrow();
     });
   });

@@ -6,5 +6,10 @@ export interface ScreenGuardState {
 }
 
 export function shouldSyncScreen(state: ScreenGuardState): boolean {
-  return state.isPlaying && !state.knobHoldTimer && state.draggingKnob === null && !state.hoveredPad;
+  return (
+    state.isPlaying &&
+    !state.knobHoldTimer &&
+    state.draggingKnob === null &&
+    !state.hoveredPad
+  );
 }

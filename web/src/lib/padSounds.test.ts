@@ -1,5 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
-import { PAD_SOUNDS, velocityForPosition, glowForVelocity, PadEffectsChain } from './padSounds';
+import { describe, expect, it, vi } from "vitest";
+import {
+  glowForVelocity,
+  PAD_SOUNDS,
+  PadEffectsChain,
+  velocityForPosition,
+} from "./padSounds";
 
 function createParam(initial = 0) {
   return {
@@ -7,10 +12,16 @@ function createParam(initial = 0) {
     setValueAtTime: vi.fn(function (this: { value: number }, v: number) {
       this.value = v;
     }),
-    exponentialRampToValueAtTime: vi.fn(function (this: { value: number }, v: number) {
+    exponentialRampToValueAtTime: vi.fn(function (
+      this: { value: number },
+      v: number,
+    ) {
       this.value = v;
     }),
-    linearRampToValueAtTime: vi.fn(function (this: { value: number }, v: number) {
+    linearRampToValueAtTime: vi.fn(function (
+      this: { value: number },
+      v: number,
+    ) {
       this.value = v;
     }),
   };
@@ -21,7 +32,7 @@ function makeGainNode() {
 }
 function makeOscillatorNode() {
   return {
-    type: '',
+    type: "",
     frequency: createParam(440),
     connect: vi.fn((dest: unknown) => dest),
     start: vi.fn(),
@@ -30,14 +41,19 @@ function makeOscillatorNode() {
 }
 function makeBiquadFilterNode() {
   return {
-    type: '',
+    type: "",
     frequency: createParam(350),
     Q: createParam(1),
     connect: vi.fn((dest: unknown) => dest),
   };
 }
 function makeBufferSourceNode() {
-  return { buffer: null, connect: vi.fn((dest: unknown) => dest), start: vi.fn(), stop: vi.fn() };
+  return {
+    buffer: null,
+    connect: vi.fn((dest: unknown) => dest),
+    start: vi.fn(),
+    stop: vi.fn(),
+  };
 }
 function makeDelayNode() {
   return { delayTime: createParam(0), connect: vi.fn((dest: unknown) => dest) };
@@ -59,22 +75,23 @@ function createFakeAudioContext(): AudioContext {
     createGain: () => makeGainNode(),
     createBiquadFilter: () => makeBiquadFilterNode(),
     createBufferSource: () => makeBufferSourceNode(),
-    createBuffer: (channels: number, length: number) => makeAudioBuffer(channels, length),
+    createBuffer: (channels: number, length: number) =>
+      makeAudioBuffer(channels, length),
     createDelay: () => makeDelayNode(),
     createConvolver: () => makeConvolverNode(),
   } as unknown as AudioContext;
 }
 
-describe('velocityForPosition', () => {
-  it('is max velocity at the top-left of a 4x4 block', () => {
+describe("velocityForPosition", () => {
+  it("is max velocity at the top-left of a 4x4 block", () => {
     expect(velocityForPosition(0, 0)).toBe(1.0);
   });
 
-  it('is min velocity at the bottom-right of a 4x4 block', () => {
+  it("is min velocity at the bottom-right of a 4x4 block", () => {
     expect(velocityForPosition(3, 3)).toBeCloseTo(0.15, 5);
   });
 
-  it('decreases monotonically as row/col increase', () => {
+  it("decreases monotonically as row/col increase", () => {
     const values: number[] = [];
     for (let r = 0; r < 4; r++) {
       for (let c = 0; c < 4; c++) values.push(velocityForPosition(r, c));
@@ -85,30 +102,33 @@ describe('velocityForPosition', () => {
   });
 });
 
-describe('glowForVelocity', () => {
+describe("glowForVelocity", () => {
   it.each([
     [0, 0.2],
     [1, 0.9],
     [0.5, 0.55],
-  ])('glowForVelocity(%d) === %d', (v, expected) => {
+  ])("glowForVelocity(%d) === %d", (v, expected) => {
     expect(glowForVelocity(v)).toBeCloseTo(expected, 5);
   });
 });
 
-describe('PAD_SOUNDS', () => {
-  it('has 8 uniquely-named sounds', () => {
+describe("PAD_SOUNDS", () => {
+  it("has 8 uniquely-named sounds", () => {
     expect(PAD_SOUNDS).toHaveLength(8);
     expect(new Set(PAD_SOUNDS.map((s) => s.name)).size).toBe(8);
   });
 
-  it.each(PAD_SOUNDS.map((s) => [s.name, s] as const))('%s plays without throwing', (_name, sound) => {
-    const ctx = createFakeAudioContext();
-    const dest = {} as AudioNode;
-    expect(() => sound.play(ctx, dest, 0.8)).not.toThrow();
-  });
+  it.each(PAD_SOUNDS.map((s) => [s.name, s] as const))(
+    "%s plays without throwing",
+    (_name, sound) => {
+      const ctx = createFakeAudioContext();
+      const dest = {} as AudioNode;
+      expect(() => sound.play(ctx, dest, 0.8)).not.toThrow();
+    },
+  );
 });
 
-describe('PadEffectsChain', () => {
+describe("PadEffectsChain", () => {
   function makeChain() {
     const ctx = createFakeAudioContext();
     const chain = new PadEffectsChain(ctx);
@@ -127,14 +147,14 @@ describe('PadEffectsChain', () => {
     };
   }
 
-  it('defaults the filter to fully open, not muffled', () => {
+  it("defaults the filter to fully open, not muffled", () => {
     // Regression guard: the same "BiquadFilterNode defaults to 350Hz" trap
     // documented in CLAUDE.md for homeAudio.ts also applies here.
     const chain = makeChain();
     expect(chain.filter.frequency.value).toBeGreaterThan(20000);
   });
 
-  it('updateVolume maps 0-127 to master gain 0-1', () => {
+  it("updateVolume maps 0-127 to master gain 0-1", () => {
     const chain = makeChain();
     chain.updateVolume(0);
     expect(chain.master.gain.value).toBe(0);
@@ -142,7 +162,7 @@ describe('PadEffectsChain', () => {
     expect(chain.master.gain.value).toBeCloseTo(1, 5);
   });
 
-  it('updateFilter maps cutoff exponentially and resonance linearly', () => {
+  it("updateFilter maps cutoff exponentially and resonance linearly", () => {
     const chain = makeChain();
     chain.updateFilter(0, 0);
     expect(chain.filter.frequency.value).toBeCloseTo(80, 5);
@@ -153,7 +173,7 @@ describe('PadEffectsChain', () => {
     expect(chain.filter.Q.value).toBeCloseTo(25, 5);
   });
 
-  it('updateReverb crossfades dry/wet gain', () => {
+  it("updateReverb crossfades dry/wet gain", () => {
     const chain = makeChain();
     chain.updateReverb(0);
     expect(chain.dryGain.gain.value).toBe(1);
@@ -164,7 +184,7 @@ describe('PadEffectsChain', () => {
     expect(chain.wetGain.gain.value).toBeCloseTo(1, 5);
   });
 
-  it('updateDelay mutes the wet signal only when both time and feedback are zero', () => {
+  it("updateDelay mutes the wet signal only when both time and feedback are zero", () => {
     const chain = makeChain();
     chain.updateDelay(0, 0);
     expect(chain.delayWet.gain.value).toBe(0);
@@ -176,7 +196,7 @@ describe('PadEffectsChain', () => {
     expect(chain.delayWet.gain.value).toBeCloseTo(0.4, 5);
   });
 
-  it('updateDelay maps time and feedback into their ranges', () => {
+  it("updateDelay maps time and feedback into their ranges", () => {
     const chain = makeChain();
     chain.updateDelay(127, 127);
     expect(chain.delay.delayTime.value).toBeCloseTo(0.8, 5);

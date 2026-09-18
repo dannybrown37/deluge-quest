@@ -5,7 +5,9 @@ let pyodidePromise: Promise<Pyodide> | null = null;
 
 export type ProgressCallback = (stage: string, pct: number) => void;
 
-export async function loadPyodide(onProgress?: ProgressCallback): Promise<Pyodide> {
+export async function loadPyodide(
+  onProgress?: ProgressCallback,
+): Promise<Pyodide> {
   if (pyodidePromise) return pyodidePromise;
 
   pyodidePromise = (async () => {
@@ -65,7 +67,7 @@ export interface SongStats {
 
 export async function analyzeStats(
   files: { name: string; content: string }[],
-  pyodide: Pyodide
+  pyodide: Pyodide,
 ): Promise<SongStats[]> {
   pyodide.globals.set("_js_files", JSON.stringify(files));
 
@@ -80,7 +82,7 @@ analyze_stats_json(_js_files)
 export async function convertMidiToDelugeXml(
   midiBytes: ArrayBuffer,
   fileName: string,
-  pyodide: Pyodide
+  pyodide: Pyodide,
 ): Promise<string> {
   await pyodide.loadPackage("micropip");
   const micropip = pyodide.pyimport("micropip");
@@ -187,7 +189,7 @@ export interface PreviewData {
 
 export async function inspectSong(
   xmlContent: string,
-  pyodide: Pyodide
+  pyodide: Pyodide,
 ): Promise<PreviewData> {
   pyodide.globals.set("_js_xml_content", xmlContent);
 
@@ -201,7 +203,7 @@ inspect_song_json(_js_xml_content)
 
 export async function convertToMusicXML(
   xmlContent: string,
-  pyodide: Pyodide
+  pyodide: Pyodide,
 ): Promise<string> {
   pyodide.globals.set("_js_xml_content", xmlContent);
 

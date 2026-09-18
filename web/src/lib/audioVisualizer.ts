@@ -1,5 +1,5 @@
-const GOLD = '#D4A847';
-const TEAL = '#5AABAC';
+const GOLD = "#D4A847";
+const TEAL = "#5AABAC";
 const BAR_COUNT = 64;
 const IDLE_WAVE_SPEED = 0.0008;
 const IDLE_WAVE_AMPLITUDE = 0.15;
@@ -9,9 +9,9 @@ const CIRCUIT_ROWS = 8;
 const NODE_RADIUS = 3;
 const CONNECTION_DECAY = 0.92;
 
-const STORAGE_KEY = 'deluge-viz-paused';
+const STORAGE_KEY = "deluge-viz-paused";
 
-export type VisualizerMode = 'bars' | 'circuit';
+export type VisualizerMode = "bars" | "circuit";
 
 export class AudioVisualizer {
   private canvas: HTMLCanvasElement;
@@ -24,29 +24,37 @@ export class AudioVisualizer {
   private lastTime = 0;
   private lastSignal = false;
   private dpr = 1;
-  private _mode: VisualizerMode = 'bars';
+  private _mode: VisualizerMode = "bars";
   private _paused = false;
   private _visible = true;
   private observer: IntersectionObserver | null = null;
   private motionQuery: MediaQueryList | null = null;
   private motionHandler: ((e: MediaQueryListEvent) => void) | null = null;
 
-  private nodeEnergy: Float32Array = new Float32Array(CIRCUIT_COLS * CIRCUIT_ROWS);
-  private connectionStrength: Float32Array = new Float32Array(CIRCUIT_COLS * CIRCUIT_ROWS);
+  private nodeEnergy: Float32Array = new Float32Array(
+    CIRCUIT_COLS * CIRCUIT_ROWS,
+  );
+  private connectionStrength: Float32Array = new Float32Array(
+    CIRCUIT_COLS * CIRCUIT_ROWS,
+  );
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d')!;
+    this.ctx = canvas.getContext("2d")!;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    try { this._paused = localStorage.getItem(STORAGE_KEY) === '1'; } catch { /* localStorage may be unavailable */ }
+    try {
+      this._paused = localStorage.getItem(STORAGE_KEY) === "1";
+    } catch {
+      /* localStorage may be unavailable */
+    }
 
-    this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    this.motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (this.motionQuery.matches) this._paused = true;
     this.motionHandler = (e: MediaQueryListEvent) => {
       if (e.matches) this.paused = true;
     };
-    this.motionQuery.addEventListener('change', this.motionHandler);
+    this.motionQuery.addEventListener("change", this.motionHandler);
 
     this.observer = new IntersectionObserver(([entry]) => {
       this._visible = entry.isIntersecting;
@@ -75,7 +83,11 @@ export class AudioVisualizer {
 
   set paused(p: boolean) {
     this._paused = p;
-    try { localStorage.setItem(STORAGE_KEY, p ? '1' : '0'); } catch { /* localStorage may be unavailable */ }
+    try {
+      localStorage.setItem(STORAGE_KEY, p ? "1" : "0");
+    } catch {
+      /* localStorage may be unavailable */
+    }
     if (p) {
       cancelAnimationFrame(this.raf);
       this.drawStatic();
@@ -118,7 +130,7 @@ export class AudioVisualizer {
     try {
       this.draw();
     } catch (err) {
-      console.error('[visualizer] draw failed', err);
+      console.error("[visualizer] draw failed", err);
     }
     this.raf = requestAnimationFrame(this.tick);
   };
@@ -145,10 +157,9 @@ export class AudioVisualizer {
 
     if (hasSignal !== this.lastSignal) {
       this.lastSignal = hasSignal;
-
     }
 
-    if (this._mode === 'bars') {
+    if (this._mode === "bars") {
       if (hasSignal) {
         this.drawBars(w, h);
       } else {
@@ -208,8 +219,12 @@ export class AudioVisualizer {
 
       for (let x = 0; x <= w; x += 2) {
         const t = x / w;
-        const y = midY + Math.sin(t * Math.PI * freq + this.idlePhase * speed) * amp
-                       + Math.sin(t * Math.PI * (freq * 1.7) + this.idlePhase * speed * 0.6) * amp * 0.3;
+        const y =
+          midY +
+          Math.sin(t * Math.PI * freq + this.idlePhase * speed) * amp +
+          Math.sin(t * Math.PI * (freq * 1.7) + this.idlePhase * speed * 0.6) *
+            amp *
+            0.3;
         ctx.lineTo(x, y);
       }
 
@@ -246,7 +261,8 @@ export class AudioVisualizer {
         const proximity = 1 - dist * 0.3;
         const target = rawValue * rawValue * proximity;
         this.nodeEnergy[idx] += (target - this.nodeEnergy[idx]) * 0.15;
-        this.connectionStrength[idx] = this.connectionStrength[idx] * CONNECTION_DECAY +
+        this.connectionStrength[idx] =
+          this.connectionStrength[idx] * CONNECTION_DECAY +
           this.nodeEnergy[idx] * (1 - CONNECTION_DECAY);
       }
     }
@@ -260,7 +276,8 @@ export class AudioVisualizer {
 
         const x = padX + col * spacingX;
         const y = padY + row * spacingY;
-        const dist = Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
+        const dist =
+          Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
         const color = dist < 0.5 ? GOLD : TEAL;
 
         if (col < CIRCUIT_COLS - 1) {
@@ -295,7 +312,8 @@ export class AudioVisualizer {
         const energy = this.nodeEnergy[idx];
         const x = padX + col * spacingX;
         const y = padY + row * spacingY;
-        const dist = Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
+        const dist =
+          Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
         const color = dist < 0.5 ? GOLD : TEAL;
 
         const baseRadius = NODE_RADIUS + energy * 4;
@@ -333,7 +351,8 @@ export class AudioVisualizer {
       for (let col = 0; col < CIRCUIT_COLS; col++) {
         const x = padX + col * spacingX;
         const y = padY + row * spacingY;
-        const dist = Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
+        const dist =
+          Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
 
         const wave = Math.sin(this.idlePhase * 1.5 - dist * 4) * 0.5 + 0.5;
         const dimAlpha = 0.06 + wave * 0.08;
@@ -358,7 +377,9 @@ export class AudioVisualizer {
   }
 
   private hexWithAlpha(hex: string, alpha: number): string {
-    const a = Math.round(Math.min(1, Math.max(0, alpha)) * 255).toString(16).padStart(2, '0');
+    const a = Math.round(Math.min(1, Math.max(0, alpha)) * 255)
+      .toString(16)
+      .padStart(2, "0");
     return hex + a;
   }
 
@@ -368,7 +389,7 @@ export class AudioVisualizer {
     if (w === 0 || h === 0) return;
     this.ctx.clearRect(0, 0, w, h);
 
-    if (this._mode === 'bars') {
+    if (this._mode === "bars") {
       const midY = h * 0.5;
       const amp = h * IDLE_WAVE_AMPLITUDE;
       for (let layer = 0; layer < 3; layer++) {
@@ -379,8 +400,10 @@ export class AudioVisualizer {
         this.ctx.moveTo(0, h);
         for (let x = 0; x <= w; x += 2) {
           const t = x / w;
-          const y = midY + Math.sin(t * Math.PI * freq) * amp
-                         + Math.sin(t * Math.PI * (freq * 1.7)) * amp * 0.3;
+          const y =
+            midY +
+            Math.sin(t * Math.PI * freq) * amp +
+            Math.sin(t * Math.PI * (freq * 1.7)) * amp * 0.3;
           this.ctx.lineTo(x, y);
         }
         this.ctx.lineTo(w, h);
@@ -400,7 +423,9 @@ export class AudioVisualizer {
         for (let col = 0; col < CIRCUIT_COLS; col++) {
           const x = padX + col * spacingX;
           const y = padY + row * spacingY;
-          const dist = Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) / maxDist;
+          const dist =
+            Math.sqrt((col - centerCol) ** 2 + (row - centerRow) ** 2) /
+            maxDist;
           const color = dist < 0.5 ? GOLD : TEAL;
           this.ctx.fillStyle = this.hexWithAlpha(color, 0.1);
           this.ctx.beginPath();
@@ -416,7 +441,7 @@ export class AudioVisualizer {
     this.observer?.disconnect();
     this.observer = null;
     if (this.motionQuery && this.motionHandler) {
-      this.motionQuery.removeEventListener('change', this.motionHandler);
+      this.motionQuery.removeEventListener("change", this.motionHandler);
     }
     this.motionQuery = null;
     this.motionHandler = null;

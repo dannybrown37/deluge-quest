@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadPyodide } from "pyodide";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   analyzeStats,
   convertMidiToDelugeXml,
-  inspectSong,
   convertToMusicXML,
+  inspectSong,
   type Pyodide,
 } from "./pyodide";
 
@@ -18,19 +18,21 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PY_DIR = path.resolve(__dirname, "../../public/py");
-const manifest = JSON.parse(fs.readFileSync(path.join(PY_DIR, "manifest.json"), "utf-8"));
+const manifest = JSON.parse(
+  fs.readFileSync(path.join(PY_DIR, "manifest.json"), "utf-8"),
+);
 const WHEEL_PATH = path.join(PY_DIR, manifest.wheel);
 const FIXTURE_XML_PATH = path.resolve(
   __dirname,
-  "../../../tests/fixtures/square_spelunking.XML"
+  "../../../tests/fixtures/square_spelunking.XML",
 );
 
 // Built with mido (matches tests/test_midi_to_deluge.py's own fixtures):
 // one MThd + one MTrk, a single quarter note at note 60, velocity 64.
 const TINY_MIDI_BYTES = new Uint8Array([
-  0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01,
-  0x00, 0x60, 0x4d, 0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x90,
-  0x3c, 0x40, 0x60, 0x80, 0x3c, 0x40, 0x00, 0xff, 0x2f, 0x00,
+  0x4d, 0x54, 0x68, 0x64, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00,
+  0x60, 0x4d, 0x54, 0x72, 0x6b, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x90, 0x3c, 0x40,
+  0x60, 0x80, 0x3c, 0x40, 0x00, 0xff, 0x2f, 0x00,
 ]);
 
 let pyodide: Pyodide;
@@ -71,7 +73,7 @@ json.dumps([
   it("analyzeStats parses a real song into stats", async () => {
     const [stats] = await analyzeStats(
       [{ name: "square_spelunking.XML", content: fixtureXml }],
-      pyodide
+      pyodide,
     );
 
     expect(stats.filename).toBe("square_spelunking.XML");
@@ -85,7 +87,7 @@ json.dumps([
   it("analyzeStats reports a per-file error instead of throwing", async () => {
     const [stats] = await analyzeStats(
       [{ name: "broken.XML", content: "this is not xml at all" }],
-      pyodide
+      pyodide,
     );
 
     expect(stats.filename).toBe("broken.XML");
@@ -117,7 +119,7 @@ json.dumps([
     const xml = await convertMidiToDelugeXml(
       TINY_MIDI_BYTES.buffer,
       "tiny.mid",
-      pyodide
+      pyodide,
     );
 
     expect(xml).toContain("<song");

@@ -1,102 +1,112 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { homeAudio } from '../lib/homeAudio';
+import { onDestroy, onMount } from "svelte";
+import { homeAudio } from "../lib/homeAudio";
 
-  export let name: string;
-  export let year: string | undefined = undefined;
-  export let genre: string | undefined = undefined;
-  export let duration: string | undefined = undefined;
-  export let pageUrl: string;
+export let name: string;
+export let year: string | undefined = undefined;
+export let genre: string | undefined = undefined;
+export let duration: string | undefined = undefined;
+export let pageUrl: string;
 
-  let displayName = name;
-  let displayYear = year;
-  let displayGenre = genre;
-  let displayDuration = duration;
-  let displayUrl = pageUrl;
+let displayName = name;
+let displayYear = year;
+let displayGenre = genre;
+let displayDuration = duration;
+let displayUrl = pageUrl;
 
-  let playing = false;
-  let currentTime = 0;
-  let totalDuration = 0;
-  let loaded = false;
-  let copied = false;
-  let unsubscribe: (() => void) | null = null;
-  let raf = 0;
+let playing = false;
+let currentTime = 0;
+let totalDuration = 0;
+let loaded = false;
+let copied = false;
+let unsubscribe: (() => void) | null = null;
+let raf = 0;
 
-  function fmt(s: number): string {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${String(sec).padStart(2, '0')}`;
+function fmt(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function sync() {
+  playing = homeAudio.isPlaying;
+  loaded = homeAudio.songLoaded;
+  currentTime = homeAudio.elapsed;
+  totalDuration = homeAudio.duration;
+
+  const song = homeAudio.currentSong;
+  if (song && song.name !== displayName) {
+    displayName = song.name;
+    displayYear = typeof song.year === "number" ? String(song.year) : song.year;
+    displayGenre = song.genre;
+    displayDuration = song.duration;
+    const slug = song.slug ?? slugify(song.name);
+    displayUrl = `https://deluge.quest/songs/${slug}`;
   }
+}
 
-  function slugify(s: string): string {
-    return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+async function toggle() {
+  await homeAudio.initAudio();
+  const idx = homeAudio.songs.findIndex(
+    (s) => s.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (idx >= 0 && homeAudio.loadedSongIndex !== idx) {
+    await homeAudio.loadSong(idx);
   }
+  await homeAudio.togglePlay();
+  sync();
+}
 
-  function sync() {
-    playing = homeAudio.isPlaying;
-    loaded = homeAudio.songLoaded;
-    currentTime = homeAudio.elapsed;
-    totalDuration = homeAudio.duration;
-
-    const song = homeAudio.currentSong;
-    if (song && song.name !== displayName) {
-      displayName = song.name;
-      displayYear = typeof song.year === 'number' ? String(song.year) : song.year;
-      displayGenre = song.genre;
-      displayDuration = song.duration;
-      const slug = song.slug ?? slugify(song.name);
-      displayUrl = `https://deluge.quest/songs/${slug}`;
-    }
-  }
-
-  async function toggle() {
-    await homeAudio.initAudio();
-    const idx = homeAudio.songs.findIndex(s => s.name.toLowerCase() === name.toLowerCase());
-    if (idx >= 0 && homeAudio.loadedSongIndex !== idx) {
-      await homeAudio.loadSong(idx);
-    }
-    await homeAudio.togglePlay();
-    sync();
-  }
-
-  function share() {
-    if (navigator.share) {
-      navigator.share({ title: `${displayName} — deluge.quest`, url: displayUrl });
-    } else {
-      navigator.clipboard.writeText(displayUrl);
-      copied = true;
-      setTimeout(() => { copied = false; }, 2000);
-    }
-  }
-
-  function startTick() {
-    const tick = () => {
-      if (!playing) return;
-      sync();
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-  }
-
-  onMount(async () => {
-    await homeAudio.fetchSongList();
-    const target = name.toLowerCase();
-    const idx = homeAudio.songs.findIndex(s => s.name.toLowerCase() === target);
-    if (idx >= 0) homeAudio.currentSongIndex = idx;
-    sync();
-
-    unsubscribe = homeAudio.subscribe(() => {
-      sync();
-      if (playing) startTick();
+function share() {
+  if (navigator.share) {
+    navigator.share({
+      title: `${displayName} — deluge.quest`,
+      url: displayUrl,
     });
+  } else {
+    navigator.clipboard.writeText(displayUrl);
+    copied = true;
+    setTimeout(() => {
+      copied = false;
+    }, 2000);
+  }
+}
 
-    if (homeAudio.isPlaying) startTick();
+function startTick() {
+  const tick = () => {
+    if (!playing) return;
+    sync();
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+}
+
+onMount(async () => {
+  await homeAudio.fetchSongList();
+  const target = name.toLowerCase();
+  const idx = homeAudio.songs.findIndex((s) => s.name.toLowerCase() === target);
+  if (idx >= 0) homeAudio.currentSongIndex = idx;
+  sync();
+
+  unsubscribe = homeAudio.subscribe(() => {
+    sync();
+    if (playing) startTick();
   });
 
-  onDestroy(() => {
-    unsubscribe?.();
-    if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(raf);
-  });
+  if (homeAudio.isPlaying) startTick();
+});
+
+onDestroy(() => {
+  unsubscribe?.();
+  if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(raf);
+});
 </script>
 
 <div class="player">

@@ -1,481 +1,558 @@
 <script lang="ts">
-  import { loadPyodide, inspectSong, type PreviewData, type PreviewTrack } from "../lib/pyodide";
-  import { SongPlayer, type EQBand } from "../lib/songAudio";
-  import { cardStore } from "../lib/cardStore";
-  import { trackToolAction } from "../lib/analytics";
+import { trackToolAction } from "../lib/analytics";
+import { cardStore } from "../lib/cardStore";
+import {
+  inspectSong,
+  loadPyodide,
+  type PreviewData,
+  type PreviewTrack,
+} from "../lib/pyodide";
+import { type EQBand, SongPlayer } from "../lib/songAudio";
 
-  type State = "idle" | "loading" | "processing" | "done" | "error";
+type State = "idle" | "loading" | "processing" | "done" | "error";
 
-  let state: State = $state("idle");
-  let progress = $state("");
-  let progressPct = $state(0);
-  let errorMsg = $state("");
-  let fileName = $state("");
-  let data: PreviewData | null = $state(null);
-  let dragOver = $state(false);
-  let statsCount = $state(0);
-  let hoveredClip: { track: number; clip: number } | null = $state(null);
-  let tooltip = $state({ visible: false, x: 0, y: 0, text: "" });
-  let cardSongs: { path: string; xml: string }[] = $state([]);
-  let cardName = $state("");
-  let cardSavedAt = $state(0);
-  let cardFromCache = $state(false);
+let state: State = $state("idle");
+let progress = $state("");
+let progressPct = $state(0);
+let errorMsg = $state("");
+let fileName = $state("");
+let data: PreviewData | null = $state(null);
+let dragOver = $state(false);
+let statsCount = $state(0);
+let hoveredClip: { track: number; clip: number } | null = $state(null);
+let tooltip = $state({ visible: false, x: 0, y: 0, text: "" });
+let cardSongs: { path: string; xml: string }[] = $state([]);
+let cardName = $state("");
+let cardSavedAt = $state(0);
+let cardFromCache = $state(false);
 
-  async function tryLoadCardSongs() {
-    try {
-      if (cardStore.isLoaded && cardStore.songXmls.size > 0) {
-        cardSongs = cardStore.eligibleSongs(false);
-        cardName = cardStore.rootHandle?.name ?? "";
-        return;
-      }
-      const cached = await cardStore.loadCachedSongs();
-      if (cached?.songs.length) {
-        cardSongs = cached.songs;
-        cardName = cached.cardName;
-        cardSavedAt = cached.savedAt;
-        cardFromCache = true;
-      }
-    } catch {}
-  }
-
-  tryLoadCardSongs();
-
-  let player: SongPlayer | null = $state(null);
-  let playState: 'stopped' | 'playing' | 'paused' = $state('stopped');
-  let playheadTick = $state(0);
-  let scrollEl: HTMLDivElement | undefined = $state();
-
-  const EQ_BANDS: { key: EQBand; label: string }[] = [
-    { key: 'low', label: 'Low' },
-    { key: 'mid', label: 'Mid' },
-    { key: 'high', label: 'High' },
-  ];
-  const EQ_FREQ_LABEL: Record<EQBand, string> = { low: '200 Hz shelf', mid: '1 kHz', high: '4 kHz shelf' };
-  let eq: Record<EQBand, number> = $state({ low: -4, mid: 0, high: 0 });
-
-  function setEQ(band: EQBand, gainDb: number) {
-    eq = { ...eq, [band]: gainDb };
-    player?.setEQ(band, gainDb);
-  }
-
-  let filterCutoff = $state(20000);
-  let filterRes = $state(0.5);
-
-  function setFilterCutoff(hz: number) {
-    filterCutoff = hz;
-    player?.setFilterCutoff(hz);
-  }
-
-  function setFilterRes(q: number) {
-    filterRes = q;
-    player?.setFilterRes(q);
-  }
-
-  // Knob helpers — value 0..1 maps to angle -135..135
-  function valToAngle(v: number): number { return v * 270 - 135; }
-  function angleToVal(a: number): number { return (Math.max(-135, Math.min(135, a)) + 135) / 270; }
-
-  // EQ knob: -12..12 dB → 0..1
-  function eqToNorm(db: number): number { return (db + 12) / 24; }
-  function normToEq(n: number): number { return Math.round(n * 24 - 12); }
-
-  // Filter cutoff: exponential 80 Hz..20 kHz → 0..1
-  function cutoffToNorm(hz: number): number { return Math.log(hz / 80) / Math.log(20000 / 80); }
-  function normToCutoff(n: number): number { return Math.round(80 * Math.pow(20000 / 80, n)); }
-
-  // Resonance: 0.5..20 → 0..1
-  function resToNorm(q: number): number { return (q - 0.5) / 19.5; }
-  function normToRes(n: number): number { return +(0.5 + n * 19.5).toFixed(1); }
-
-  interface KnobDef {
-    id: string;
-    label: string;
-    color: 'gold' | 'black';
-    getNorm: () => number;
-    setFromNorm: (n: number) => void;
-    display: () => string;
-  }
-
-  const knobDefs: KnobDef[] = [
-    { id: 'cutoff', label: 'Cutoff', color: 'gold',
-      getNorm: () => cutoffToNorm(filterCutoff),
-      setFromNorm: (n) => setFilterCutoff(normToCutoff(n)),
-      display: () => filterCutoff >= 1000 ? `${(filterCutoff / 1000).toFixed(1)}k` : `${filterCutoff}` },
-    { id: 'res', label: 'Res', color: 'gold',
-      getNorm: () => resToNorm(filterRes),
-      setFromNorm: (n) => setFilterRes(normToRes(n)),
-      display: () => `${filterRes}` },
-    { id: 'eqLow', label: 'Low', color: 'black',
-      getNorm: () => eqToNorm(eq.low),
-      setFromNorm: (n) => setEQ('low', normToEq(n)),
-      display: () => `${eq.low > 0 ? '+' : ''}${eq.low}` },
-    { id: 'eqMid', label: 'Mid', color: 'black',
-      getNorm: () => eqToNorm(eq.mid),
-      setFromNorm: (n) => setEQ('mid', normToEq(n)),
-      display: () => `${eq.mid > 0 ? '+' : ''}${eq.mid}` },
-    { id: 'eqHigh', label: 'High', color: 'black',
-      getNorm: () => eqToNorm(eq.high),
-      setFromNorm: (n) => setEQ('high', normToEq(n)),
-      display: () => `${eq.high > 0 ? '+' : ''}${eq.high}` },
-  ];
-
-  let draggingKnob: number | null = $state(null);
-  let dragStartY = 0;
-  let dragStartNorm = 0;
-
-  function handleKnobStart(idx: number, e: MouseEvent) {
-    e.preventDefault();
-    draggingKnob = idx;
-    dragStartY = e.clientY;
-    dragStartNorm = knobDefs[idx].getNorm();
-    document.addEventListener('mousemove', handleKnobMove);
-    document.addEventListener('mouseup', handleKnobEnd);
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'grabbing';
-  }
-
-  function handleKnobMove(e: MouseEvent) {
-    if (draggingKnob === null) return;
-    e.preventDefault();
-    const delta = (dragStartY - e.clientY) / 150;
-    const n = Math.max(0, Math.min(1, dragStartNorm + delta));
-    knobDefs[draggingKnob].setFromNorm(n);
-  }
-
-  function handleKnobEnd() {
-    draggingKnob = null;
-    document.removeEventListener('mousemove', handleKnobMove);
-    document.removeEventListener('mouseup', handleKnobEnd);
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-  }
-
-  let trackVolumes: number[] = $state([]);
-  let trackMuted: boolean[] = $state([]);
-
-  function setTrackVolume(ti: number, volume: number) {
-    trackVolumes[ti] = volume;
-    player?.setTrackVolume(ti, volume);
-  }
-
-  function toggleTrackMuted(ti: number) {
-    trackMuted[ti] = !trackMuted[ti];
-    player?.setTrackMuted(ti, trackMuted[ti]);
-  }
-
-  const TRACK_COLORS = [
-    "#D4A847", "#5AABAC", "#C47A7A", "#7A9EC4", "#A87AD4",
-    "#7AC48A", "#D4977A", "#7ACAC4", "#C4B07A", "#AD7AC4",
-    "#7AC4A8", "#C47AAD",
-  ];
-
-  const TYPE_COLORS: Record<string, string> = {
-    synth: "#D4A847",
-    kit: "#5AABAC",
-    midi: "#7A9EC4",
-    cv: "#A87AD4",
-    audio: "#C47A7A",
-  };
-
-  const TYPE_LABELS: Record<string, string> = {
-    synth: "Synth",
-    kit: "Kit",
-    midi: "MIDI",
-    cv: "CV",
-    audio: "Audio",
-  };
-
-  let typeCounts = $derived.by(() => {
-    if (!data) return [];
-    const counts: Record<string, number> = {};
-    for (const t of data.tracks) {
-      const type = t.instrumentType ?? (t.isKit ? "kit" : "synth");
-      counts[type] = (counts[type] ?? 0) + 1;
-    }
-    return Object.entries(counts).map(([type, count]) => ({
-      type,
-      count,
-      label: TYPE_LABELS[type] ?? type,
-      color: TYPE_COLORS[type] ?? "#888",
-    }));
-  });
-
-  const TRACK_HEIGHT = 32;
-  const HEADER_HEIGHT = 28;
-  const LABEL_WIDTH = 140;
-  const RULER_HEIGHT = 24;
-  const MIN_TIMELINE_WIDTH = 600;
-  const PADDING = 16;
-
-  let containerEl: HTMLDivElement | undefined = $state();
-  let containerWidth = $state(800);
-
-  $effect(() => {
-    if (!containerEl) return;
-    const ro = new ResizeObserver(entries => {
-      containerWidth = entries[0].contentRect.width;
-    });
-    ro.observe(containerEl);
-    return () => ro.disconnect();
-  });
-
-  let layout = $derived.by(() => {
-    if (!data || data.tracks.length === 0) return null;
-
-    const ticksPerMeasure = data.ticksPerQuarter * 4;
-    const totalMeasures = Math.ceil(data.durationTicks / ticksPerMeasure);
-    const trackCount = data.tracks.length;
-
-    const availableWidth = Math.max(containerWidth - LABEL_WIDTH - PADDING * 2, MIN_TIMELINE_WIDTH);
-    const pxPerMeasure = Math.max(availableWidth / totalMeasures, 20);
-    const timelineWidth = pxPerMeasure * totalMeasures;
-    const svgWidth = LABEL_WIDTH + timelineWidth;
-    const svgHeight = RULER_HEIGHT + trackCount * TRACK_HEIGHT + PADDING;
-
-    const rulerMarks: { x: number; label: string }[] = [];
-    let step = 1;
-    if (totalMeasures > 200) step = 16;
-    else if (totalMeasures > 100) step = 8;
-    else if (totalMeasures > 50) step = 4;
-    else if (totalMeasures > 20) step = 2;
-    for (let m = 0; m <= totalMeasures; m += step) {
-      rulerMarks.push({
-        x: LABEL_WIDTH + m * pxPerMeasure,
-        label: String(m + 1),
-      });
-    }
-
-    const isSession = !data.hasArrangement;
-    const tracks = data.tracks.map((t, i) => {
-      const y = RULER_HEIGHT + i * TRACK_HEIGHT;
-      const type = t.instrumentType ?? (t.isKit ? "kit" : "synth");
-      const color = TYPE_COLORS[type] ?? TRACK_COLORS[i % TRACK_COLORS.length];
-      const clips = t.clips.map((c, ci) => {
-        const x = LABEL_WIDTH + (c.positionTicks / ticksPerMeasure) * pxPerMeasure;
-        const w = Math.max((c.lengthTicks / ticksPerMeasure) * pxPerMeasure, 2);
-        const patternW = isSession
-          ? Math.max((c.clipLengthTicks / ticksPerMeasure) * pxPerMeasure, 2)
-          : w;
-        const loops = isSession && c.clipLengthTicks > 0
-          ? Math.ceil(c.lengthTicks / c.clipLengthTicks)
-          : 1;
-        return { ...c, x, w, patternW, loops, trackIdx: i, clipIdx: ci };
-      });
-      return { ...t, y, color, clips, isSession };
-    });
-
-    return { svgWidth, svgHeight, rulerMarks, tracks, totalMeasures, pxPerMeasure, ticksPerMeasure };
-  });
-
-  async function inspect(name: string, xmlContent: string) {
-    fileName = name;
-    state = "loading";
-
-    try {
-      const pyodide = await loadPyodide((stage, pct) => {
-        progress = stage;
-        progressPct = pct;
-      });
-
-      state = "processing";
-      progress = "Parsing song";
-      progressPct = 85;
-
-      const result = await inspectSong(xmlContent, pyodide);
-
-      if (result.tracks.length === 0) {
-        state = "error";
-        errorMsg = "No tracks found. This song has no clips or arrangement data.";
-        return;
-      }
-
-      data = result;
-      trackVolumes = result.tracks.map(() => 1);
-      trackMuted = result.tracks.map(() => false);
-      state = "done";
-      progressPct = 100;
-      trackToolAction("preview", "inspect");
-    } catch (e: any) {
-      state = "error";
-      errorMsg = e.message || "Failed to parse song";
-      trackToolAction("preview", "inspect_error");
-    }
-  }
-
-  async function handleFile(file: File) {
-    if (!file.name.toLowerCase().endsWith(".xml")) {
-      state = "error";
-      errorMsg = "Please drop a Deluge .XML song file";
+async function tryLoadCardSongs() {
+  try {
+    if (cardStore.isLoaded && cardStore.songXmls.size > 0) {
+      cardSongs = cardStore.eligibleSongs(false);
+      cardName = cardStore.rootHandle?.name ?? "";
       return;
     }
-    inspect(file.name, await file.text());
+    const cached = await cardStore.loadCachedSongs();
+    if (cached?.songs.length) {
+      cardSongs = cached.songs;
+      cardName = cached.cardName;
+      cardSavedAt = cached.savedAt;
+      cardFromCache = true;
+    }
+  } catch {}
+}
+
+tryLoadCardSongs();
+
+let player: SongPlayer | null = $state(null);
+let playState: "stopped" | "playing" | "paused" = $state("stopped");
+let playheadTick = $state(0);
+let scrollEl: HTMLDivElement | undefined = $state();
+
+const EQ_BANDS: { key: EQBand; label: string }[] = [
+  { key: "low", label: "Low" },
+  { key: "mid", label: "Mid" },
+  { key: "high", label: "High" },
+];
+const EQ_FREQ_LABEL: Record<EQBand, string> = {
+  low: "200 Hz shelf",
+  mid: "1 kHz",
+  high: "4 kHz shelf",
+};
+let eq: Record<EQBand, number> = $state({ low: -4, mid: 0, high: 0 });
+
+function setEQ(band: EQBand, gainDb: number) {
+  eq = { ...eq, [band]: gainDb };
+  player?.setEQ(band, gainDb);
+}
+
+let filterCutoff = $state(20000);
+let filterRes = $state(0.5);
+
+function setFilterCutoff(hz: number) {
+  filterCutoff = hz;
+  player?.setFilterCutoff(hz);
+}
+
+function setFilterRes(q: number) {
+  filterRes = q;
+  player?.setFilterRes(q);
+}
+
+// Knob helpers — value 0..1 maps to angle -135..135
+function valToAngle(v: number): number {
+  return v * 270 - 135;
+}
+function angleToVal(a: number): number {
+  return (Math.max(-135, Math.min(135, a)) + 135) / 270;
+}
+
+// EQ knob: -12..12 dB → 0..1
+function eqToNorm(db: number): number {
+  return (db + 12) / 24;
+}
+function normToEq(n: number): number {
+  return Math.round(n * 24 - 12);
+}
+
+// Filter cutoff: exponential 80 Hz..20 kHz → 0..1
+function cutoffToNorm(hz: number): number {
+  return Math.log(hz / 80) / Math.log(20000 / 80);
+}
+function normToCutoff(n: number): number {
+  return Math.round(80 * Math.pow(20000 / 80, n));
+}
+
+// Resonance: 0.5..20 → 0..1
+function resToNorm(q: number): number {
+  return (q - 0.5) / 19.5;
+}
+function normToRes(n: number): number {
+  return +(0.5 + n * 19.5).toFixed(1);
+}
+
+interface KnobDef {
+  id: string;
+  label: string;
+  color: "gold" | "black";
+  getNorm: () => number;
+  setFromNorm: (n: number) => void;
+  display: () => string;
+}
+
+const knobDefs: KnobDef[] = [
+  {
+    id: "cutoff",
+    label: "Cutoff",
+    color: "gold",
+    getNorm: () => cutoffToNorm(filterCutoff),
+    setFromNorm: (n) => setFilterCutoff(normToCutoff(n)),
+    display: () =>
+      filterCutoff >= 1000
+        ? `${(filterCutoff / 1000).toFixed(1)}k`
+        : `${filterCutoff}`,
+  },
+  {
+    id: "res",
+    label: "Res",
+    color: "gold",
+    getNorm: () => resToNorm(filterRes),
+    setFromNorm: (n) => setFilterRes(normToRes(n)),
+    display: () => `${filterRes}`,
+  },
+  {
+    id: "eqLow",
+    label: "Low",
+    color: "black",
+    getNorm: () => eqToNorm(eq.low),
+    setFromNorm: (n) => setEQ("low", normToEq(n)),
+    display: () => `${eq.low > 0 ? "+" : ""}${eq.low}`,
+  },
+  {
+    id: "eqMid",
+    label: "Mid",
+    color: "black",
+    getNorm: () => eqToNorm(eq.mid),
+    setFromNorm: (n) => setEQ("mid", normToEq(n)),
+    display: () => `${eq.mid > 0 ? "+" : ""}${eq.mid}`,
+  },
+  {
+    id: "eqHigh",
+    label: "High",
+    color: "black",
+    getNorm: () => eqToNorm(eq.high),
+    setFromNorm: (n) => setEQ("high", normToEq(n)),
+    display: () => `${eq.high > 0 ? "+" : ""}${eq.high}`,
+  },
+];
+
+let draggingKnob: number | null = $state(null);
+let dragStartY = 0;
+let dragStartNorm = 0;
+
+function handleKnobStart(idx: number, e: MouseEvent) {
+  e.preventDefault();
+  draggingKnob = idx;
+  dragStartY = e.clientY;
+  dragStartNorm = knobDefs[idx].getNorm();
+  document.addEventListener("mousemove", handleKnobMove);
+  document.addEventListener("mouseup", handleKnobEnd);
+  document.body.style.userSelect = "none";
+  document.body.style.cursor = "grabbing";
+}
+
+function handleKnobMove(e: MouseEvent) {
+  if (draggingKnob === null) return;
+  e.preventDefault();
+  const delta = (dragStartY - e.clientY) / 150;
+  const n = Math.max(0, Math.min(1, dragStartNorm + delta));
+  knobDefs[draggingKnob].setFromNorm(n);
+}
+
+function handleKnobEnd() {
+  draggingKnob = null;
+  document.removeEventListener("mousemove", handleKnobMove);
+  document.removeEventListener("mouseup", handleKnobEnd);
+  document.body.style.userSelect = "";
+  document.body.style.cursor = "";
+}
+
+let trackVolumes: number[] = $state([]);
+let trackMuted: boolean[] = $state([]);
+
+function setTrackVolume(ti: number, volume: number) {
+  trackVolumes[ti] = volume;
+  player?.setTrackVolume(ti, volume);
+}
+
+function toggleTrackMuted(ti: number) {
+  trackMuted[ti] = !trackMuted[ti];
+  player?.setTrackMuted(ti, trackMuted[ti]);
+}
+
+const TRACK_COLORS = [
+  "#D4A847",
+  "#5AABAC",
+  "#C47A7A",
+  "#7A9EC4",
+  "#A87AD4",
+  "#7AC48A",
+  "#D4977A",
+  "#7ACAC4",
+  "#C4B07A",
+  "#AD7AC4",
+  "#7AC4A8",
+  "#C47AAD",
+];
+
+const TYPE_COLORS: Record<string, string> = {
+  synth: "#D4A847",
+  kit: "#5AABAC",
+  midi: "#7A9EC4",
+  cv: "#A87AD4",
+  audio: "#C47A7A",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  synth: "Synth",
+  kit: "Kit",
+  midi: "MIDI",
+  cv: "CV",
+  audio: "Audio",
+};
+
+let typeCounts = $derived.by(() => {
+  if (!data) return [];
+  const counts: Record<string, number> = {};
+  for (const t of data.tracks) {
+    const type = t.instrumentType ?? (t.isKit ? "kit" : "synth");
+    counts[type] = (counts[type] ?? 0) + 1;
+  }
+  return Object.entries(counts).map(([type, count]) => ({
+    type,
+    count,
+    label: TYPE_LABELS[type] ?? type,
+    color: TYPE_COLORS[type] ?? "#888",
+  }));
+});
+
+const TRACK_HEIGHT = 32;
+const HEADER_HEIGHT = 28;
+const LABEL_WIDTH = 140;
+const RULER_HEIGHT = 24;
+const MIN_TIMELINE_WIDTH = 600;
+const PADDING = 16;
+
+let containerEl: HTMLDivElement | undefined = $state();
+let containerWidth = $state(800);
+
+$effect(() => {
+  if (!containerEl) return;
+  const ro = new ResizeObserver((entries) => {
+    containerWidth = entries[0].contentRect.width;
+  });
+  ro.observe(containerEl);
+  return () => ro.disconnect();
+});
+
+let layout = $derived.by(() => {
+  if (!data || data.tracks.length === 0) return null;
+
+  const ticksPerMeasure = data.ticksPerQuarter * 4;
+  const totalMeasures = Math.ceil(data.durationTicks / ticksPerMeasure);
+  const trackCount = data.tracks.length;
+
+  const availableWidth = Math.max(
+    containerWidth - LABEL_WIDTH - PADDING * 2,
+    MIN_TIMELINE_WIDTH,
+  );
+  const pxPerMeasure = Math.max(availableWidth / totalMeasures, 20);
+  const timelineWidth = pxPerMeasure * totalMeasures;
+  const svgWidth = LABEL_WIDTH + timelineWidth;
+  const svgHeight = RULER_HEIGHT + trackCount * TRACK_HEIGHT + PADDING;
+
+  const rulerMarks: { x: number; label: string }[] = [];
+  let step = 1;
+  if (totalMeasures > 200) step = 16;
+  else if (totalMeasures > 100) step = 8;
+  else if (totalMeasures > 50) step = 4;
+  else if (totalMeasures > 20) step = 2;
+  for (let m = 0; m <= totalMeasures; m += step) {
+    rulerMarks.push({
+      x: LABEL_WIDTH + m * pxPerMeasure,
+      label: String(m + 1),
+    });
   }
 
-  $effect(() => {
-    try {
-      const stored = sessionStorage.getItem("deluge-preview-file");
-      if (stored) {
-        sessionStorage.removeItem("deluge-preview-file");
-        const { name, content } = JSON.parse(stored);
-        if (name && content) inspect(name, content);
-      }
-    } catch {}
-    try {
-      const cached = JSON.parse(sessionStorage.getItem("deluge-stats-results") ?? "null");
-      statsCount = Array.isArray(cached) ? cached.length : 0;
-    } catch {
-      statsCount = 0;
-    }
+  const isSession = !data.hasArrangement;
+  const tracks = data.tracks.map((t, i) => {
+    const y = RULER_HEIGHT + i * TRACK_HEIGHT;
+    const type = t.instrumentType ?? (t.isKit ? "kit" : "synth");
+    const color = TYPE_COLORS[type] ?? TRACK_COLORS[i % TRACK_COLORS.length];
+    const clips = t.clips.map((c, ci) => {
+      const x =
+        LABEL_WIDTH + (c.positionTicks / ticksPerMeasure) * pxPerMeasure;
+      const w = Math.max((c.lengthTicks / ticksPerMeasure) * pxPerMeasure, 2);
+      const patternW = isSession
+        ? Math.max((c.clipLengthTicks / ticksPerMeasure) * pxPerMeasure, 2)
+        : w;
+      const loops =
+        isSession && c.clipLengthTicks > 0
+          ? Math.ceil(c.lengthTicks / c.clipLengthTicks)
+          : 1;
+      return { ...c, x, w, patternW, loops, trackIdx: i, clipIdx: ci };
+    });
+    return { ...t, y, color, clips, isSession };
   });
 
-  function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    dragOver = false;
-    const file = e.dataTransfer?.files[0];
-    if (file) handleFile(file);
-  }
+  return {
+    svgWidth,
+    svgHeight,
+    rulerMarks,
+    tracks,
+    totalMeasures,
+    pxPerMeasure,
+    ticksPerMeasure,
+  };
+});
 
-  function handleDragOver(e: DragEvent) {
-    e.preventDefault();
-    dragOver = true;
-  }
+async function inspect(name: string, xmlContent: string) {
+  fileName = name;
+  state = "loading";
 
-  function handleDragLeave() {
-    dragOver = false;
-  }
-
-  function handleInputChange(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (file) handleFile(file);
-  }
-
-  function formatMeasure(ticks: number, ticksPerMeasure: number): string {
-    const measure = Math.floor(ticks / ticksPerMeasure) + 1;
-    const beat = Math.floor((ticks % ticksPerMeasure) / (ticksPerMeasure / 4)) + 1;
-    return `m${measure} beat ${beat}`;
-  }
-
-  function formatLength(ticks: number, ticksPerMeasure: number): string {
-    const measures = ticks / ticksPerMeasure;
-    if (measures === Math.floor(measures)) return `${measures} bar${measures !== 1 ? "s" : ""}`;
-    return `${measures.toFixed(1)} bars`;
-  }
-
-  function showTooltip(e: MouseEvent, trackIdx: number, clipIdx: number) {
-    if (!data || !layout) return;
-    const track = data.tracks[trackIdx];
-    const clip = track.clips[clipIdx];
-    const ticksPerMeasure = layout.ticksPerMeasure;
-    const lines = [track.name];
-    if (data.hasArrangement) {
-      lines.push(formatMeasure(clip.positionTicks, ticksPerMeasure));
-    }
-    lines.push(formatLength(clip.clipLengthTicks, ticksPerMeasure));
-    if (!data.hasArrangement && clip.clipLengthTicks < clip.lengthTicks) {
-      const loops = Math.ceil(clip.lengthTicks / clip.clipLengthTicks);
-      lines.push(`loops ${loops}x`);
-    }
-    lines.push(`${clip.noteCount} notes, ${clip.rowCount} rows`);
-    hoveredClip = { track: trackIdx, clip: clipIdx };
-    tooltip = {
-      visible: true,
-      x: e.clientX,
-      y: e.clientY,
-      text: lines.join("\n"),
-    };
-  }
-
-  function hideTooltip() {
-    hoveredClip = null;
-    tooltip = { ...tooltip, visible: false };
-  }
-
-  function createPlayer() {
-    if (!data) return null;
-    const p = new SongPlayer({
-      bpm: data.bpm,
-      ticksPerQuarter: data.ticksPerQuarter,
-      tracks: data.tracks,
-      durationTicks: data.durationTicks,
-      onTick: (tick) => {
-        playheadTick = tick;
-        autoScrollToPlayhead();
-      },
-      onEnd: () => { playState = 'stopped'; },
-      sampleResolver: cardStore.isLoaded
-        ? (path, ctx) => cardStore.getSampleBuffer(path, ctx)
-        : undefined,
+  try {
+    const pyodide = await loadPyodide((stage, pct) => {
+      progress = stage;
+      progressPct = pct;
     });
-    for (const { key } of EQ_BANDS) p.setEQ(key, eq[key]);
-    p.setFilterCutoff(filterCutoff);
-    p.setFilterRes(filterRes);
-    for (let i = 0; i < data.tracks.length; i++) {
-      p.setTrackVolume(i, trackVolumes[i] ?? 1);
-      p.setTrackMuted(i, trackMuted[i] ?? false);
+
+    state = "processing";
+    progress = "Parsing song";
+    progressPct = 85;
+
+    const result = await inspectSong(xmlContent, pyodide);
+
+    if (result.tracks.length === 0) {
+      state = "error";
+      errorMsg = "No tracks found. This song has no clips or arrangement data.";
+      return;
     }
-    return p;
-  }
 
-  function togglePlay() {
-    if (playState === 'playing') {
-      player?.pause();
-      playState = 'paused';
-    } else {
-      if (!player || playState === 'stopped') {
-        player?.dispose();
-        player = createPlayer();
-      }
-      player?.play();
-      playState = 'playing';
-      trackToolAction("preview", "play");
+    data = result;
+    trackVolumes = result.tracks.map(() => 1);
+    trackMuted = result.tracks.map(() => false);
+    state = "done";
+    progressPct = 100;
+    trackToolAction("preview", "inspect");
+  } catch (e: any) {
+    state = "error";
+    errorMsg = e.message || "Failed to parse song";
+    trackToolAction("preview", "inspect_error");
+  }
+}
+
+async function handleFile(file: File) {
+  if (!file.name.toLowerCase().endsWith(".xml")) {
+    state = "error";
+    errorMsg = "Please drop a Deluge .XML song file";
+    return;
+  }
+  inspect(file.name, await file.text());
+}
+
+$effect(() => {
+  try {
+    const stored = sessionStorage.getItem("deluge-preview-file");
+    if (stored) {
+      sessionStorage.removeItem("deluge-preview-file");
+      const { name, content } = JSON.parse(stored);
+      if (name && content) inspect(name, content);
     }
+  } catch {}
+  try {
+    const cached = JSON.parse(
+      sessionStorage.getItem("deluge-stats-results") ?? "null",
+    );
+    statsCount = Array.isArray(cached) ? cached.length : 0;
+  } catch {
+    statsCount = 0;
   }
+});
 
-  function stopPlayback() {
-    player?.stop();
-    playState = 'stopped';
-    playheadTick = 0;
+function handleDrop(e: DragEvent) {
+  e.preventDefault();
+  dragOver = false;
+  const file = e.dataTransfer?.files[0];
+  if (file) handleFile(file);
+}
+
+function handleDragOver(e: DragEvent) {
+  e.preventDefault();
+  dragOver = true;
+}
+
+function handleDragLeave() {
+  dragOver = false;
+}
+
+function handleInputChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file) handleFile(file);
+}
+
+function formatMeasure(ticks: number, ticksPerMeasure: number): string {
+  const measure = Math.floor(ticks / ticksPerMeasure) + 1;
+  const beat =
+    Math.floor((ticks % ticksPerMeasure) / (ticksPerMeasure / 4)) + 1;
+  return `m${measure} beat ${beat}`;
+}
+
+function formatLength(ticks: number, ticksPerMeasure: number): string {
+  const measures = ticks / ticksPerMeasure;
+  if (measures === Math.floor(measures))
+    return `${measures} bar${measures !== 1 ? "s" : ""}`;
+  return `${measures.toFixed(1)} bars`;
+}
+
+function showTooltip(e: MouseEvent, trackIdx: number, clipIdx: number) {
+  if (!data || !layout) return;
+  const track = data.tracks[trackIdx];
+  const clip = track.clips[clipIdx];
+  const ticksPerMeasure = layout.ticksPerMeasure;
+  const lines = [track.name];
+  if (data.hasArrangement) {
+    lines.push(formatMeasure(clip.positionTicks, ticksPerMeasure));
   }
+  lines.push(formatLength(clip.clipLengthTicks, ticksPerMeasure));
+  if (!data.hasArrangement && clip.clipLengthTicks < clip.lengthTicks) {
+    const loops = Math.ceil(clip.lengthTicks / clip.clipLengthTicks);
+    lines.push(`loops ${loops}x`);
+  }
+  lines.push(`${clip.noteCount} notes, ${clip.rowCount} rows`);
+  hoveredClip = { track: trackIdx, clip: clipIdx };
+  tooltip = {
+    visible: true,
+    x: e.clientX,
+    y: e.clientY,
+    text: lines.join("\n"),
+  };
+}
 
-  function handleTimelineClick(e: MouseEvent) {
-    if (!layout || !data) return;
-    const svg = e.currentTarget as SVGSVGElement;
-    const rect = svg.getBoundingClientRect();
-    const scrollLeft = scrollEl?.scrollLeft ?? 0;
-    const x = e.clientX - rect.left + scrollLeft;
-    const timelineX = x - LABEL_WIDTH;
-    if (timelineX < 0) return;
-    const tick = (timelineX / layout.pxPerMeasure) * layout.ticksPerMeasure;
-    const clampedTick = Math.max(0, Math.min(tick, data.durationTicks));
-    if (!player || playState === 'stopped') {
+function hideTooltip() {
+  hoveredClip = null;
+  tooltip = { ...tooltip, visible: false };
+}
+
+function createPlayer() {
+  if (!data) return null;
+  const p = new SongPlayer({
+    bpm: data.bpm,
+    ticksPerQuarter: data.ticksPerQuarter,
+    tracks: data.tracks,
+    durationTicks: data.durationTicks,
+    onTick: (tick) => {
+      playheadTick = tick;
+      autoScrollToPlayhead();
+    },
+    onEnd: () => {
+      playState = "stopped";
+    },
+    sampleResolver: cardStore.isLoaded
+      ? (path, ctx) => cardStore.getSampleBuffer(path, ctx)
+      : undefined,
+  });
+  for (const { key } of EQ_BANDS) p.setEQ(key, eq[key]);
+  p.setFilterCutoff(filterCutoff);
+  p.setFilterRes(filterRes);
+  for (let i = 0; i < data.tracks.length; i++) {
+    p.setTrackVolume(i, trackVolumes[i] ?? 1);
+    p.setTrackMuted(i, trackMuted[i] ?? false);
+  }
+  return p;
+}
+
+function togglePlay() {
+  if (playState === "playing") {
+    player?.pause();
+    playState = "paused";
+  } else {
+    if (!player || playState === "stopped") {
       player?.dispose();
       player = createPlayer();
     }
-    player?.seek(clampedTick);
-    playState = 'playing';
+    player?.play();
+    playState = "playing";
+    trackToolAction("preview", "play");
   }
+}
 
-  function autoScrollToPlayhead() {
-    if (!scrollEl || !layout) return;
-    const px = LABEL_WIDTH + (playheadTick / layout.ticksPerMeasure) * layout.pxPerMeasure;
-    const viewLeft = scrollEl.scrollLeft;
-    const viewRight = viewLeft + scrollEl.clientWidth;
-    if (px < viewLeft + 60 || px > viewRight - 60) {
-      scrollEl.scrollLeft = px - scrollEl.clientWidth / 3;
-    }
-  }
+function stopPlayback() {
+  player?.stop();
+  playState = "stopped";
+  playheadTick = 0;
+}
 
-  function reset() {
+function handleTimelineClick(e: MouseEvent) {
+  if (!layout || !data) return;
+  const svg = e.currentTarget as SVGSVGElement;
+  const rect = svg.getBoundingClientRect();
+  const scrollLeft = scrollEl?.scrollLeft ?? 0;
+  const x = e.clientX - rect.left + scrollLeft;
+  const timelineX = x - LABEL_WIDTH;
+  if (timelineX < 0) return;
+  const tick = (timelineX / layout.pxPerMeasure) * layout.ticksPerMeasure;
+  const clampedTick = Math.max(0, Math.min(tick, data.durationTicks));
+  if (!player || playState === "stopped") {
     player?.dispose();
-    player = null;
-    playState = 'stopped';
-    playheadTick = 0;
-    state = "idle";
-    data = null;
-    fileName = "";
-    errorMsg = "";
+    player = createPlayer();
   }
+  player?.seek(clampedTick);
+  playState = "playing";
+}
+
+function autoScrollToPlayhead() {
+  if (!scrollEl || !layout) return;
+  const px =
+    LABEL_WIDTH + (playheadTick / layout.ticksPerMeasure) * layout.pxPerMeasure;
+  const viewLeft = scrollEl.scrollLeft;
+  const viewRight = viewLeft + scrollEl.clientWidth;
+  if (px < viewLeft + 60 || px > viewRight - 60) {
+    scrollEl.scrollLeft = px - scrollEl.clientWidth / 3;
+  }
+}
+
+function reset() {
+  player?.dispose();
+  player = null;
+  playState = "stopped";
+  playheadTick = 0;
+  state = "idle";
+  data = null;
+  fileName = "";
+  errorMsg = "";
+}
 </script>
 
 {#if state === "idle"}

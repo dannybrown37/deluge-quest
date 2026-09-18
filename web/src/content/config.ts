@@ -1,11 +1,11 @@
-import { defineCollection, z } from 'astro:content';
+import { defineCollection, z } from "astro:content";
 
 const changelog = defineCollection({
-  type: 'content',
+  type: "content",
   schema: z.object({
     title: z.string(),
     date: z.date(),
-    tag: z.enum(['feature', 'fix', 'improvement']),
+    tag: z.enum(["feature", "fix", "improvement"]),
   }),
 });
 

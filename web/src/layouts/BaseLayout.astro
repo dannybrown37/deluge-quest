@@ -1,13 +1,14 @@
 ---
-import { ClientRouter } from 'astro:transitions';
+import { ClientRouter } from "astro:transitions";
 
 interface Props {
   title: string;
   description?: string;
 }
 
-const { title, description = "Browser-based tools for Synthstrom Deluge" } = Astro.props;
-const canonicalURL = new URL(Astro.url.pathname, 'https://deluge.quest');
+const { title, description = "Browser-based tools for Synthstrom Deluge" } =
+  Astro.props;
+const canonicalURL = new URL(Astro.url.pathname, "https://deluge.quest");
 ---
 
 <html lang="en">

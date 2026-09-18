@@ -84,9 +84,9 @@ web-build:
 web-lint:
   cd web && npm run lint
 
-# Type-check the web frontend
+# Type-check the web frontend (Svelte components + TypeScript)
 web-typecheck:
-  cd web && npx tsc --noEmit
+  cd web && npx svelte-check --tsconfig ./tsconfig.json
 
 # Run web frontend tests
 web-test:

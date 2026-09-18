@@ -1,4 +1,4 @@
-import { trackSong, crossedMarks, percentPlayed } from './analytics';
+import { crossedMarks, percentPlayed, trackSong } from "./analytics";
 
 interface Song {
   file: string;
@@ -81,12 +81,14 @@ export class HomeAudioPlayer {
   async fetchSongList(): Promise<void> {
     if (this.songs.length > 0) return;
     try {
-      const resp = await fetch('/audio/songs.json');
+      const resp = await fetch("/audio/songs.json");
       if (resp.ok) {
         this.songs = this.shuffle(await resp.json());
         this.currentSongIndex = 0;
       }
-    } catch { /* no songs available */ }
+    } catch {
+      /* no songs available */
+    }
   }
 
   createImpulse(ctx: AudioContext, duration = 2.5, decay = 3): AudioBuffer {
@@ -104,13 +106,13 @@ export class HomeAudioPlayer {
 
   async initAudio(): Promise<void> {
     if (this.audioCtx) {
-      if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+      if (this.audioCtx.state === "suspended") await this.audioCtx.resume();
       return;
     }
     this.audioCtx = new AudioContext();
 
     this.filterNode = this.audioCtx.createBiquadFilter();
-    this.filterNode.type = 'lowpass';
+    this.filterNode.type = "lowpass";
     this.filterNode.frequency.value = 22050;
     this.gainNode = this.audioCtx.createGain();
     this.dryGain = this.audioCtx.createGain();
@@ -152,9 +154,9 @@ export class HomeAudioPlayer {
     this.mediaElement?.pause();
 
     const el = new Audio();
-    el.crossOrigin = 'anonymous';
-    el.preload = 'auto';
-    el.addEventListener('ended', () => {
+    el.crossOrigin = "anonymous";
+    el.preload = "auto";
+    el.addEventListener("ended", () => {
       this.isPlaying = false;
       this.stepSong(1, true);
     });
@@ -165,7 +167,7 @@ export class HomeAudioPlayer {
   }
 
   private songUrl(file: string): string {
-    return `/audio/${encodeURIComponent(file).replace(/%2C/g, ',')}`;
+    return `/audio/${encodeURIComponent(file).replace(/%2C/g, ",")}`;
   }
 
   async loadSong(idx: number): Promise<boolean> {
@@ -186,8 +188,8 @@ export class HomeAudioPlayer {
     return new Promise<boolean>((resolve) => {
       const el = this.mediaElement!;
       const onReady = () => {
-        el.removeEventListener('canplaythrough', onReady);
-        el.removeEventListener('error', onError);
+        el.removeEventListener("canplaythrough", onReady);
+        el.removeEventListener("error", onError);
         this.songLoaded = true;
         this.loadedSongIndex = idx;
         this.updateMediaMetadata();
@@ -195,13 +197,13 @@ export class HomeAudioPlayer {
         resolve(true);
       };
       const onError = () => {
-        el.removeEventListener('canplaythrough', onReady);
-        el.removeEventListener('error', onError);
-        console.error('Audio load failed:', song.file);
+        el.removeEventListener("canplaythrough", onReady);
+        el.removeEventListener("error", onError);
+        console.error("Audio load failed:", song.file);
         resolve(false);
       };
-      el.addEventListener('canplaythrough', onReady, { once: true });
-      el.addEventListener('error', onError, { once: true });
+      el.addEventListener("canplaythrough", onReady, { once: true });
+      el.addEventListener("error", onError, { once: true });
       el.src = this.songUrl(song.file);
       el.load();
     });
@@ -209,7 +211,8 @@ export class HomeAudioPlayer {
 
   async stepSong(delta: number, forcePlay = false): Promise<void> {
     const wasPlaying = forcePlay || this.isPlaying;
-    const idx = (this.currentSongIndex + delta + this.songs.length) % this.songs.length;
+    const idx =
+      (this.currentSongIndex + delta + this.songs.length) % this.songs.length;
     await this.initAudio();
     await this.loadSong(idx);
     if (wasPlaying) await this.togglePlay();
@@ -225,37 +228,52 @@ export class HomeAudioPlayer {
       this.updateMediaMetadata();
       // Chrome hides the media UI when playbackState is 'none', which happens
       // after ClientRouter transitions on some browsers. Reassert it.
-      this.setMediaState(this.isPlaying ? 'playing' : 'paused');
+      this.setMediaState(this.isPlaying ? "playing" : "paused");
     }
   }
 
   initMediaSession() {
     if (this.mediaSessionReady) return;
-    if (!('mediaSession' in navigator)) return;
+    if (!("mediaSession" in navigator)) return;
     this.mediaSessionReady = true;
     const set = (action: MediaSessionAction, handler: (() => void) | null) => {
-      try { navigator.mediaSession.setActionHandler(action, handler); } catch { /* unsupported */ }
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch {
+        /* unsupported */
+      }
     };
-    set('play', () => { if (!this.isPlaying) this.togglePlay(); });
-    set('pause', () => { if (this.isPlaying) this.togglePlay(); });
-    set('stop', () => { if (this.isPlaying) this.togglePlay(); });
-    set('nexttrack', () => { if (this.songs.length > 1) this.stepSong(1); });
-    set('previoustrack', () => { if (this.songs.length > 1) this.stepSong(-1); });
+    set("play", () => {
+      if (!this.isPlaying) this.togglePlay();
+    });
+    set("pause", () => {
+      if (this.isPlaying) this.togglePlay();
+    });
+    set("stop", () => {
+      if (this.isPlaying) this.togglePlay();
+    });
+    set("nexttrack", () => {
+      if (this.songs.length > 1) this.stepSong(1);
+    });
+    set("previoustrack", () => {
+      if (this.songs.length > 1) this.stepSong(-1);
+    });
   }
 
   updateMediaMetadata() {
-    if (!('mediaSession' in navigator)) return;
+    if (!("mediaSession" in navigator)) return;
     const song = this.currentSong;
     if (!song) return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: song.name,
-      artist: 'deluge.quest',
-      album: 'Demo Tracks',
+      artist: "deluge.quest",
+      album: "Demo Tracks",
     });
   }
 
   private setMediaState(state: MediaSessionPlaybackState) {
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = state;
+    if ("mediaSession" in navigator)
+      navigator.mediaSession.playbackState = state;
   }
 
   async togglePlay(playbackRate = 1.0): Promise<void> {
@@ -265,7 +283,7 @@ export class HomeAudioPlayer {
     if (this.isPlaying) {
       this.mediaElement.pause();
       this.isPlaying = false;
-      this.setMediaState('paused');
+      this.setMediaState("paused");
       cancelAnimationFrame(this.timerRaf);
       this.flushListenTime();
       // Cutting the source doesn't stop the delay feedback loop from
@@ -277,15 +295,16 @@ export class HomeAudioPlayer {
     }
 
     this.mediaElement.playbackRate = playbackRate;
-    if (this.delayFeedback && this.delayNode) this.delayFeedback.connect(this.delayNode);
+    if (this.delayFeedback && this.delayNode)
+      this.delayFeedback.connect(this.delayNode);
     await this.mediaElement.play();
     this.isPlaying = true;
     this.updateMediaMetadata();
-    this.setMediaState('playing');
+    this.setMediaState("playing");
     this.initMediaSession();
     if (!this.playReported) {
       this.playReported = true;
-      trackSong('play', this.songLabel);
+      trackSong("play", this.songLabel);
     }
     this.installUnloadFlush();
     this.startTimer();
@@ -306,7 +325,7 @@ export class HomeAudioPlayer {
 
   private get songLabel(): string {
     const song = this.currentSong;
-    return song?.slug ?? song?.name ?? 'unknown';
+    return song?.slug ?? song?.name ?? "unknown";
   }
 
   private accrueListenTime() {
@@ -326,19 +345,19 @@ export class HomeAudioPlayer {
     const marks = crossedMarks(this.trackedPercent, pct);
     this.trackedPercent = Math.max(this.trackedPercent, pct);
     for (const mark of marks) {
-      trackSong('progress', this.songLabel, mark);
+      trackSong("progress", this.songLabel, mark);
     }
   }
 
   // pagehide is the only unload event mobile Safari reliably fires.
   private installUnloadFlush() {
-    if (this.unloadFlushInstalled || typeof window === 'undefined') return;
+    if (this.unloadFlushInstalled || typeof window === "undefined") return;
     this.unloadFlushInstalled = true;
-    window.addEventListener('pagehide', () => this.flushListenTime());
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
+    window.addEventListener("pagehide", () => this.flushListenTime());
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
         this.flushListenTime();
-      } else if (this.isPlaying && this.audioCtx?.state === 'suspended') {
+      } else if (this.isPlaying && this.audioCtx?.state === "suspended") {
         this.audioCtx.resume();
       }
     });
@@ -351,7 +370,7 @@ export class HomeAudioPlayer {
     const unreported = Math.round(this.listenSeconds - this.reportedSeconds);
     if (unreported < 1) return;
     this.reportedSeconds = this.listenSeconds;
-    trackSong('listen', this.songLabel, unreported);
+    trackSong("listen", this.songLabel, unreported);
   }
 
   updateVolume(value: number) {
@@ -383,12 +402,14 @@ export class HomeAudioPlayer {
   }
 
   updatePlaybackRate(value: number) {
-    const rate = value <= 64 ? 0.5 + (value / 64) * 0.5 : 1.0 + ((value - 64) / 63) * 1.0;
+    const rate =
+      value <= 64 ? 0.5 + (value / 64) * 0.5 : 1.0 + ((value - 64) / 63) * 1.0;
     if (this.mediaElement) this.mediaElement.playbackRate = rate;
   }
 
   formatTime(current: number, total: number): string {
-    const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    const fmt = (s: number) =>
+      `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
     return `${fmt(current)} / ${fmt(total)}`;
   }
 }

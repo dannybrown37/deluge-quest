@@ -1,15 +1,15 @@
 import {
-  midiToFreq,
-  createSubVoice,
+  type AudioPatch,
   createFMVoice,
+  createSubVoice,
   envAttackTime,
   envDecayReleaseTime,
   envSustainLevel,
   lpfFreqHz,
   lpfResQ,
-  type AudioPatch,
-} from './patchAudio';
-import type { PreviewTrack, PreviewPatch } from './pyodide';
+  midiToFreq,
+} from "./patchAudio";
+import type { PreviewPatch, PreviewTrack } from "./pyodide";
 
 export interface SongPlaybackOptions {
   bpm: number;
@@ -18,7 +18,10 @@ export interface SongPlaybackOptions {
   durationTicks: number;
   onTick?: (currentTick: number) => void;
   onEnd?: () => void;
-  sampleResolver?: (path: string, ctx: AudioContext) => Promise<AudioBuffer | null>;
+  sampleResolver?: (
+    path: string,
+    ctx: AudioContext,
+  ) => Promise<AudioBuffer | null>;
 }
 
 interface ScheduledNode {
@@ -26,30 +29,47 @@ interface ScheduledNode {
   gain: GainNode;
 }
 
-type DrumType = 'kick' | 'snare' | 'hihat' | 'clap' | 'tom' | 'cymbal' | 'perc';
+type DrumType = "kick" | "snare" | "hihat" | "clap" | "tom" | "cymbal" | "perc";
 
 function classifyDrum(drumName: string | null, midi: number): DrumType {
   if (drumName) {
     const n = drumName.toUpperCase();
-    if (n.includes('KICK') || n.includes('BASS') || n.includes('BD')) return 'kick';
-    if (n.includes('SNARE') || n.includes('SNR') || n.includes('SD')) return 'snare';
-    if (n.includes('HAT') || n.includes('HH') || n.includes('HIHAT')) return 'hihat';
-    if (n.includes('CLAP') || n.includes('CLP') || n.includes('HAND')) return 'clap';
-    if (n.includes('TOM')) return 'tom';
-    if (n.includes('CRASH') || n.includes('RIDE') || n.includes('CYMBAL') || n.includes('CYM')) return 'cymbal';
-    if (n.includes('RIM') || n.includes('COWBELL') || n.includes('CLAVE') || n.includes('SHAKER') || n.includes('TAMB')) return 'perc';
+    if (n.includes("KICK") || n.includes("BASS") || n.includes("BD"))
+      return "kick";
+    if (n.includes("SNARE") || n.includes("SNR") || n.includes("SD"))
+      return "snare";
+    if (n.includes("HAT") || n.includes("HH") || n.includes("HIHAT"))
+      return "hihat";
+    if (n.includes("CLAP") || n.includes("CLP") || n.includes("HAND"))
+      return "clap";
+    if (n.includes("TOM")) return "tom";
+    if (
+      n.includes("CRASH") ||
+      n.includes("RIDE") ||
+      n.includes("CYMBAL") ||
+      n.includes("CYM")
+    )
+      return "cymbal";
+    if (
+      n.includes("RIM") ||
+      n.includes("COWBELL") ||
+      n.includes("CLAVE") ||
+      n.includes("SHAKER") ||
+      n.includes("TAMB")
+    )
+      return "perc";
   }
-  if (midi <= 40) return 'kick';
-  if (midi <= 50) return 'snare';
-  if (midi >= 70) return 'hihat';
-  return 'perc';
+  if (midi <= 40) return "kick";
+  if (midi <= 50) return "snare";
+  if (midi >= 70) return "hihat";
+  return "perc";
 }
 
-const WAVEFORMS: OscillatorType[] = ['sawtooth', 'square', 'triangle', 'sine'];
+const WAVEFORMS: OscillatorType[] = ["sawtooth", "square", "triangle", "sine"];
 const LOOKAHEAD_SEC = 5;
 const SCHEDULE_INTERVAL_MS = 200;
 
-export type EQBand = 'low' | 'mid' | 'high';
+export type EQBand = "low" | "mid" | "high";
 
 const EQ_FREQ: Record<EQBand, number> = { low: 200, mid: 1000, high: 4000 };
 const DEFAULT_EQ: Record<EQBand, number> = { low: -4, mid: 0, high: 0 };
@@ -84,7 +104,16 @@ export class SongPlayer {
   private _isPlaying = false;
   private _isPaused = false;
 
-  private flatNotes: { trackIdx: number; midi: number; isKit: boolean; drumType: DrumType; samplePath: string | null; startSec: number; durSec: number; vel: number }[] = [];
+  private flatNotes: {
+    trackIdx: number;
+    midi: number;
+    isKit: boolean;
+    drumType: DrumType;
+    samplePath: string | null;
+    startSec: number;
+    durSec: number;
+    vel: number;
+  }[] = [];
   private secPerTick: number;
   private totalDurationSec: number;
   private sampleBuffers = new Map<string, AudioBuffer>();
@@ -110,7 +139,9 @@ export class SongPlayer {
 
         for (const row of clip.noteRows) {
           const midi = row.y ?? 60;
-          const drumType = track.isKit ? classifyDrum(row.drumName, midi) : 'perc' as DrumType;
+          const drumType = track.isKit
+            ? classifyDrum(row.drumName, midi)
+            : ("perc" as DrumType);
           for (const note of row.notes) {
             for (let loop = 0; loop < loops; loop++) {
               const absTick = clip.positionTicks + loop * clipLen + note.pos;
@@ -135,14 +166,19 @@ export class SongPlayer {
     this.flatNotes.sort((a, b) => a.startSec - b.startSec);
   }
 
-  get isPlaying() { return this._isPlaying; }
-  get isPaused() { return this._isPaused; }
+  get isPlaying() {
+    return this._isPlaying;
+  }
+  get isPaused() {
+    return this._isPaused;
+  }
 
   get currentTick(): number {
     if (!this.ctx || !this._isPlaying) {
       return this.startOffsetSec / this.secPerTick;
     }
-    const elapsed = this.ctx.currentTime - this.startCtxTime + this.startOffsetSec;
+    const elapsed =
+      this.ctx.currentTime - this.startCtxTime + this.startOffsetSec;
     return elapsed / this.secPerTick;
   }
 
@@ -168,20 +204,20 @@ export class SongPlayer {
     this.compressor = compressor;
 
     const eqLow = ctx.createBiquadFilter();
-    eqLow.type = 'lowshelf';
+    eqLow.type = "lowshelf";
     eqLow.frequency.value = EQ_FREQ.low;
     eqLow.gain.value = this.eqGains.low;
     this.eqLow = eqLow;
 
     const eqMid = ctx.createBiquadFilter();
-    eqMid.type = 'peaking';
+    eqMid.type = "peaking";
     eqMid.frequency.value = EQ_FREQ.mid;
     eqMid.Q.value = 0.7;
     eqMid.gain.value = this.eqGains.mid;
     this.eqMid = eqMid;
 
     const eqHigh = ctx.createBiquadFilter();
-    eqHigh.type = 'highshelf';
+    eqHigh.type = "highshelf";
     eqHigh.frequency.value = EQ_FREQ.high;
     eqHigh.gain.value = this.eqGains.high;
     this.eqHigh = eqHigh;
@@ -191,7 +227,7 @@ export class SongPlayer {
     eqHigh.connect(compressor);
 
     const filterNode = ctx.createBiquadFilter();
-    filterNode.type = 'lowpass';
+    filterNode.type = "lowpass";
     filterNode.frequency.value = this.filterCutoff;
     filterNode.Q.value = this.filterRes;
     this.filterNode = filterNode;
@@ -204,18 +240,23 @@ export class SongPlayer {
 
     const trackCount = this.opts.tracks.length;
     this.trackBaseGain = 0.7 / Math.sqrt(Math.max(trackCount, 1));
-    if (this.trackVolumes.length !== trackCount) this.trackVolumes = this.opts.tracks.map(() => 1);
-    if (this.trackMuted.length !== trackCount) this.trackMuted = this.opts.tracks.map(() => false);
+    if (this.trackVolumes.length !== trackCount)
+      this.trackVolumes = this.opts.tracks.map(() => 1);
+    if (this.trackMuted.length !== trackCount)
+      this.trackMuted = this.opts.tracks.map(() => false);
     this.trackGains = this.opts.tracks.map((_, i) => {
       const g = ctx.createGain();
-      g.gain.value = this.trackMuted[i] ? 0 : this.trackBaseGain * this.trackVolumes[i];
+      g.gain.value = this.trackMuted[i]
+        ? 0
+        : this.trackBaseGain * this.trackVolumes[i];
       g.connect(masterGain);
       return g;
     });
 
     const noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const noiseData = noiseBuf.getChannelData(0);
-    for (let i = 0; i < noiseData.length; i++) noiseData[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < noiseData.length; i++)
+      noiseData[i] = Math.random() * 2 - 1;
     this.noiseBuffer = noiseBuf;
 
     this._isPlaying = true;
@@ -235,20 +276,23 @@ export class SongPlayer {
     if (!resolver || !this.ctx) return;
     const ctx = this.ctx;
     const paths = new Set(
-      this.flatNotes.map((n) => n.samplePath).filter((p): p is string => p !== null)
+      this.flatNotes
+        .map((n) => n.samplePath)
+        .filter((p): p is string => p !== null),
     );
     await Promise.all(
       [...paths].map(async (path) => {
         if (this.sampleBuffers.has(path)) return;
         const buf = await resolver(path, ctx);
         if (buf) this.sampleBuffers.set(path, buf);
-      })
+      }),
     );
   }
 
   pause() {
     if (!this._isPlaying || !this.ctx) return;
-    this.startOffsetSec = this.ctx.currentTime - this.startCtxTime + this.startOffsetSec;
+    this.startOffsetSec =
+      this.ctx.currentTime - this.startCtxTime + this.startOffsetSec;
     // Clamp to avoid negative values from timing jitter
     if (this.startOffsetSec < 0) this.startOffsetSec = 0;
     this.ctx.suspend();
@@ -285,13 +329,29 @@ export class SongPlayer {
     this._isPlaying = false;
     this._isPaused = false;
     for (const s of this.scheduled) {
-      try { s.source.stop(); } catch { /* already stopped */ }
-      try { s.source.disconnect(); } catch { /* already disconnected */ }
-      try { s.gain.disconnect(); } catch { /* already disconnected */ }
+      try {
+        s.source.stop();
+      } catch {
+        /* already stopped */
+      }
+      try {
+        s.source.disconnect();
+      } catch {
+        /* already disconnected */
+      }
+      try {
+        s.gain.disconnect();
+      } catch {
+        /* already disconnected */
+      }
     }
     this.scheduled = [];
     if (this.ctx) {
-      try { this.ctx.close(); } catch { /* already closed */ }
+      try {
+        this.ctx.close();
+      } catch {
+        /* already closed */
+      }
       this.ctx = null;
     }
     this.masterGain = null;
@@ -325,7 +385,9 @@ export class SongPlayer {
   private applyTrackGain(trackIdx: number) {
     const node = this.trackGains[trackIdx];
     if (!node || !this.ctx) return;
-    const value = this.trackMuted[trackIdx] ? 0 : this.trackBaseGain * this.trackVolumes[trackIdx];
+    const value = this.trackMuted[trackIdx]
+      ? 0
+      : this.trackBaseGain * this.trackVolumes[trackIdx];
     node.gain.setTargetAtTime(value, this.ctx.currentTime, 0.01);
   }
 
@@ -335,14 +397,19 @@ export class SongPlayer {
 
   setEQ(band: EQBand, gainDb: number) {
     this.eqGains[band] = gainDb;
-    const node = band === 'low' ? this.eqLow : band === 'mid' ? this.eqMid : this.eqHigh;
+    const node =
+      band === "low" ? this.eqLow : band === "mid" ? this.eqMid : this.eqHigh;
     if (node && this.ctx) {
       node.gain.setTargetAtTime(gainDb, this.ctx.currentTime, 0.01);
     }
   }
 
-  getFilterCutoff(): number { return this.filterCutoff; }
-  getFilterRes(): number { return this.filterRes; }
+  getFilterCutoff(): number {
+    return this.filterCutoff;
+  }
+  getFilterRes(): number {
+    return this.filterRes;
+  }
 
   setFilterCutoff(hz: number) {
     this.filterCutoff = hz;
@@ -360,7 +427,10 @@ export class SongPlayer {
 
   private startScheduler() {
     this.stopScheduler();
-    this.scheduleTimer = window.setInterval(() => this.scheduleChunk(), SCHEDULE_INTERVAL_MS);
+    this.scheduleTimer = window.setInterval(
+      () => this.scheduleChunk(),
+      SCHEDULE_INTERVAL_MS,
+    );
   }
 
   private stopScheduler() {
@@ -398,7 +468,12 @@ export class SongPlayer {
     this.scheduledUpToSec = horizonSec;
   }
 
-  private scheduleKick(ctx: AudioContext, dest: AudioNode, vol: number, when: number) {
+  private scheduleKick(
+    ctx: AudioContext,
+    dest: AudioNode,
+    vol: number,
+    when: number,
+  ) {
     const dur = 0.25;
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol, when);
@@ -406,7 +481,7 @@ export class SongPlayer {
     g.connect(dest);
 
     const osc = ctx.createOscillator();
-    osc.type = 'sine';
+    osc.type = "sine";
     osc.frequency.setValueAtTime(150, when);
     osc.frequency.exponentialRampToValueAtTime(30, when + 0.08);
     osc.connect(g);
@@ -415,7 +490,12 @@ export class SongPlayer {
     this.scheduled.push({ source: osc, gain: g });
   }
 
-  private scheduleSnare(ctx: AudioContext, dest: AudioNode, vol: number, when: number) {
+  private scheduleSnare(
+    ctx: AudioContext,
+    dest: AudioNode,
+    vol: number,
+    when: number,
+  ) {
     const dur = 0.15;
 
     const toneG = ctx.createGain();
@@ -423,7 +503,7 @@ export class SongPlayer {
     toneG.gain.exponentialRampToValueAtTime(0.001, when + 0.08);
     toneG.connect(dest);
     const osc = ctx.createOscillator();
-    osc.type = 'triangle';
+    osc.type = "triangle";
     osc.frequency.value = 200;
     osc.connect(toneG);
     osc.start(when);
@@ -437,7 +517,7 @@ export class SongPlayer {
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     const hpf = ctx.createBiquadFilter();
-    hpf.type = 'highpass';
+    hpf.type = "highpass";
     hpf.frequency.value = 2000;
     src.connect(hpf);
     hpf.connect(noiseG);
@@ -446,7 +526,12 @@ export class SongPlayer {
     this.scheduled.push({ source: src, gain: noiseG });
   }
 
-  private scheduleHihat(ctx: AudioContext, dest: AudioNode, vol: number, when: number) {
+  private scheduleHihat(
+    ctx: AudioContext,
+    dest: AudioNode,
+    vol: number,
+    when: number,
+  ) {
     const dur = 0.05;
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol * 0.5, when);
@@ -456,10 +541,10 @@ export class SongPlayer {
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     const hpf = ctx.createBiquadFilter();
-    hpf.type = 'highpass';
+    hpf.type = "highpass";
     hpf.frequency.value = 7000;
     const bpf = ctx.createBiquadFilter();
-    bpf.type = 'bandpass';
+    bpf.type = "bandpass";
     bpf.frequency.value = 10000;
     bpf.Q.value = 1;
     src.connect(hpf);
@@ -470,7 +555,12 @@ export class SongPlayer {
     this.scheduled.push({ source: src, gain: g });
   }
 
-  private scheduleClap(ctx: AudioContext, dest: AudioNode, vol: number, when: number) {
+  private scheduleClap(
+    ctx: AudioContext,
+    dest: AudioNode,
+    vol: number,
+    when: number,
+  ) {
     const dur = 0.12;
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol * 0.7, when);
@@ -480,7 +570,7 @@ export class SongPlayer {
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     const bpf = ctx.createBiquadFilter();
-    bpf.type = 'bandpass';
+    bpf.type = "bandpass";
     bpf.frequency.value = 1500;
     bpf.Q.value = 2;
     src.connect(bpf);
@@ -490,7 +580,13 @@ export class SongPlayer {
     this.scheduled.push({ source: src, gain: g });
   }
 
-  private scheduleTom(ctx: AudioContext, dest: AudioNode, vol: number, when: number, midi: number) {
+  private scheduleTom(
+    ctx: AudioContext,
+    dest: AudioNode,
+    vol: number,
+    when: number,
+    midi: number,
+  ) {
     const dur = 0.2;
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol, when);
@@ -499,7 +595,7 @@ export class SongPlayer {
 
     const freq = midiToFreq(Math.max(midi, 40));
     const osc = ctx.createOscillator();
-    osc.type = 'sine';
+    osc.type = "sine";
     osc.frequency.setValueAtTime(freq, when);
     osc.frequency.exponentialRampToValueAtTime(freq * 0.5, when + dur);
     osc.connect(g);
@@ -508,7 +604,12 @@ export class SongPlayer {
     this.scheduled.push({ source: osc, gain: g });
   }
 
-  private scheduleCymbal(ctx: AudioContext, dest: AudioNode, vol: number, when: number) {
+  private scheduleCymbal(
+    ctx: AudioContext,
+    dest: AudioNode,
+    vol: number,
+    when: number,
+  ) {
     const dur = 0.4;
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol * 0.4, when);
@@ -518,7 +619,7 @@ export class SongPlayer {
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     const hpf = ctx.createBiquadFilter();
-    hpf.type = 'highpass';
+    hpf.type = "highpass";
     hpf.frequency.value = 5000;
     src.connect(hpf);
     hpf.connect(g);
@@ -527,7 +628,13 @@ export class SongPlayer {
     this.scheduled.push({ source: src, gain: g });
   }
 
-  private schedulePerc(ctx: AudioContext, dest: AudioNode, vol: number, when: number, midi: number) {
+  private schedulePerc(
+    ctx: AudioContext,
+    dest: AudioNode,
+    vol: number,
+    when: number,
+    midi: number,
+  ) {
     const dur = 0.08;
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol * 0.6, when);
@@ -537,7 +644,7 @@ export class SongPlayer {
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     const bpf = ctx.createBiquadFilter();
-    bpf.type = 'bandpass';
+    bpf.type = "bandpass";
     bpf.frequency.value = midiToFreq(midi);
     bpf.Q.value = 3;
     src.connect(bpf);
@@ -547,7 +654,13 @@ export class SongPlayer {
     this.scheduled.push({ source: src, gain: g });
   }
 
-  private scheduleSample(ctx: AudioContext, dest: AudioNode, vol: number, when: number, buffer: AudioBuffer) {
+  private scheduleSample(
+    ctx: AudioContext,
+    dest: AudioNode,
+    vol: number,
+    when: number,
+    buffer: AudioBuffer,
+  ) {
     const g = ctx.createGain();
     g.gain.setValueAtTime(vol, when);
     g.connect(dest);
@@ -560,8 +673,13 @@ export class SongPlayer {
   }
 
   private schedulePatchVoice(
-    ctx: AudioContext, dest: AudioNode, patch: PreviewPatch,
-    midi: number, vel: number, when: number, durSec: number
+    ctx: AudioContext,
+    dest: AudioNode,
+    patch: PreviewPatch,
+    midi: number,
+    vel: number,
+    when: number,
+    durSec: number,
   ) {
     const freq = midiToFreq(midi);
     const a1 = envAttackTime(patch.envelope1.attack);
@@ -570,9 +688,14 @@ export class SongPlayer {
     const r1 = envDecayReleaseTime(patch.envelope1.release);
 
     const lpf = ctx.createBiquadFilter();
-    lpf.type = 'lowpass';
-    lpf.frequency.value = Math.min(20000, patch.params.lpfFrequency ? lpfFreqHz(patch.params.lpfFrequency) : 20000);
-    lpf.Q.value = patch.params.lpfResonance ? lpfResQ(patch.params.lpfResonance) : 0.5;
+    lpf.type = "lowpass";
+    lpf.frequency.value = Math.min(
+      20000,
+      patch.params.lpfFrequency ? lpfFreqHz(patch.params.lpfFrequency) : 20000,
+    );
+    lpf.Q.value = patch.params.lpfResonance
+      ? lpfResQ(patch.params.lpfResonance)
+      : 0.5;
     lpf.connect(dest);
 
     const noteGain = ctx.createGain();
@@ -587,18 +710,50 @@ export class SongPlayer {
     const unisonCount = Math.max(1, patch.unisonNum);
     const voiceDur = durSec + r1 + 0.1;
     for (let u = 0; u < unisonCount; u++) {
-      const detuneOffset = unisonCount === 1 ? 0 : ((u / (unisonCount - 1)) - 0.5) * patch.unisonDetune;
-      if (patch.mode === 'fm') {
-        createFMVoice(ctx, freq, detuneOffset, audioPatch, noteGain, when, voiceDur, null, undefined);
+      const detuneOffset =
+        unisonCount === 1
+          ? 0
+          : (u / (unisonCount - 1) - 0.5) * patch.unisonDetune;
+      if (patch.mode === "fm") {
+        createFMVoice(
+          ctx,
+          freq,
+          detuneOffset,
+          audioPatch,
+          noteGain,
+          when,
+          voiceDur,
+          null,
+          undefined,
+        );
       } else {
-        createSubVoice(ctx, freq, detuneOffset, audioPatch, noteGain, when, voiceDur, null, undefined);
+        createSubVoice(
+          ctx,
+          freq,
+          detuneOffset,
+          audioPatch,
+          noteGain,
+          when,
+          voiceDur,
+          null,
+          undefined,
+        );
       }
     }
   }
 
   private scheduleNote(
-    note: { trackIdx: number; midi: number; isKit: boolean; drumType: DrumType; samplePath: string | null; startSec: number; durSec: number; vel: number },
-    when: number
+    note: {
+      trackIdx: number;
+      midi: number;
+      isKit: boolean;
+      drumType: DrumType;
+      samplePath: string | null;
+      startSec: number;
+      durSec: number;
+      vel: number;
+    },
+    when: number,
   ) {
     const ctx = this.ctx!;
     const dest = this.trackGains[note.trackIdx];
@@ -606,23 +761,47 @@ export class SongPlayer {
 
     const vol = note.vel * note.vel;
 
-    const buffer = note.samplePath ? this.sampleBuffers.get(note.samplePath) : undefined;
+    const buffer = note.samplePath
+      ? this.sampleBuffers.get(note.samplePath)
+      : undefined;
     if (buffer) {
       this.scheduleSample(ctx, dest, vol, when, buffer);
     } else if (note.isKit) {
       switch (note.drumType) {
-        case 'kick': this.scheduleKick(ctx, dest, vol, when); break;
-        case 'snare': this.scheduleSnare(ctx, dest, vol, when); break;
-        case 'hihat': this.scheduleHihat(ctx, dest, vol, when); break;
-        case 'clap': this.scheduleClap(ctx, dest, vol, when); break;
-        case 'tom': this.scheduleTom(ctx, dest, vol, when, note.midi); break;
-        case 'cymbal': this.scheduleCymbal(ctx, dest, vol, when); break;
-        case 'perc': this.schedulePerc(ctx, dest, vol, when, note.midi); break;
+        case "kick":
+          this.scheduleKick(ctx, dest, vol, when);
+          break;
+        case "snare":
+          this.scheduleSnare(ctx, dest, vol, when);
+          break;
+        case "hihat":
+          this.scheduleHihat(ctx, dest, vol, when);
+          break;
+        case "clap":
+          this.scheduleClap(ctx, dest, vol, when);
+          break;
+        case "tom":
+          this.scheduleTom(ctx, dest, vol, when, note.midi);
+          break;
+        case "cymbal":
+          this.scheduleCymbal(ctx, dest, vol, when);
+          break;
+        case "perc":
+          this.schedulePerc(ctx, dest, vol, when, note.midi);
+          break;
       }
     } else {
       const patch = this.trackPatches[note.trackIdx];
       if (patch) {
-        this.schedulePatchVoice(ctx, dest, patch, note.midi, vol, when, note.durSec);
+        this.schedulePatchVoice(
+          ctx,
+          dest,
+          patch,
+          note.midi,
+          vol,
+          when,
+          note.durSec,
+        );
         return;
       }
 

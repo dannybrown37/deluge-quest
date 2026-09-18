@@ -1,8 +1,9 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
 
-import svelte from '@astrojs/svelte';
-import sitemap from '@astrojs/sitemap';
+import sitemap from "@astrojs/sitemap";
+
+import svelte from "@astrojs/svelte";
+import { defineConfig } from "astro/config";
 
 /**
  * @typedef {{ type: string; tagName?: string; properties?: Record<string, any>; children?: HastNode[] }} HastNode
@@ -12,11 +13,11 @@ import sitemap from '@astrojs/sitemap';
 function rehypeExternalLinks() {
   /** @param {HastNode} node */
   const visit = (node) => {
-    if (node.type === 'element' && node.tagName === 'a' && node.properties) {
-      const href = node.properties.href ?? '';
+    if (node.type === "element" && node.tagName === "a" && node.properties) {
+      const href = node.properties.href ?? "";
       if (/^https?:\/\//.test(href)) {
-        node.properties.target = '_blank';
-        node.properties.rel = 'noopener';
+        node.properties.target = "_blank";
+        node.properties.rel = "noopener";
       }
     }
     for (const child of node.children ?? []) visit(child);
@@ -26,7 +27,7 @@ function rehypeExternalLinks() {
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://deluge.quest',
+  site: "https://deluge.quest",
   integrations: [svelte(), sitemap()],
   markdown: {
     rehypePlugins: [rehypeExternalLinks],

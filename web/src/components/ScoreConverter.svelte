@@ -1,165 +1,169 @@
 <script lang="ts">
-  import { loadPyodide, convertToMusicXML } from "../lib/pyodide";
-  import { cardStore, songHasArrangement } from "../lib/cardStore";
-  import { trackToolAction } from "../lib/analytics";
+import { trackToolAction } from "../lib/analytics";
+import { cardStore, songHasArrangement } from "../lib/cardStore";
+import { convertToMusicXML, loadPyodide } from "../lib/pyodide";
 
-  type State = "idle" | "loading" | "processing" | "done" | "error";
+type State = "idle" | "loading" | "processing" | "done" | "error";
 
-  let state: State = $state("idle");
-  let progress = $state("");
-  let progressPct = $state(0);
-  let errorMsg = $state("");
-  let fileName = $state("");
-  let resultXml = $state("");
-  let dragOver = $state(false);
-  let statsCount = $state(0);
-  let cardSongs: { path: string; xml: string }[] = $state([]);
-  let cardName = $state("");
-  let cardSavedAt = $state(0);
-  let cardFromCache = $state(false);
-  let viewMode = $state<"flat" | "folders">("flat");
-  let collapsedFolders = $state<string[]>([]);
+let state: State = $state("idle");
+let progress = $state("");
+let progressPct = $state(0);
+let errorMsg = $state("");
+let fileName = $state("");
+let resultXml = $state("");
+let dragOver = $state(false);
+let statsCount = $state(0);
+let cardSongs: { path: string; xml: string }[] = $state([]);
+let cardName = $state("");
+let cardSavedAt = $state(0);
+let cardFromCache = $state(false);
+let viewMode = $state<"flat" | "folders">("flat");
+let collapsedFolders = $state<string[]>([]);
 
-  interface FolderGroup {
-    folder: string;
-    songs: { path: string; xml: string }[];
+interface FolderGroup {
+  folder: string;
+  songs: { path: string; xml: string }[];
+}
+
+let folderGroups = $derived.by(() => {
+  const groups = new Map<string, { path: string; xml: string }[]>();
+  for (const s of cardSongs) {
+    const parts = s.path.split("/");
+    parts.pop();
+    const folder = parts.length > 0 ? parts.join("/") : "(root)";
+    if (!groups.has(folder)) groups.set(folder, []);
+    groups.get(folder)!.push(s);
   }
-
-  let folderGroups = $derived.by(() => {
-    const groups = new Map<string, { path: string; xml: string }[]>();
-    for (const s of cardSongs) {
-      const parts = s.path.split("/");
-      parts.pop();
-      const folder = parts.length > 0 ? parts.join("/") : "(root)";
-      if (!groups.has(folder)) groups.set(folder, []);
-      groups.get(folder)!.push(s);
-    }
-    const result: FolderGroup[] = [];
-    for (const [folder, songs] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-      result.push({ folder, songs });
-    }
-    return result;
-  });
-
-  function toggleFolder(folder: string) {
-    if (collapsedFolders.includes(folder)) {
-      collapsedFolders = collapsedFolders.filter(f => f !== folder);
-    } else {
-      collapsedFolders = [...collapsedFolders, folder];
-    }
+  const result: FolderGroup[] = [];
+  for (const [folder, songs] of [...groups.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0]),
+  )) {
+    result.push({ folder, songs });
   }
+  return result;
+});
 
-  async function tryLoadCardSongs() {
-    try {
-      if (cardStore.isLoaded && cardStore.songXmls.size > 0) {
-        cardSongs = cardStore.eligibleSongs();
-        cardName = cardStore.rootHandle?.name ?? "";
-        return;
-      }
-      const cached = await cardStore.loadCachedSongs();
-      if (cached?.songs.length) {
-        cardSongs = cached.songs.filter(s => songHasArrangement(s.xml));
-        cardName = cached.cardName;
-        cardSavedAt = cached.savedAt;
-        cardFromCache = true;
-      }
-    } catch {}
+function toggleFolder(folder: string) {
+  if (collapsedFolders.includes(folder)) {
+    collapsedFolders = collapsedFolders.filter((f) => f !== folder);
+  } else {
+    collapsedFolders = [...collapsedFolders, folder];
   }
+}
 
-  tryLoadCardSongs();
-
-  async function convert(name: string, xmlContent: string) {
-    fileName = name;
-    state = "loading";
-
-    try {
-      const pyodide = await loadPyodide((stage, pct) => {
-        progress = stage;
-        progressPct = pct;
-      });
-
-      state = "processing";
-      progress = "Converting";
-      progressPct = 85;
-
-      resultXml = await convertToMusicXML(xmlContent, pyodide);
-
-      state = "done";
-      progress = "Done";
-      progressPct = 100;
-      trackToolAction("score", "convert");
-    } catch (e: any) {
-      state = "error";
-      errorMsg = e.message || "Conversion failed";
-      trackToolAction("score", "convert_error");
-    }
-  }
-
-  async function handleFile(file: File) {
-    if (!file.name.toLowerCase().endsWith(".xml")) {
-      state = "error";
-      errorMsg = "Please drop a Deluge .XML song file";
+async function tryLoadCardSongs() {
+  try {
+    if (cardStore.isLoaded && cardStore.songXmls.size > 0) {
+      cardSongs = cardStore.eligibleSongs();
+      cardName = cardStore.rootHandle?.name ?? "";
       return;
     }
-    convert(file.name, await file.text());
-  }
-
-  $effect(() => {
-    try {
-      const stored = sessionStorage.getItem("deluge-score-file");
-      if (stored) {
-        sessionStorage.removeItem("deluge-score-file");
-        const { name, content } = JSON.parse(stored);
-        if (name && content) convert(name, content);
-      }
-    } catch {}
-    try {
-      const cached = JSON.parse(sessionStorage.getItem("deluge-stats-results") ?? "null");
-      statsCount = Array.isArray(cached) ? cached.length : 0;
-    } catch {
-      statsCount = 0;
+    const cached = await cardStore.loadCachedSongs();
+    if (cached?.songs.length) {
+      cardSongs = cached.songs.filter((s) => songHasArrangement(s.xml));
+      cardName = cached.cardName;
+      cardSavedAt = cached.savedAt;
+      cardFromCache = true;
     }
-  });
+  } catch {}
+}
 
-  function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    dragOver = false;
-    const file = e.dataTransfer?.files[0];
-    if (file) handleFile(file);
-  }
+tryLoadCardSongs();
 
-  function handleDragOver(e: DragEvent) {
-    e.preventDefault();
-    dragOver = true;
-  }
+async function convert(name: string, xmlContent: string) {
+  fileName = name;
+  state = "loading";
 
-  function handleDragLeave() {
-    dragOver = false;
-  }
+  try {
+    const pyodide = await loadPyodide((stage, pct) => {
+      progress = stage;
+      progressPct = pct;
+    });
 
-  function handleInputChange(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (file) handleFile(file);
-  }
+    state = "processing";
+    progress = "Converting";
+    progressPct = 85;
 
-  function download() {
-    const blob = new Blob([resultXml], { type: "application/xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName.replace(/\.XML$/i, ".musicxml");
-    a.click();
-    trackToolAction("score", "download");
-    URL.revokeObjectURL(url);
-  }
+    resultXml = await convertToMusicXML(xmlContent, pyodide);
 
-  function reset() {
-    state = "idle";
-    resultXml = "";
-    fileName = "";
-    errorMsg = "";
+    state = "done";
+    progress = "Done";
+    progressPct = 100;
+    trackToolAction("score", "convert");
+  } catch (e: any) {
+    state = "error";
+    errorMsg = e.message || "Conversion failed";
+    trackToolAction("score", "convert_error");
   }
+}
+
+async function handleFile(file: File) {
+  if (!file.name.toLowerCase().endsWith(".xml")) {
+    state = "error";
+    errorMsg = "Please drop a Deluge .XML song file";
+    return;
+  }
+  convert(file.name, await file.text());
+}
+
+$effect(() => {
+  try {
+    const stored = sessionStorage.getItem("deluge-score-file");
+    if (stored) {
+      sessionStorage.removeItem("deluge-score-file");
+      const { name, content } = JSON.parse(stored);
+      if (name && content) convert(name, content);
+    }
+  } catch {}
+  try {
+    const cached = JSON.parse(
+      sessionStorage.getItem("deluge-stats-results") ?? "null",
+    );
+    statsCount = Array.isArray(cached) ? cached.length : 0;
+  } catch {
+    statsCount = 0;
+  }
+});
+
+function handleDrop(e: DragEvent) {
+  e.preventDefault();
+  dragOver = false;
+  const file = e.dataTransfer?.files[0];
+  if (file) handleFile(file);
+}
+
+function handleDragOver(e: DragEvent) {
+  e.preventDefault();
+  dragOver = true;
+}
+
+function handleDragLeave() {
+  dragOver = false;
+}
+
+function handleInputChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file) handleFile(file);
+}
+
+function download() {
+  const blob = new Blob([resultXml], { type: "application/xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName.replace(/\.XML$/i, ".musicxml");
+  a.click();
+  trackToolAction("score", "download");
+  URL.revokeObjectURL(url);
+}
+
+function reset() {
+  state = "idle";
+  resultXml = "";
+  fileName = "";
+  errorMsg = "";
+}
 </script>
 
 {#if state === "idle"}

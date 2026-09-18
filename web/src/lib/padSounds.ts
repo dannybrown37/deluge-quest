@@ -16,7 +16,7 @@ function noiseBuffer(ctx: AudioContext, dur: number): AudioBufferSourceNode {
 function kick(ctx: AudioContext, dest: AudioNode, vel: number) {
   const t = ctx.currentTime;
   const osc = ctx.createOscillator();
-  osc.type = 'sine';
+  osc.type = "sine";
   osc.frequency.setValueAtTime(150, t);
   osc.frequency.exponentialRampToValueAtTime(30, t + 0.15);
   const g = ctx.createGain();
@@ -30,7 +30,7 @@ function kick(ctx: AudioContext, dest: AudioNode, vel: number) {
 function snare(ctx: AudioContext, dest: AudioNode, vel: number) {
   const t = ctx.currentTime;
   const osc = ctx.createOscillator();
-  osc.type = 'triangle';
+  osc.type = "triangle";
   osc.frequency.setValueAtTime(200, t);
   osc.frequency.exponentialRampToValueAtTime(80, t + 0.1);
   const og = ctx.createGain();
@@ -42,7 +42,7 @@ function snare(ctx: AudioContext, dest: AudioNode, vel: number) {
 
   const ns = noiseBuffer(ctx, 0.2);
   const hp = ctx.createBiquadFilter();
-  hp.type = 'highpass';
+  hp.type = "highpass";
   hp.frequency.value = 3000;
   const ng = ctx.createGain();
   ng.gain.setValueAtTime(vel * 0.5, t);
@@ -56,7 +56,7 @@ function hihat(ctx: AudioContext, dest: AudioNode, vel: number) {
   const t = ctx.currentTime;
   const ns = noiseBuffer(ctx, 0.08);
   const bp = ctx.createBiquadFilter();
-  bp.type = 'bandpass';
+  bp.type = "bandpass";
   bp.frequency.value = 10000;
   bp.Q.value = 1;
   const g = ctx.createGain();
@@ -72,7 +72,7 @@ function clap(ctx: AudioContext, dest: AudioNode, vel: number) {
   for (let i = 0; i < 3; i++) {
     const ns = noiseBuffer(ctx, 0.04);
     const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
+    bp.type = "bandpass";
     bp.frequency.value = 2500;
     bp.Q.value = 3;
     const g = ctx.createGain();
@@ -86,7 +86,7 @@ function clap(ctx: AudioContext, dest: AudioNode, vel: number) {
   }
   const tail = noiseBuffer(ctx, 0.15);
   const bp2 = ctx.createBiquadFilter();
-  bp2.type = 'bandpass';
+  bp2.type = "bandpass";
   bp2.frequency.value = 2500;
   bp2.Q.value = 2;
   const tg = ctx.createGain();
@@ -100,7 +100,7 @@ function clap(ctx: AudioContext, dest: AudioNode, vel: number) {
 function tom(ctx: AudioContext, dest: AudioNode, vel: number) {
   const t = ctx.currentTime;
   const osc = ctx.createOscillator();
-  osc.type = 'sine';
+  osc.type = "sine";
   osc.frequency.setValueAtTime(120, t);
   osc.frequency.exponentialRampToValueAtTime(60, t + 0.2);
   const g = ctx.createGain();
@@ -114,7 +114,7 @@ function tom(ctx: AudioContext, dest: AudioNode, vel: number) {
 function zap(ctx: AudioContext, dest: AudioNode, vel: number) {
   const t = ctx.currentTime;
   const osc = ctx.createOscillator();
-  osc.type = 'sawtooth';
+  osc.type = "sawtooth";
   osc.frequency.setValueAtTime(800, t);
   osc.frequency.exponentialRampToValueAtTime(50, t + 0.12);
   const g = ctx.createGain();
@@ -128,7 +128,7 @@ function zap(ctx: AudioContext, dest: AudioNode, vel: number) {
 function blip(ctx: AudioContext, dest: AudioNode, vel: number) {
   const t = ctx.currentTime;
   const osc = ctx.createOscillator();
-  osc.type = 'sine';
+  osc.type = "sine";
   osc.frequency.setValueAtTime(1200, t);
   osc.frequency.exponentialRampToValueAtTime(600, t + 0.06);
   const g = ctx.createGain();
@@ -143,7 +143,7 @@ function sweep(ctx: AudioContext, dest: AudioNode, vel: number) {
   const t = ctx.currentTime;
   const ns = noiseBuffer(ctx, 0.5);
   const lp = ctx.createBiquadFilter();
-  lp.type = 'lowpass';
+  lp.type = "lowpass";
   lp.frequency.setValueAtTime(200, t);
   lp.frequency.exponentialRampToValueAtTime(8000, t + 0.25);
   lp.frequency.exponentialRampToValueAtTime(200, t + 0.5);
@@ -157,17 +157,20 @@ function sweep(ctx: AudioContext, dest: AudioNode, vel: number) {
 }
 
 export const PAD_SOUNDS: PadSound[] = [
-  { name: 'Kick',  color: '#4488DD', play: kick },
-  { name: 'Snare', color: '#DD55AA', play: snare },
-  { name: 'Hat',   color: '#DDBB33', play: hihat },
-  { name: 'Clap',  color: '#5AABAC', play: clap },
-  { name: 'Tom',   color: '#CC3030', play: tom },
-  { name: 'Zap',   color: '#AACC30', play: zap },
-  { name: 'Blip',  color: '#3355CC', play: blip },
-  { name: 'Sweep', color: '#FF6622', play: sweep },
+  { name: "Kick", color: "#4488DD", play: kick },
+  { name: "Snare", color: "#DD55AA", play: snare },
+  { name: "Hat", color: "#DDBB33", play: hihat },
+  { name: "Clap", color: "#5AABAC", play: clap },
+  { name: "Tom", color: "#CC3030", play: tom },
+  { name: "Zap", color: "#AACC30", play: zap },
+  { name: "Blip", color: "#3355CC", play: blip },
+  { name: "Sweep", color: "#FF6622", play: sweep },
 ];
 
-export function velocityForPosition(localRow: number, localCol: number): number {
+export function velocityForPosition(
+  localRow: number,
+  localCol: number,
+): number {
   const index = localRow * 4 + localCol;
   const maxVel = 1.0;
   const minVel = 0.15;
@@ -194,7 +197,7 @@ export class PadEffectsChain {
     this.ctx = ctx;
 
     this.filter = ctx.createBiquadFilter();
-    this.filter.type = 'lowpass';
+    this.filter.type = "lowpass";
     this.filter.frequency.value = 22000;
 
     this.dryGain = ctx.createGain();

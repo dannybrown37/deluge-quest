@@ -1,19 +1,19 @@
-import { render, fireEvent, screen, cleanup } from '@testing-library/svelte';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import PatchGenerator from './PatchGenerator.svelte';
+import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import PatchGenerator from "./PatchGenerator.svelte";
 
-vi.mock('../lib/patchAudio', () => ({
+vi.mock("../lib/patchAudio", () => ({
   playPreview: vi.fn(),
   stopPreview: vi.fn(),
   isPlaying: vi.fn(() => false),
 }));
 
-vi.mock('../lib/analytics', () => ({
+vi.mock("../lib/analytics", () => ({
   trackToolAction: vi.fn(),
 }));
 
-import { playPreview, stopPreview } from '../lib/patchAudio';
-import { trackToolAction } from '../lib/analytics';
+import { trackToolAction } from "../lib/analytics";
+import { playPreview, stopPreview } from "../lib/patchAudio";
 
 const mockPlayPreview = playPreview as unknown as ReturnType<typeof vi.fn>;
 const mockStopPreview = stopPreview as unknown as ReturnType<typeof vi.fn>;
@@ -21,7 +21,7 @@ const mockTrack = trackToolAction as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
 });
 
 afterEach(() => {
@@ -29,168 +29,184 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('PatchGenerator', () => {
-  it('renders the five category buttons with Lead active by default', () => {
+describe("PatchGenerator", () => {
+  it("renders the five category buttons with Lead active by default", () => {
     render(PatchGenerator);
-    expect(screen.getByText('Pad')).toBeTruthy();
-    expect(screen.getByText('Lead')).toBeTruthy();
-    expect(screen.getByText('Bass')).toBeTruthy();
-    expect(screen.getByText('Keys')).toBeTruthy();
-    expect(screen.getByText('FX')).toBeTruthy();
-    expect(screen.getByText('Lead').closest('button')?.className).toContain('active');
+    expect(screen.getByText("Pad")).toBeTruthy();
+    expect(screen.getByText("Lead")).toBeTruthy();
+    expect(screen.getByText("Bass")).toBeTruthy();
+    expect(screen.getByText("Keys")).toBeTruthy();
+    expect(screen.getByText("FX")).toBeTruthy();
+    expect(screen.getByText("Lead").closest("button")?.className).toContain(
+      "active",
+    );
   });
 
-  it('switches the selected category on click', async () => {
+  it("switches the selected category on click", async () => {
     render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Bass'));
-    expect(screen.getByText('Bass').closest('button')?.className).toContain('active');
-    expect(screen.getByText('Lead').closest('button')?.className).not.toContain('active');
+    await fireEvent.click(screen.getByText("Bass"));
+    expect(screen.getByText("Bass").closest("button")?.className).toContain(
+      "active",
+    );
+    expect(screen.getByText("Lead").closest("button")?.className).not.toContain(
+      "active",
+    );
   });
 
-  it('generates a patch and displays it', async () => {
+  it("generates a patch and displays it", async () => {
     render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Generate Patch'));
+    await fireEvent.click(screen.getByText("Generate Patch"));
 
-    expect(document.querySelector('.patch-name')).toBeTruthy();
-    expect(screen.getByText('Subtractive') || screen.getByText('FM')).toBeTruthy();
-    expect(mockTrack).toHaveBeenCalledWith('patch', 'generate');
+    expect(document.querySelector(".patch-name")).toBeTruthy();
+    expect(
+      screen.getByText("Subtractive") || screen.getByText("FM"),
+    ).toBeTruthy();
+    expect(mockTrack).toHaveBeenCalledWith("patch", "generate");
   });
 
-  it('toggles preview playback', async () => {
+  it("toggles preview playback", async () => {
     let onEnd: (() => void) | undefined;
     mockPlayPreview.mockImplementation((_patch: unknown, cb: () => void) => {
       onEnd = cb;
     });
 
     render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    await fireEvent.click(screen.getByText('▶ Preview'));
+    await fireEvent.click(screen.getByText("Generate Patch"));
+    await fireEvent.click(screen.getByText("▶ Preview"));
 
     expect(mockPlayPreview).toHaveBeenCalled();
-    expect(mockTrack).toHaveBeenCalledWith('patch', 'preview');
-    expect(screen.getByText('■ Stop')).toBeTruthy();
+    expect(mockTrack).toHaveBeenCalledWith("patch", "preview");
+    expect(screen.getByText("■ Stop")).toBeTruthy();
 
     onEnd?.();
     await Promise.resolve();
-    expect(screen.getByText('▶ Preview')).toBeTruthy();
+    expect(screen.getByText("▶ Preview")).toBeTruthy();
   });
 
-  it('stops preview playback manually', async () => {
+  it("stops preview playback manually", async () => {
     render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    await fireEvent.click(screen.getByText('▶ Preview'));
-    await fireEvent.click(screen.getByText('■ Stop'));
+    await fireEvent.click(screen.getByText("Generate Patch"));
+    await fireEvent.click(screen.getByText("▶ Preview"));
+    await fireEvent.click(screen.getByText("■ Stop"));
 
     expect(mockStopPreview).toHaveBeenCalled();
-    expect(screen.getByText('▶ Preview')).toBeTruthy();
+    expect(screen.getByText("▶ Preview")).toBeTruthy();
   });
 
-  it('downloads the generated patch as XML', async () => {
-    const createUrl = vi.fn().mockReturnValue('blob:mock');
+  it("downloads the generated patch as XML", async () => {
+    const createUrl = vi.fn().mockReturnValue("blob:mock");
     const revokeUrl = vi.fn();
     URL.createObjectURL = createUrl;
     URL.revokeObjectURL = revokeUrl;
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
 
     render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    await fireEvent.click(screen.getByText('Download .XML'));
+    await fireEvent.click(screen.getByText("Generate Patch"));
+    await fireEvent.click(screen.getByText("Download .XML"));
 
     expect(createUrl).toHaveBeenCalled();
     expect(clickSpy).toHaveBeenCalled();
-    expect(revokeUrl).toHaveBeenCalledWith('blob:mock');
-    expect(mockTrack).toHaveBeenCalledWith('patch', 'download');
+    expect(revokeUrl).toHaveBeenCalledWith("blob:mock");
+    expect(mockTrack).toHaveBeenCalledWith("patch", "download");
 
     clickSpy.mockRestore();
   });
 
-  it('bulk-downloads a zip of generated patches', async () => {
-    const createUrl = vi.fn().mockReturnValue('blob:mock');
+  it("bulk-downloads a zip of generated patches", async () => {
+    const createUrl = vi.fn().mockReturnValue("blob:mock");
     const revokeUrl = vi.fn();
     URL.createObjectURL = createUrl;
     URL.revokeObjectURL = revokeUrl;
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
 
     render(PatchGenerator);
-    const bulkInput = document.querySelector('.bulk-input') as HTMLInputElement;
-    await fireEvent.input(bulkInput, { target: { value: '3' } });
-    await fireEvent.click(screen.getByText('Bulk Download .ZIP'));
+    const bulkInput = document.querySelector(".bulk-input") as HTMLInputElement;
+    await fireEvent.input(bulkInput, { target: { value: "3" } });
+    await fireEvent.click(screen.getByText("Bulk Download .ZIP"));
 
     expect(createUrl).toHaveBeenCalled();
     expect(clickSpy).toHaveBeenCalled();
-    expect(mockTrack).toHaveBeenCalledWith('patch', 'bulk_download');
+    expect(mockTrack).toHaveBeenCalledWith("patch", "bulk_download");
 
     const anchor = clickSpy.mock.contexts[0] as HTMLAnchorElement;
-    expect(anchor.download).toBe('deluge_lead_patches.zip');
+    expect(anchor.download).toBe("deluge_lead_patches.zip");
 
     clickSpy.mockRestore();
   });
 
-  it('builds a history list after multiple generations and can revisit an entry', async () => {
+  it("builds a history list after multiple generations and can revisit an entry", async () => {
     render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    expect(document.querySelector('.history')).toBeNull();
+    await fireEvent.click(screen.getByText("Generate Patch"));
+    expect(document.querySelector(".history")).toBeNull();
 
-    await fireEvent.click(screen.getByText('Generate Patch'));
-    const historyItems = document.querySelectorAll('.history-item');
+    await fireEvent.click(screen.getByText("Generate Patch"));
+    const historyItems = document.querySelectorAll(".history-item");
     expect(historyItems.length).toBe(2);
 
     await fireEvent.click(historyItems[1]);
-    expect(historyItems[1].className).toContain('active');
+    expect(historyItems[1].className).toContain("active");
   });
 
-  it('shows FM-specific rows when the generated patch uses FM mode', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.95);
+  it("shows FM-specific rows when the generated patch uses FM mode", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.95);
     render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Bass'));
-    await fireEvent.click(screen.getByText('Generate Patch'));
+    await fireEvent.click(screen.getByText("Bass"));
+    await fireEvent.click(screen.getByText("Generate Patch"));
 
-    expect(screen.getByText('FM')).toBeTruthy();
-    expect(screen.getByText('MOD 1')).toBeTruthy();
+    expect(screen.getByText("FM")).toBeTruthy();
+    expect(screen.getByText("MOD 1")).toBeTruthy();
   });
 
-  it('shows a non-off arp tag and multiple patch cables for a lead patch', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.55);
+  it("shows a non-off arp tag and multiple patch cables for a lead patch", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.55);
     render(PatchGenerator);
-    await fireEvent.click(screen.getByText('Lead'));
-    await fireEvent.click(screen.getByText('Generate Patch'));
+    await fireEvent.click(screen.getByText("Lead"));
+    await fireEvent.click(screen.getByText("Generate Patch"));
 
-    const arpTag = document.querySelector('.meta-tag--teal');
-    expect(arpTag?.textContent).toContain('Arp:');
+    const arpTag = document.querySelector(".meta-tag--teal");
+    expect(arpTag?.textContent).toContain("Arp:");
 
-    const routingRow = Array.from(document.querySelectorAll('.osc-row')).find((row) =>
-      row.textContent?.includes('patch cable')
+    const routingRow = Array.from(document.querySelectorAll(".osc-row")).find(
+      (row) => row.textContent?.includes("patch cable"),
     );
     expect(routingRow).toBeTruthy();
     expect(routingRow?.textContent).toMatch(/\d+ patch cables/);
 
-    const metaTags = Array.from(document.querySelectorAll('.meta-tag')).map((el) => el.textContent);
-    expect(metaTags.some((t) => /st$/.test(t || ''))).toBe(true);
+    const metaTags = Array.from(document.querySelectorAll(".meta-tag")).map(
+      (el) => el.textContent,
+    );
+    expect(metaTags.some((t) => /st$/.test(t || ""))).toBe(true);
   });
 
-  it('generates an FX patch with bitCrush and routing applied', async () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.75);
+  it("generates an FX patch with bitCrush and routing applied", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.75);
     render(PatchGenerator);
-    await fireEvent.click(screen.getByText('FX'));
-    await fireEvent.click(screen.getByText('Generate Patch'));
+    await fireEvent.click(screen.getByText("FX"));
+    await fireEvent.click(screen.getByText("Generate Patch"));
 
-    expect(document.querySelector('.patch-name')).toBeTruthy();
-    const routingRow = Array.from(document.querySelectorAll('.osc-row')).find((row) =>
-      row.textContent?.includes('patch cable')
+    expect(document.querySelector(".patch-name")).toBeTruthy();
+    const routingRow = Array.from(document.querySelectorAll(".osc-row")).find(
+      (row) => row.textContent?.includes("patch cable"),
     );
     expect(routingRow).toBeTruthy();
   });
 
-  it.each(['Pad', 'Lead', 'Bass', 'Keys', 'FX'])(
-    'generates valid %s patches across the full random range without throwing',
+  it.each(["Pad", "Lead", "Bass", "Keys", "FX"])(
+    "generates valid %s patches across the full random range without throwing",
     async (label) => {
-      const randomSpy = vi.spyOn(Math, 'random');
+      const randomSpy = vi.spyOn(Math, "random");
       render(PatchGenerator);
       await fireEvent.click(screen.getByText(label));
-      for (const r of [0, 0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 0.999]) {
+      for (const r of [
+        0, 0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 0.999,
+      ]) {
         randomSpy.mockReturnValue(r);
-        await fireEvent.click(screen.getByText('Generate Patch'));
-        expect(document.querySelector('.patch-name')).toBeTruthy();
+        await fireEvent.click(screen.getByText("Generate Patch"));
+        expect(document.querySelector(".patch-name")).toBeTruthy();
       }
     },
   );

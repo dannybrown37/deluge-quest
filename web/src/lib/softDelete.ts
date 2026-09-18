@@ -2,7 +2,12 @@ export const TRASH_DIR = "SOFT_DELETE";
 export const HISTORY_BACKUP_DIR = "HISTORY_BACKUP";
 
 /** Our own folders. Restoring into one would corrupt the very backups we rely on. */
-const APP_MANAGED = [TRASH_DIR, HISTORY_BACKUP_DIR, "MOVE_BACKUP", "REPAIR_BACKUP"];
+const APP_MANAGED = [
+  TRASH_DIR,
+  HISTORY_BACKUP_DIR,
+  "MOVE_BACKUP",
+  "REPAIR_BACKUP",
+];
 
 export async function getOrCreateDir(
   root: FileSystemDirectoryHandle,
@@ -32,7 +37,9 @@ export async function moveToTrash(
 
   const trashPath = `${TRASH_DIR}/${sourceDir}`;
   const trashDirHandle = await getOrCreateDir(root, trashPath);
-  const destFileHandle = await trashDirHandle.getFileHandle(fileName, { create: true });
+  const destFileHandle = await trashDirHandle.getFileHandle(fileName, {
+    create: true,
+  });
   const writable = await destFileHandle.createWritable();
   await writable.write(data);
   await writable.close();
@@ -73,10 +80,14 @@ export async function restoreFile(
 ): Promise<RestoreResult> {
   const parts = filePath.split("/").filter((part) => part.trim());
   if (parts.length < 2) {
-    throw new Error(`Cannot restore "${filePath}": expected a path like SONGS/NAME.XML`);
+    throw new Error(
+      `Cannot restore "${filePath}": expected a path like SONGS/NAME.XML`,
+    );
   }
   if (APP_MANAGED.includes(parts[0].toUpperCase())) {
-    throw new Error(`Cannot restore into "${parts[0]}": that is an app-managed folder`);
+    throw new Error(
+      `Cannot restore into "${parts[0]}": that is an app-managed folder`,
+    );
   }
 
   const fileName = parts.pop()!;
@@ -85,13 +96,18 @@ export async function restoreFile(
 
   let current: string | null = null;
   try {
-    current = await (await (await dirHandle.getFileHandle(fileName)).getFile()).text();
+    current = await (
+      await (await dirHandle.getFileHandle(fileName)).getFile()
+    ).text();
   } catch {
     /* not on the card any more — nothing to back up, we are putting it back */
   }
 
   if (current !== null) {
-    const backupDir = await getOrCreateDir(root, `${HISTORY_BACKUP_DIR}/${dirPath}`);
+    const backupDir = await getOrCreateDir(
+      root,
+      `${HISTORY_BACKUP_DIR}/${dirPath}`,
+    );
     const backupName = await freeBackupName(backupDir, fileName);
     const backupWritable = await (
       await backupDir.getFileHandle(backupName, { create: true })

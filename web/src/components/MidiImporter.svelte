@@ -1,95 +1,95 @@
 <script lang="ts">
-  import { loadPyodide, convertMidiToDelugeXml } from "../lib/pyodide";
-  import { trackToolAction } from "../lib/analytics";
+import { trackToolAction } from "../lib/analytics";
+import { convertMidiToDelugeXml, loadPyodide } from "../lib/pyodide";
 
-  type State = "idle" | "loading" | "processing" | "done" | "error";
+type State = "idle" | "loading" | "processing" | "done" | "error";
 
-  let state: State = $state("idle");
-  let progress = $state("");
-  let progressPct = $state(0);
-  let errorMsg = $state("");
-  let fileName = $state("");
-  let resultXml = $state("");
-  let dragOver = $state(false);
+let state: State = $state("idle");
+let progress = $state("");
+let progressPct = $state(0);
+let errorMsg = $state("");
+let fileName = $state("");
+let resultXml = $state("");
+let dragOver = $state(false);
 
-  async function convert(name: string, bytes: ArrayBuffer) {
-    fileName = name;
-    state = "loading";
+async function convert(name: string, bytes: ArrayBuffer) {
+  fileName = name;
+  state = "loading";
 
-    try {
-      const pyodide = await loadPyodide((stage, pct) => {
-        progress = stage;
-        progressPct = pct;
-      });
+  try {
+    const pyodide = await loadPyodide((stage, pct) => {
+      progress = stage;
+      progressPct = pct;
+    });
 
-      state = "processing";
-      progress = "Installing mido";
-      progressPct = 80;
+    state = "processing";
+    progress = "Installing mido";
+    progressPct = 80;
 
-      resultXml = await convertMidiToDelugeXml(bytes, name, pyodide);
+    resultXml = await convertMidiToDelugeXml(bytes, name, pyodide);
 
-      progress = "Converting";
-      progressPct = 90;
+    progress = "Converting";
+    progressPct = 90;
 
-      state = "done";
-      progress = "Done";
-      progressPct = 100;
-      trackToolAction("import", "convert");
-    } catch (e: any) {
-      state = "error";
-      errorMsg = e.message || "Conversion failed";
-      trackToolAction("import", "convert_error");
-    }
+    state = "done";
+    progress = "Done";
+    progressPct = 100;
+    trackToolAction("import", "convert");
+  } catch (e: any) {
+    state = "error";
+    errorMsg = e.message || "Conversion failed";
+    trackToolAction("import", "convert_error");
   }
+}
 
-  async function handleFile(file: File) {
-    if (!file.name.toLowerCase().match(/\.midi?$/)) {
-      state = "error";
-      errorMsg = "Please drop a .mid or .midi file";
-      return;
-    }
-    convert(file.name, await file.arrayBuffer());
+async function handleFile(file: File) {
+  if (!file.name.toLowerCase().match(/\.midi?$/)) {
+    state = "error";
+    errorMsg = "Please drop a .mid or .midi file";
+    return;
   }
+  convert(file.name, await file.arrayBuffer());
+}
 
-  function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    dragOver = false;
-    const file = e.dataTransfer?.files[0];
-    if (file) handleFile(file);
-  }
+function handleDrop(e: DragEvent) {
+  e.preventDefault();
+  dragOver = false;
+  const file = e.dataTransfer?.files[0];
+  if (file) handleFile(file);
+}
 
-  function handleDragOver(e: DragEvent) {
-    e.preventDefault();
-    dragOver = true;
-  }
+function handleDragOver(e: DragEvent) {
+  e.preventDefault();
+  dragOver = true;
+}
 
-  function handleDragLeave() {
-    dragOver = false;
-  }
+function handleDragLeave() {
+  dragOver = false;
+}
 
-  function handleInputChange(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (file) handleFile(file);
-  }
+function handleInputChange(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file) handleFile(file);
+}
 
-  function download() {
-    const blob = new Blob([resultXml], { type: "application/xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName.replace(/\.midi?$/i, "") + ".XML";
-    a.click();
-    trackToolAction("import", "download");
-    URL.revokeObjectURL(url);
-  }
+function download() {
+  const blob = new Blob([resultXml], { type: "application/xml" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName.replace(/\.midi?$/i, "") + ".XML";
+  a.click();
+  trackToolAction("import", "download");
+  URL.revokeObjectURL(url);
+}
 
-  function reset() {
-    state = "idle";
-    resultXml = "";
-    fileName = "";
-    errorMsg = "";
-  }
+function reset() {
+  state = "idle";
+  resultXml = "";
+  fileName = "";
+  errorMsg = "";
+}
 </script>
 
 {#if state === "idle"}

@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  getChannelLabels,
-  setChannelLabel,
-  removeChannelLabel,
   formatChannel,
+  getChannelLabels,
+  removeChannelLabel,
+  setChannelLabel,
 } from "./channelLabels";
 
 const storageMap = new Map<string, string>();
@@ -23,12 +23,18 @@ describe("getChannelLabels", () => {
   });
 
   it("returns parsed labels", () => {
-    storageMap.set("deluge-channel-labels", JSON.stringify({ 9: "Peak", 10: "Sub Phatty" }));
+    storageMap.set(
+      "deluge-channel-labels",
+      JSON.stringify({ 9: "Peak", 10: "Sub Phatty" }),
+    );
     expect(getChannelLabels()).toEqual({ 9: "Peak", 10: "Sub Phatty" });
   });
 
   it("strips whitespace-only values", () => {
-    storageMap.set("deluge-channel-labels", JSON.stringify({ 9: "  ", 10: "Valid" }));
+    storageMap.set(
+      "deluge-channel-labels",
+      JSON.stringify({ 9: "  ", 10: "Valid" }),
+    );
     expect(getChannelLabels()).toEqual({ 10: "Valid" });
   });
 

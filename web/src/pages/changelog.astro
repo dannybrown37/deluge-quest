@@ -1,26 +1,29 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
-import { getCollection, render } from 'astro:content';
+import { getCollection, render } from "astro:content";
+import BaseLayout from "../layouts/BaseLayout.astro";
 
-const entries = (await getCollection('changelog')).sort(
-  (a, b) => b.data.date.getTime() - a.data.date.getTime()
+const entries = (await getCollection("changelog")).sort(
+  (a, b) => b.data.date.getTime() - a.data.date.getTime(),
 );
 
 const rendered = await Promise.all(
   entries.map(async (entry) => ({
     entry,
     Content: (await render(entry)).Content,
-    dateStr: entry.data.date.toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
+    dateStr: entry.data.date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
     }),
     iso: entry.data.date.toISOString().slice(0, 10),
-  }))
+  })),
 );
 
 const tagColors: Record<string, string> = {
-  feature: 'var(--accent)',
-  fix: 'var(--teal)',
-  improvement: 'var(--text-secondary)',
+  feature: "var(--accent)",
+  fix: "var(--teal)",
+  improvement: "var(--text-secondary)",
 };
 ---
 

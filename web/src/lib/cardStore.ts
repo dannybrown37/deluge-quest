@@ -5,7 +5,11 @@ export interface SampleInfo {
   path: string;
 }
 
-export type ProgressCallback = (stage: string, done: number, total: number) => void;
+export type ProgressCallback = (
+  stage: string,
+  done: number,
+  total: number,
+) => void;
 
 const IDB_NAME = "deluge-card-store";
 const IDB_VERSION = 2;
@@ -62,8 +66,10 @@ function openIdb(): Promise<IDBDatabase> {
     const req = indexedDB.open(IDB_NAME, IDB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(IDB_META)) db.createObjectStore(IDB_META);
-      if (!db.objectStoreNames.contains(IDB_SONGS)) db.createObjectStore(IDB_SONGS);
+      if (!db.objectStoreNames.contains(IDB_META))
+        db.createObjectStore(IDB_META);
+      if (!db.objectStoreNames.contains(IDB_SONGS))
+        db.createObjectStore(IDB_SONGS);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -104,12 +110,14 @@ class CardStoreImpl {
   private async loadHandle(): Promise<FileSystemDirectoryHandle | null> {
     try {
       const db = await openIdb();
-      const handle = await new Promise<FileSystemDirectoryHandle | null>((resolve, reject) => {
-        const tx = db.transaction(IDB_META, "readonly");
-        const req = tx.objectStore(IDB_META).get(KEY_HANDLE);
-        req.onsuccess = () => resolve(req.result ?? null);
-        req.onerror = () => reject(req.error);
-      });
+      const handle = await new Promise<FileSystemDirectoryHandle | null>(
+        (resolve, reject) => {
+          const tx = db.transaction(IDB_META, "readonly");
+          const req = tx.objectStore(IDB_META).get(KEY_HANDLE);
+          req.onsuccess = () => resolve(req.result ?? null);
+          req.onerror = () => reject(req.error);
+        },
+      );
       db.close();
       return handle;
     } catch {
@@ -126,7 +134,10 @@ class CardStoreImpl {
    * (or lost permission on navigation) can still list songs. Quota failures are non-fatal — the
    * scan itself already succeeded.
    */
-  async saveSongCache(cardName: string, songs: { path: string; xml: string }[] = this.eligibleSongs(false)) {
+  async saveSongCache(
+    cardName: string,
+    songs: { path: string; xml: string }[] = this.eligibleSongs(false),
+  ) {
     try {
       const payload: CachedSongs = {
         cardName,
@@ -150,12 +161,14 @@ class CardStoreImpl {
   async loadCachedSongs(): Promise<CachedSongs | null> {
     try {
       const db = await openIdb();
-      const cached = await new Promise<CachedSongs | null>((resolve, reject) => {
-        const tx = db.transaction(IDB_SONGS, "readonly");
-        const req = tx.objectStore(IDB_SONGS).get(KEY_SONGS);
-        req.onsuccess = () => resolve(req.result ?? null);
-        req.onerror = () => reject(req.error);
-      });
+      const cached = await new Promise<CachedSongs | null>(
+        (resolve, reject) => {
+          const tx = db.transaction(IDB_SONGS, "readonly");
+          const req = tx.objectStore(IDB_SONGS).get(KEY_SONGS);
+          req.onsuccess = () => resolve(req.result ?? null);
+          req.onerror = () => reject(req.error);
+        },
+      );
       db.close();
       return cached;
     } catch {
@@ -182,7 +195,9 @@ class CardStoreImpl {
    * Grabs the persisted root handle without walking the card — for callers (like /kits) that only
    * need a directory handle, not the full song/sample index. Does not touch isLoaded or the maps.
    */
-  async reconnectHandleOnly(requestPermission = false): Promise<FileSystemDirectoryHandle | null> {
+  async reconnectHandleOnly(
+    requestPermission = false,
+  ): Promise<FileSystemDirectoryHandle | null> {
     const handle = await this.loadHandle();
     if (!handle) return null;
     const perm = requestPermission
@@ -200,7 +215,10 @@ class CardStoreImpl {
   }
 
   /** Walks a directory handle obtained any other way (e.g. drag-and-drop) and persists it for future reconnects. */
-  async adoptHandle(handle: FileSystemDirectoryHandle, onProgress?: ProgressCallback): Promise<void> {
+  async adoptHandle(
+    handle: FileSystemDirectoryHandle,
+    onProgress?: ProgressCallback,
+  ): Promise<void> {
     await this.loadFromHandle(handle, onProgress);
     await this.saveHandle(handle);
   }
@@ -225,7 +243,10 @@ class CardStoreImpl {
     return true;
   }
 
-  private async loadFromHandle(handle: FileSystemDirectoryHandle, onProgress?: ProgressCallback) {
+  private async loadFromHandle(
+    handle: FileSystemDirectoryHandle,
+    onProgress?: ProgressCallback,
+  ) {
     this.rootHandle = handle;
     this.isLoaded = false;
     this.songXmls = new Map();
@@ -254,7 +275,11 @@ class CardStoreImpl {
         this.presetIndex.set(path, await file.text());
       } else if (dir === "SAMPLES" && AUDIO_EXTENSIONS.has(extension)) {
         const file = await fh.getFile();
-        this.sampleIndex.set(normalizePath(path), { handle: fh, size: file.size, path });
+        this.sampleIndex.set(normalizePath(path), {
+          handle: fh,
+          size: file.size,
+          path,
+        });
       }
       if (done % 25 === 0 || done === total) {
         onProgress?.("Indexing files", done, total);
@@ -271,7 +296,8 @@ class CardStoreImpl {
     out: { path: string; handle: FileSystemFileHandle }[],
   ) {
     for await (const entry of dirHandle.values()) {
-      if (entry.kind === "directory" && APP_MANAGED_DIRS.has(entry.name)) continue;
+      if (entry.kind === "directory" && APP_MANAGED_DIRS.has(entry.name))
+        continue;
       const entryPath = path ? `${path}/${entry.name}` : entry.name;
       if (entry.kind === "file") {
         out.push({ path: entryPath, handle: entry as FileSystemFileHandle });
@@ -292,7 +318,10 @@ class CardStoreImpl {
   }
 
   /** Decodes and caches (LRU) a sample by SAMPLES-relative path. Returns null if not on the card. */
-  async getSampleBuffer(path: string, ctx: AudioContext): Promise<AudioBuffer | null> {
+  async getSampleBuffer(
+    path: string,
+    ctx: AudioContext,
+  ): Promise<AudioBuffer | null> {
     const key = normalizePath(path);
     const cached = this.sampleBufferCache.get(key);
     if (cached) {
@@ -341,7 +370,8 @@ export async function walkHandle(
   out: { path: string; handle: FileSystemFileHandle }[],
 ): Promise<void> {
   for await (const entry of dirHandle.values()) {
-    if (entry.kind === "directory" && APP_MANAGED_DIRS.has(entry.name)) continue;
+    if (entry.kind === "directory" && APP_MANAGED_DIRS.has(entry.name))
+      continue;
     const entryPath = path ? `${path}/${entry.name}` : entry.name;
     if (entry.kind === "file") {
       out.push({ path: entryPath, handle: entry as FileSystemFileHandle });
