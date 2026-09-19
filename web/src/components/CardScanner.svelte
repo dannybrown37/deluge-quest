@@ -1412,9 +1412,10 @@ async function playSample(samplePath: string) {
         </p>
       {/if}
       <p class="dropzone-hint">
-        Don't have a card yet?
+        Not ready to drop your own SD card yet?<br>
         <a href="https://synthstrom.com/product/deluge/#downloads" target="_blank" rel="noopener">Download the official factory card</a> from Synthstrom,
-        unzip it, then browse to the extracted folder.
+        unzip it, and use it to try this feature out.<br>
+        (Or try visiting other pages.)
       </p>
     </div>
   </div>
