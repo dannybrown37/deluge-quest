@@ -1,6 +1,7 @@
 <script lang="ts">
 import { trackToolAction } from "../lib/analytics";
 import { cardStore, songHasArrangement } from "../lib/cardStore";
+import { DEMO_SONG, fetchDemoXml } from "../lib/demoSong";
 import { convertToMusicXML, loadPyodide } from "../lib/pyodide";
 
 type State = "idle" | "loading" | "processing" | "done" | "error";
@@ -12,6 +13,7 @@ let errorMsg = $state("");
 let fileName = $state("");
 let resultXml = $state("");
 let dragOver = $state(false);
+let sourceXml = $state("");
 let statsCount = $state(0);
 let cardSongs: { path: string; xml: string }[] = $state([]);
 let cardName = $state("");
@@ -72,6 +74,7 @@ tryLoadCardSongs();
 
 async function convert(name: string, xmlContent: string) {
   fileName = name;
+  sourceXml = xmlContent;
   status = "loading";
 
   try {
@@ -145,6 +148,20 @@ function handleInputChange(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
   if (file) handleFile(file);
+}
+
+let loadingDemo = $state(false);
+async function loadDemo() {
+  loadingDemo = true;
+  try {
+    const xml = await fetchDemoXml();
+    convert(DEMO_SONG.fileName, xml);
+  } catch (e: any) {
+    status = "error";
+    errorMsg = e.message || "Failed to load demo song";
+  } finally {
+    loadingDemo = false;
+  }
 }
 
 function download() {
@@ -224,6 +241,15 @@ function reset() {
   {:else}
     <p class="card-hint">No songs cached yet. <a href="/manage">Scan your card on Card Management</a> to pick a song from a list here instead of dropping a file.</p>
   {/if}
+  <div class="demo-cta">
+    <p class="demo-cta-text">No Deluge handy? Try a demo song to see what this tool does.</p>
+    <div class="demo-cta-actions">
+      <button class="btn btn-primary" onclick={loadDemo} disabled={loadingDemo}>
+        {loadingDemo ? "Loading…" : `Convert "${DEMO_SONG.name}"`}
+      </button>
+      <a href={DEMO_SONG.songPagePath} class="demo-cta-listen">or listen to the original ↗</a>
+    </div>
+  </div>
   <div
     class="dropzone"
     class:dropzone--over={dragOver}
@@ -277,6 +303,7 @@ function reset() {
     <p class="result-file">{fileName} → {fileName.replace(/\.XML$/i, '.musicxml')}</p>
     <div class="result-actions">
       <button class="btn btn-primary" onclick={download}>Download MusicXML</button>
+      <a class="btn btn-secondary" href="/preview" onclick={() => sessionStorage.setItem('deluge-preview-file', JSON.stringify({ name: fileName, content: sourceXml }))}>Listen in Song Preview ↗</a>
       <button class="btn btn-secondary" onclick={reset}>Convert another</button>
     </div>
   </div>
@@ -289,6 +316,34 @@ function reset() {
 {/if}
 
 <style>
+  .demo-cta {
+    text-align: center;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .demo-cta-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+  }
+  .demo-cta-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .demo-cta-listen {
+    color: var(--accent);
+    font-size: 0.85rem;
+    text-decoration: none;
+  }
+  .demo-cta-listen:hover {
+    text-decoration: underline;
+  }
   .resume-banner {
     display: flex;
     align-items: center;

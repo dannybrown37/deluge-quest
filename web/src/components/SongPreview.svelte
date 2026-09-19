@@ -1,7 +1,9 @@
 <script lang="ts">
 import { trackToolAction } from "../lib/analytics";
 import { cardStore } from "../lib/cardStore";
+import { DEMO_SONG, fetchDemoXml } from "../lib/demoSong";
 import {
+  convertToMusicXML,
   inspectSong,
   loadPyodide,
   type PreviewData,
@@ -17,6 +19,7 @@ let errorMsg = $state("");
 let fileName = $state("");
 let data: PreviewData | null = $state(null);
 let dragOver = $state(false);
+let sourceXml = $state("");
 let statsCount = $state(0);
 let hoveredClip: { track: number; clip: number } | null = $state(null);
 let tooltip = $state({ visible: false, x: 0, y: 0, text: "" });
@@ -338,6 +341,7 @@ let layout = $derived.by(() => {
 
 async function inspect(name: string, xmlContent: string) {
   fileName = name;
+  sourceXml = xmlContent;
   status = "loading";
 
   try {
@@ -419,6 +423,42 @@ function handleInputChange(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
   if (file) handleFile(file);
+}
+
+let loadingDemo = $state(false);
+async function loadDemo() {
+  loadingDemo = true;
+  try {
+    const xml = await fetchDemoXml();
+    inspect(DEMO_SONG.fileName, xml);
+  } catch (e: any) {
+    status = "error";
+    errorMsg = e.message || "Failed to load demo song";
+  } finally {
+    loadingDemo = false;
+  }
+}
+
+let converting = $state(false);
+async function convertToScore() {
+  if (!sourceXml) return;
+  converting = true;
+  try {
+    const pyodide = await loadPyodide();
+    const musicxml = await convertToMusicXML(sourceXml, pyodide);
+    const blob = new Blob([musicxml], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName.replace(/\.XML$/i, ".musicxml");
+    a.click();
+    URL.revokeObjectURL(url);
+    trackToolAction("preview", "convert_score");
+  } catch (e: any) {
+    errorMsg = `Score conversion failed: ${e.message}`;
+  } finally {
+    converting = false;
+  }
 }
 
 function formatMeasure(ticks: number, ticksPerMeasure: number): string {
@@ -583,6 +623,15 @@ function reset() {
   {:else}
     <p class="card-hint">No songs cached yet. <a href="/manage">Scan your card on Card Management</a> to pick a song from a list here instead of dropping a file.</p>
   {/if}
+  <div class="demo-cta">
+    <p class="demo-cta-text">No Deluge handy? Try a demo song to see what this tool does.</p>
+    <div class="demo-cta-actions">
+      <button class="btn btn-primary" onclick={loadDemo} disabled={loadingDemo}>
+        {loadingDemo ? "Loading…" : `Preview "${DEMO_SONG.name}"`}
+      </button>
+      <a href={DEMO_SONG.songPagePath} class="demo-cta-listen">or listen to the original ↗</a>
+    </div>
+  </div>
   <div
     class="dropzone"
     class:dropzone--over={dragOver}
@@ -643,7 +692,12 @@ function reset() {
           <span class="chip">{data.totalNotes.toLocaleString()} notes</span>
         </div>
       </div>
-      <button class="btn btn-secondary" onclick={reset}>Inspect another</button>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick={convertToScore} disabled={converting}>
+          {converting ? "Converting…" : "Download as sheet music"}
+        </button>
+        <button class="btn btn-secondary" onclick={reset}>Inspect another</button>
+      </div>
     </div>
 
     {#if typeCounts.length > 0}
@@ -931,6 +985,34 @@ function reset() {
 {/if}
 
 <style>
+  .demo-cta {
+    text-align: center;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .demo-cta-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+  }
+  .demo-cta-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .demo-cta-listen {
+    color: var(--accent);
+    font-size: 0.85rem;
+    text-decoration: none;
+  }
+  .demo-cta-listen:hover {
+    text-decoration: underline;
+  }
   .resume-banner {
     display: flex;
     align-items: center;
@@ -1449,6 +1531,11 @@ function reset() {
     border: none;
     cursor: pointer;
     transition: background 0.05s;
+  }
+  .header-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
   }
   .btn-secondary {
     background: transparent;

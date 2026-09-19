@@ -1,0 +1,3385 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song
+	firmwareVersion="4.0.0"
+	earliestCompatibleFirmware="4.0.0-beta"
+	previewNumPads="144"
+	preview="000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005AA5080A0B080A0B080A0B080A0B080A0B080A0B080A0B080A0B080A0B08131208121308190C08101608101608170E00FF06000000005AA5080E17080D18080B1A080A1B080A1B080A1B08131208180D080A0B08131208121308190C08101608101608170E00FF06000000005AA50D150B150E0B160D0B180A0B180A0C160A0E130A11130A11180A0C170B0B0E140B180B0B180A0B180A0B13100B00FF06000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+	inArrangementView="1"
+	xScrollSongView="0"
+	xZoomSongView="24"
+	arrangementAutoScrollOn="0"
+	xScroll="6144"
+	xZoom="96"
+	yScrollSongView="0"
+	yScrollArrangementView="-3"
+	xScrollArrangementView="0"
+	xZoomArrangementView="768"
+	timePerTimerTick="287"
+	timerTickFraction="469762048"
+	rootNote="52"
+	inputTickMagnitude="2"
+	swingAmount="0"
+	swingInterval="7"
+	affectEntire="1"
+	activeModFunction="1"
+	lpfMode="24dB"
+	modFXType="flanger"
+	modFXCurrentParam="feedback"
+	currentFilterType="lpf">
+	<modeNotes>
+		<modeNote>0</modeNote>
+		<modeNote>1</modeNote>
+		<modeNote>2</modeNote>
+		<modeNote>3</modeNote>
+		<modeNote>4</modeNote>
+		<modeNote>5</modeNote>
+		<modeNote>6</modeNote>
+		<modeNote>7</modeNote>
+		<modeNote>8</modeNote>
+		<modeNote>9</modeNote>
+		<modeNote>10</modeNote>
+		<modeNote>11</modeNote>
+	</modeNotes>
+	<reverb
+		roomSize="1288490496"
+		dampening="1546188288"
+		width="2147483647"
+		pan="0">
+		<compressor
+			attack="327244"
+			release="936"
+			volume="-21474836"
+			shape="-601295438"
+			syncLevel="5" />
+	</reverb>
+	<delay
+		pingPong="1"
+		analog="0"
+		syncLevel="7" />
+	<compressor
+		syncLevel="6"
+		attack="327244"
+		release="936" />
+	<songParams
+		reverbAmount="0x4E000000"
+		volume="0x0C000000"
+		pan="0x00000000"
+		sidechainCompressorShape="0xDC28F5B2"
+		modFXDepth="0x00000000"
+		modFXRate="0xE0000000"
+		stutterRate="0x00000000"
+		sampleRateReduction="0x80000000"
+		bitCrush="0x80000000"
+		modFXOffset="0x00000000"
+		modFXFeedback="0x80000000">
+		<delay
+			rate="0x28000000"
+			feedback="0x94000000" />
+		<lpf
+			frequency="0x7FFFFFFF"
+			resonance="0x84000000" />
+		<hpf
+			frequency="0x80000000"
+			resonance="0x80000000" />
+		<equalizer
+			bass="0x00000000"
+			treble="0x00000000"
+			bassFrequency="0x00000000"
+			trebleFrequency="0x00000000" />
+	</songParams>
+	<instruments>
+		<sound
+			presetSlot="1"
+			presetSubSlot="-1"
+			presetFolder="SYNTHS"
+			defaultVelocity="108"
+			isArmedForRecording="0"
+			activeModFunction="0"
+			clipInstances="0x00000000000032400000000E0000330000001E000000000B0000570000000C000000000600006300000019800000000300007C8000000C0000000000000089100000018080000000"
+			polyphonic="poly"
+			voicePriority="1"
+			mode="subtractive"
+			lpfMode="24dB"
+			modFXType="none">
+			<osc1
+				type="square"
+				transpose="0"
+				cents="0"
+				retrigPhase="-1" />
+			<osc2
+				type="saw"
+				transpose="0"
+				cents="0"
+				retrigPhase="-1" />
+			<lfo1 type="triangle" syncLevel="0" />
+			<lfo2 type="triangle" />
+			<unison num="2" detune="23" />
+			<delay
+				pingPong="1"
+				analog="0"
+				syncLevel="7" />
+			<compressor
+				syncLevel="6"
+				attack="327244"
+				release="936" />
+			<modKnobs>
+				<modKnob controlsParam="pan" />
+				<modKnob controlsParam="volumePostFX" />
+				<modKnob controlsParam="lpfResonance" />
+				<modKnob controlsParam="lpfFrequency" />
+				<modKnob controlsParam="env1Release" />
+				<modKnob controlsParam="env1Attack" />
+				<modKnob controlsParam="delayFeedback" />
+				<modKnob controlsParam="delayRate" />
+				<modKnob controlsParam="reverbAmount" />
+				<modKnob controlsParam="volumePostReverbSend" patchAmountFromSource="compressor" />
+				<modKnob controlsParam="pitch" patchAmountFromSource="lfo1" />
+				<modKnob controlsParam="lfo1Rate" />
+				<modKnob controlsParam="portamento" />
+				<modKnob controlsParam="stutterRate" />
+				<modKnob controlsParam="bitcrushAmount" />
+				<modKnob controlsParam="sampleRateReduction" />
+			</modKnobs>
+		</sound>
+		<sound
+			presetName="Wizard"
+			presetFolder="SYNTHS/Keyboard"
+			defaultVelocity="99"
+			isArmedForRecording="0"
+			activeModFunction="1"
+			clipInstances="0x00000000000032400000000F0000330000001E000000000C0000510000000600000000090000570000000C000000000700006300000019800000000400007C8000000C0000000001000089100000018080000001"
+			polyphonic="auto"
+			voicePriority="1"
+			mode="subtractive"
+			lpfMode="24dB"
+			modFXType="chorus">
+			<osc1
+				type="triangle"
+				transpose="0"
+				cents="0"
+				retrigPhase="-1" />
+			<osc2
+				type="saw"
+				transpose="0"
+				cents="0"
+				oscillatorSync="1"
+				retrigPhase="-1" />
+			<lfo1 type="triangle" syncLevel="0" />
+			<lfo2 type="triangle" />
+			<unison num="2" detune="11" />
+			<delay
+				pingPong="1"
+				analog="1"
+				syncLevel="8" />
+			<compressor
+				syncLevel="6"
+				attack="327244"
+				release="936" />
+			<modKnobs>
+				<modKnob controlsParam="pan" />
+				<modKnob controlsParam="volumePostFX" />
+				<modKnob controlsParam="lpfResonance" />
+				<modKnob controlsParam="lpfFrequency" />
+				<modKnob controlsParam="env1Release" />
+				<modKnob controlsParam="env1Attack" />
+				<modKnob controlsParam="delayFeedback" />
+				<modKnob controlsParam="delayRate" />
+				<modKnob controlsParam="reverbAmount" />
+				<modKnob controlsParam="volumePostReverbSend" patchAmountFromSource="compressor" />
+				<modKnob controlsParam="pitch" patchAmountFromSource="lfo1" />
+				<modKnob controlsParam="lfo1Rate" />
+				<modKnob controlsParam="portamento" />
+				<modKnob controlsParam="stutterRate" />
+				<modKnob controlsParam="bitcrushAmount" />
+				<modKnob controlsParam="sampleRateReduction" />
+			</modKnobs>
+		</sound>
+		<sound
+			presetName="Cello Db"
+			presetFolder="SYNTHS"
+			defaultVelocity="127"
+			isArmedForRecording="0"
+			activeModFunction="1"
+			clipInstances="0x0000000000003240000000100000330000001E000000000D00005100000006000000000A0000570000000C000000000800006300000019800000000500007C8000000C0000000002000089100000018080000002"
+			polyphonic="poly"
+			voicePriority="1"
+			mode="subtractive"
+			lpfMode="24dB"
+			modFXType="none">
+			<osc1
+				type="analogSquare"
+				transpose="0"
+				cents="0"
+				retrigPhase="-1" />
+			<osc2
+				type="square"
+				transpose="0"
+				cents="0"
+				retrigPhase="-1" />
+			<lfo1 type="triangle" syncLevel="0" />
+			<lfo2 type="triangle" />
+			<unison num="3" detune="8" />
+			<delay
+				pingPong="1"
+				analog="0"
+				syncLevel="7" />
+			<compressor
+				syncLevel="6"
+				attack="327244"
+				release="936" />
+			<modKnobs>
+				<modKnob controlsParam="pan" />
+				<modKnob controlsParam="volumePostFX" />
+				<modKnob controlsParam="lpfResonance" />
+				<modKnob controlsParam="lpfFrequency" />
+				<modKnob controlsParam="env1Release" />
+				<modKnob controlsParam="env1Attack" />
+				<modKnob controlsParam="delayFeedback" />
+				<modKnob controlsParam="delayRate" />
+				<modKnob controlsParam="reverbAmount" />
+				<modKnob controlsParam="volumePostReverbSend" patchAmountFromSource="compressor" />
+				<modKnob controlsParam="pitch" patchAmountFromSource="lfo1" />
+				<modKnob controlsParam="lfo1Rate" />
+				<modKnob controlsParam="portamento" />
+				<modKnob controlsParam="stutterRate" />
+				<modKnob controlsParam="bitcrushAmount" />
+				<modKnob controlsParam="sampleRateReduction" />
+			</modKnobs>
+		</sound>
+	</instruments>
+	<sections>
+		<section id="0" numRepeats="1" />
+		<section id="1" numRepeats="1" />
+		<section id="2" numRepeats="1" />
+		<section id="3" numRepeats="1" />
+		<section id="4" numRepeats="1" />
+		<section id="5" numRepeats="0" />
+		<section id="6" numRepeats="0" />
+		<section id="7" numRepeats="0" />
+		<section id="8" numRepeats="0" />
+		<section id="9" numRepeats="0" />
+		<section id="10" numRepeats="0" />
+		<section id="11" numRepeats="0" />
+	</sections>
+	<sessionClips>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="73"
+			yScrollKeyboard="50"
+			instrumentPresetSlot="1"
+			instrumentPresetSubSlot="-1"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="3072"
+			colourOffset="13"
+			section="5">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x18000000"
+				pan="0x00000000"
+				lpfFrequency="0x48000000"
+				lpfResonance="0xAE000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x94000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x86000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0xBA000000"
+				reverbAmount="0xF6000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x80000000"
+					decay="0xB851EB7B"
+					sustain="0xB333332A"
+					release="0x80000000" />
+				<envelope2
+					attack="0xE6666654"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03000000" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="59" />
+				<noteRow
+					y="62" />
+				<noteRow
+					y="63"
+					noteDataWithLift="0x00000840000000C06C4014000009C00000011F6C401400000B40000000C06C4014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x000007E0000000606C401400000960000000606C401400000AE0000000606C4014" />
+				<noteRow
+					y="65" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x00000300000000C06C4014000003C0000000C06C401400000480000000C06C401400000540000000C06C401400000600000000C06C4014000006C0000000C06C401400000780000000606C401400000840000000C06C401400000900000000606C4014000009C00000011F6C401400000B40000000C06C4014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x000007E0000000606C401400000960000000606C401400000AE0000000606C4014" />
+				<noteRow
+					y="69"
+					noteDataWithLift="0x00000780000000606C401400000900000000606C4014" />
+				<noteRow
+					y="70" />
+				<noteRow
+					y="71"
+					noteDataWithLift="0x00000060000000606C401400000120000000606C4014000001E0000000606C4014000006C0000000C06C4014" />
+				<noteRow
+					y="73"
+					noteDataWithLift="0x00000540000000C06C401400000660000000606C4014" />
+				<noteRow
+					y="74"
+					noteDataWithLift="0x00000180000000606C4014" />
+				<noteRow
+					y="75"
+					noteDataWithLift="0x000004E0000000606C401400000600000000606C4014" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x000000C0000000606C401400000390000000306C401400000480000000606C4014" />
+				<noteRow
+					y="77" />
+				<noteRow
+					y="78"
+					noteDataWithLift="0x00000000000000606C401400000240000000606C4014000002A0000000606C401400000300000000606C401400000420000000606C4014" />
+				<noteRow
+					y="79" />
+				<noteRow
+					y="80"
+					noteDataWithLift="0x00000360000000306C4014000003C0000000606C4014" />
+				<noteRow
+					y="82" />
+				<noteRow
+					y="83"
+					noteDataWithLift="0x00000060000000606C401400000120000000606C4014000001E0000000606C4014" />
+				<noteRow
+					y="85" />
+				<noteRow
+					y="86"
+					noteDataWithLift="0x00000180000000606C4014" />
+				<noteRow
+					y="87" />
+				<noteRow
+					y="88"
+					noteDataWithLift="0x000000C0000000606C4014" />
+				<noteRow
+					y="90"
+					noteDataWithLift="0x00000000000000606C401400000240000000606C4014" />
+				<noteRow
+					y="92" />
+				<noteRow
+					y="94" />
+				<noteRow
+					y="95" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="54"
+			yScrollKeyboard="50"
+			instrumentPresetName="Wizard"
+			instrumentPresetFolder="SYNTHS/Keyboard"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="3072"
+			colourOffset="13"
+			section="5">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x1999997E"
+				oscBPulseWidth="0x1C28F5B8"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x76000000"
+				lpfResonance="0xC2000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0xCCCCCCBF"
+				modFXDepth="0x3D70A3B5"
+				delayRate="0xBA000000"
+				delayFeedback="0xC2000000"
+				reverbAmount="0x08000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x23D70A20"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x8A3D70A2"
+					decay="0xA8F5C288"
+					sustain="0xD1EB8510"
+					release="0xA3D70A37" />
+				<envelope2
+					attack="0x147AE12D"
+					decay="0xE6666654"
+					sustain="0x80000000"
+					release="0x33333313" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="41" />
+				<noteRow
+					y="42"
+					noteDataWithLift="0x00000240000000606840140000030000000060684014000003C000000060684014000004800000006068401400000540000000606840140000060000000060684014" />
+				<noteRow
+					y="43" />
+				<noteRow
+					y="44" />
+				<noteRow
+					y="45" />
+				<noteRow
+					y="46" />
+				<noteRow
+					y="47"
+					noteDataWithLift="0x0000000000000060684014000000C0000000606840140000018000000060684014000006C0000000606840140000078000000060684014000008400000006068401400000A800000006069401400000B4000000060684014" />
+				<noteRow
+					y="48"
+					noteDataWithLift="0x0000090000000060684014000009C000000060684014" />
+				<noteRow
+					y="50"
+					noteDataWithLift="0x0000012000000060684014" />
+				<noteRow
+					y="52"
+					noteDataWithLift="0x0000006000000060684014" />
+				<noteRow
+					y="54"
+					noteDataWithLift="0x000001E000000060684014000002A00000006068401400000360000000606840140000042000000060684014000004E000000060684014000005A00000006068401400000660000000606840140000072000000060684014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x000007E000000060684014000008A00000006068401400000AE00000006067401400000BA000000060684014" />
+				<noteRow
+					y="60"
+					noteDataWithLift="0x000009600000006068401400000A2000000060684014" />
+				<noteRow
+					y="61" />
+				<noteRow
+					y="62" />
+				<noteRow
+					y="64" />
+				<noteRow
+					y="66" />
+				<noteRow
+					y="67" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="39"
+			yScrollKeyboard="50"
+			instrumentPresetName="Cello Db"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="1"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="3072"
+			colourOffset="-62"
+			section="5">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x02000000"
+				lpfResonance="0xA0000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0x80000000"
+				reverbAmount="0x2E000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x0E000000"
+					decay="0xE6666654"
+					sustain="0x7FFFFFFF"
+					release="0x88000000" />
+				<envelope2
+					attack="0x570A3D4A"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo2"
+						destination="lpfFrequency"
+						amount="0x0147AE14" />
+					<patchCable
+						source="note"
+						destination="lpfFrequency"
+						amount="0x08F5C28C" />
+					<patchCable
+						source="envelope2"
+						destination="lpfFrequency"
+						amount="0x170A3D68" />
+					<patchCable
+						source="compressor"
+						destination="volumePostReverbSend"
+						amount="0x27800000" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03D70A3C" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="39"
+					noteDataWithLift="0x000006C0000000C07F4014" />
+				<noteRow
+					y="42"
+					noteDataWithLift="0x00000540000000C07F401400000660000000607F4014" />
+				<noteRow
+					y="43" />
+				<noteRow
+					y="47"
+					noteDataWithLift="0x00000210000000307F4014000004E0000000607F401400000600000000607F4014" />
+				<noteRow
+					y="48" />
+				<noteRow
+					y="49"
+					noteDataWithLift="0x000002A0000000607F401400000390000000307F401400000480000000607F4014" />
+				<noteRow
+					y="50"
+					noteDataWithLift="0x00000240000000607F401400000420000000607F4014" />
+				<noteRow
+					y="51"
+					noteDataWithLift="0x00000300000000607F4014" />
+				<noteRow
+					y="52"
+					noteDataWithLift="0x00000360000000307F4014000003C0000000607F4014" />
+				<noteRow
+					y="54"
+					noteDataWithLift="0x00000180000000607F4014" />
+				<noteRow
+					y="55"
+					noteDataWithLift="0x00000120000000607F4014000001E0000000307F4014" />
+				<noteRow
+					y="57"
+					noteDataWithLift="0x000000C0000000607F4014" />
+				<noteRow
+					y="58"
+					noteDataWithLift="0x00000060000000607F4014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x00000000000000607F4014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="81"
+			yScrollKeyboard="50"
+			instrumentPresetSlot="1"
+			instrumentPresetSubSlot="-1"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="6528"
+			colourOffset="13"
+			section="4">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x18000000"
+				pan="0x00000000"
+				lpfFrequency="0x78000000"
+				lpfResonance="0xAE000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x94000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x86000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0xBA000000"
+				reverbAmount="0xF6000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x80000000"
+					decay="0xB851EB7B"
+					sustain="0xB333332A"
+					release="0x80000000" />
+				<envelope2
+					attack="0xE6666654"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03000000" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="59"
+					noteDataWithLift="0x00000000000001506C401400001200000000606C4014" />
+				<noteRow
+					y="62"
+					noteDataWithLift="0x00000000000001506C401400000150000001806C4014000002D00000011F6C4014000003F0000000BF6C4014000004B0000000C06C401400000570000000906C401400000960000001806C401400000AE0000001206C4014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x00000F6000000060684014000010E0000000606C4014000011A0000000606C4014000018C0000000C06C4014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x00001020000000606C401400001080000000606C4014" />
+				<noteRow
+					y="70"
+					noteDataWithLift="0x000006C0000000C06C4014" />
+				<noteRow
+					y="71"
+					noteDataWithLift="0x00000000000001506C401400000180000000306C4014000001E0000000C06C401400000300000000306C401400000360000000906C401400000420000000306C4014000004E0000000306C401400000540000000306C4014000005A0000000306C401400000600000000C06C401400000780000000C06C401400000840000000C06C401400000900000000C0684014000009C0000000C068401400000C000000009068401400000CC00000009068401400000D800000009068401400000E400000009068401400000F0000000060684014000012C0000000606C401400001860000000606C4014" />
+				<noteRow
+					y="73"
+					noteDataWithLift="0x000006C0000000C06C4014000009000000009068401400000A500000003068401400000A800000009068401400000BD00000003068401400000C900000003068401400000D500000003068401400000E100000003068401400000ED00000003068401400001590000000306C401400001710000000306C401400001800000000606C4014000018C0000000C06C4014" />
+				<noteRow
+					y="74"
+					noteDataWithLift="0x000001B0000000306C401400000330000000306C401400000450000000306C401400000510000000306C4014000005D0000000306C401400000600000000C06C4014000009900000003068401400000A200000003068401400000B100000003068401400000BA000000030684014" />
+				<noteRow
+					y="75"
+					noteDataWithLift="0x00001620000000606C4014000017A0000000606C401400001860000000606C4014" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x000009C00000006068401400000B700000003068401400001500000000606C4014000015C0000000606C401400001680000000606C401400001740000000606C401400001800000000606C4014" />
+				<noteRow
+					y="78"
+					noteDataWithLift="0x00000600000000906C401400000750000000306C401400000780000000906C4014000008D0000000306C401400000B400000003068401400001260000000606C401400001320000000606C4014000014A0000000606C401400001560000000306C4014000016E0000000306C401400001800000001806C4014" />
+				<noteRow
+					y="79"
+					noteDataWithLift="0x00000690000000306C4014000006C0000000906C401400000810000000306C401400000840000000906C4014" />
+				<noteRow
+					y="80"
+					noteDataWithLift="0x00001440000000606C4014" />
+				<noteRow
+					y="82"
+					noteDataWithLift="0x000013E0000000606C401400001590000000306C4014" />
+				<noteRow
+					y="83"
+					noteDataWithLift="0x00001380000000606C401400001620000000606C401400001710000000306C4014000017A0000000606C4014" />
+				<noteRow
+					y="85"
+					noteDataWithLift="0x00001500000000606C401400001590000000306C4014000015C0000000606C401400001680000000606C401400001740000000606C4014" />
+				<noteRow
+					y="87"
+					noteDataWithLift="0x00001380000000606C4014000014A0000000606C401400001560000000306C401400001620000000606C4014000016E0000000306C4014" />
+				<noteRow
+					y="88"
+					noteDataWithLift="0x00001440000000606C401400001500000000606C4014000015C0000000606C4014" />
+				<noteRow
+					y="90"
+					noteDataWithLift="0x00001320000000606C4014000013E0000000606C4014000014A0000000606C401400001560000000306C4014" />
+				<noteRow
+					y="92"
+					noteDataWithLift="0x00001440000000606C4014" />
+				<noteRow
+					y="94"
+					noteDataWithLift="0x000013E0000000606C4014" />
+				<noteRow
+					y="95"
+					noteDataWithLift="0x00001380000000606C4014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="58"
+			yScrollKeyboard="50"
+			instrumentPresetName="Wizard"
+			instrumentPresetFolder="SYNTHS/Keyboard"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="6528"
+			colourOffset="13"
+			section="4">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x1999997E"
+				oscBPulseWidth="0x1C28F5B8"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x76000000"
+				lpfResonance="0xC2000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0xCCCCCCBF"
+				modFXDepth="0x3D70A3B5"
+				delayRate="0xBA000000"
+				delayFeedback="0xC2000000"
+				reverbAmount="0x08000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x23D70A20"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x8A3D70A2"
+					decay="0xA8F5C288"
+					sustain="0xD1EB8510"
+					release="0xA3D70A37" />
+				<envelope2
+					attack="0x147AE12D"
+					decay="0xE6666654"
+					sustain="0x80000000"
+					release="0x33333313" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="41"
+					noteDataWithLift="0x000005D000000030684014" />
+				<noteRow
+					y="42"
+					noteDataWithLift="0x0000009000000030684014000001B000000030684014000003300000003068401400000450000000306840140000051000000030684014000006000000003068401400000660000000606840140000108000000090684014" />
+				<noteRow
+					y="43"
+					noteDataWithLift="0x000000C0000000EF684014000001E00000003068401400000240000000EF6840140000036000000030684014000003C0000000906840140000048000000030684014000004E0000000306840140000054000000030684014000005A0000000306840140000063000000030684014" />
+				<noteRow
+					y="45"
+					noteDataWithLift="0x00000210000000306840140000039000000030684014000004B0000000306840140000057000000030684014" />
+				<noteRow
+					y="47"
+					noteDataWithLift="0x0000120000000060684014000012C000000060684014000013800000006068401400001440000000606840140000150000000060684014000015C000000060684014000016800000006068401400001740000000606840140000180000000060684014000018C000000060684014" />
+				<noteRow
+					y="54"
+					noteDataWithLift="0x00000F60000000606840140000108000000090684014000011A00000006068401400001260000000606840140000132000000060684014000013E000000060684014000014A00000006068401400001560000000606840140000162000000060684014000016E000000060684014000017A00000006068401400001860000000606840140000192000000060684014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x00000780000000C068401400000840000000C068401400000900000000C0684014000009C0000000C068401400000C000000009068401400000CC00000009068401400000D800000009068401400000E400000009068401400000F0000000060684014" />
+				<noteRow
+					y="61"
+					noteDataWithLift="0x000009000000009068401400000A500000003068401400000A800000009068401400000BD00000003068401400000C900000003068401400000D500000003068401400000E100000003068401400000ED000000030684014" />
+				<noteRow
+					y="62"
+					noteDataWithLift="0x000009900000003068401400000A200000003068401400000B100000003068401400000BA000000030684014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x000009C00000006068401400000B7000000030684014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x00000750000000306840140000078000000090684014000008D00000003068401400000B4000000030684014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x00000810000000306840140000084000000090684014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="47"
+			yScrollKeyboard="50"
+			instrumentPresetName="Cello Db"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="6528"
+			colourOffset="-62"
+			section="4">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0xEE000000"
+				lpfResonance="0x80000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0x80000000"
+				reverbAmount="0x2E000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x0E000000"
+					decay="0xE6666654"
+					sustain="0x7FFFFFFF"
+					release="0x88000000" />
+				<envelope2
+					attack="0x570A3D4A"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo2"
+						destination="lpfFrequency"
+						amount="0x0147AE14" />
+					<patchCable
+						source="note"
+						destination="lpfFrequency"
+						amount="0x08F5C28C" />
+					<patchCable
+						source="envelope2"
+						destination="lpfFrequency"
+						amount="0x170A3D68" />
+					<patchCable
+						source="compressor"
+						destination="volumePostReverbSend"
+						amount="0x27800000" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03D70A3C" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="46"
+					noteDataWithLift="0x00000F00000000907F4014" />
+				<noteRow
+					y="47"
+					noteDataWithLift="0x000010E0000000607F401400001260000000607F401400001320000000607F4014000013E0000000607F4014000014A0000000607F401400001560000000607F401400001620000000607F4014000016E0000000607F4014000017A0000000607F401400001860000000607F4014" />
+				<noteRow
+					y="49"
+					noteDataWithLift="0x00000930000000307F4014000009C0000000607F401400000AB0000000307F401400000B40000000607F4014" />
+				<noteRow
+					y="50"
+					noteDataWithLift="0x00000870000000307F4014000008A0000000607F401400000990000000307F401400000A20000000307F401400000B10000000307F401400000BA0000000307F4014" />
+				<noteRow
+					y="51"
+					noteDataWithLift="0x000007B0000000307F4014000007E0000000907F4014" />
+				<noteRow
+					y="52"
+					noteDataWithLift="0x000006F0000000307F4014000007200000008F7F401400000960000000307F401400000A50000000307F401400000AE0000000307F401400000BD0000000307F401400000F00000000907F4014" />
+				<noteRow
+					y="53"
+					noteDataWithLift="0x000005D0000000307F401400000C30000000307F401400000C60000000907F401400000E70000000307F4014" />
+				<noteRow
+					y="54"
+					noteDataWithLift="0x00000450000000307F401400000510000000307F401400000600000000307F401400000660000000907F401400000CF0000000307F401400000D200000008F7F401400000EA0000000487F401400001080000000607F401400001200000000607F4014000012C0000000607F401400001380000000607F401400001440000000607F401400001500000000607F4014000015C0000000607F401400001680000000607F401400001740000000607F401400001800000000607F401400001920000000607F4014" />
+				<noteRow
+					y="55"
+					noteDataWithLift="0x00000480000000307F4014000004E0000000307F401400000540000000307F4014000005A0000000307F401400000630000000307F401400000DB0000000307F401400000DE0000000907F4014" />
+				<noteRow
+					y="57"
+					noteDataWithLift="0x000004B0000000307F401400000570000000307F4014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x000011A0000000607F4014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x00001140000000607F4014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="79"
+			yScrollKeyboard="50"
+			instrumentPresetSlot="1"
+			instrumentPresetSubSlot="-1"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="3072"
+			colourOffset="13"
+			section="3">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x18000000"
+				pan="0x00000000"
+				lpfFrequency="0x5A000000"
+				lpfResonance="0xAE000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x94000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x86000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0xBA000000"
+				reverbAmount="0xF6000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x80000000"
+					decay="0xB851EB7B"
+					sustain="0xB333332A"
+					release="0x80000000" />
+				<envelope2
+					attack="0xE6666654"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03000000" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="66"
+					noteDataWithLift="0x00000A20000000606C4014" />
+				<noteRow
+					y="74"
+					noteDataWithLift="0x00000060000000906C401400000120000000306C401400000180000000906C401400000240000000306C4014000002A0000000306C401400000300000000306C4014" />
+				<noteRow
+					y="75"
+					noteDataWithLift="0x000004B0000000306C4014000004E0000000906C4014" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x000003F0000000306C4014000004200000008F6C401400000570000000306C4014000005A0000000606C401400000630000000606C401400000750000000306C4014" />
+				<noteRow
+					y="77"
+					noteDataWithLift="0x00000780000000906C4014" />
+				<noteRow
+					y="78"
+					noteDataWithLift="0x00000030000000306C4014000000F0000000306C401400000150000000306C401400000210000000306C401400000270000000306C4014000002D0000000306C401400000360000000906C401400000690000000306C401400000720000000306C401400000840000000906C4014" />
+				<noteRow
+					y="79"
+					noteDataWithLift="0x000006C0000000606C4014" />
+				<noteRow
+					y="80"
+					noteDataWithLift="0x00000900000000906C4014" />
+				<noteRow
+					y="82"
+					noteDataWithLift="0x000009C0000000606C4014" />
+				<noteRow
+					y="83"
+					noteDataWithLift="0x00000060000000906C401400000120000000306C401400000180000000906C401400000240000000306C4014000002A0000000306C401400000300000000306C4014000004B0000000306C4014000004E0000000906C401400000570000000306C4014000005A0000000606C4014" />
+				<noteRow
+					y="85"
+					noteDataWithLift="0x000003F0000000306C4014000004200000008F6C401400000810000000306C4014000008D0000000306C401400000990000000306C4014" />
+				<noteRow
+					y="86"
+					noteDataWithLift="0x00000150000000306C401400000270000000306C401400000330000000306C401400000360000000906C4014" />
+				<noteRow
+					y="87"
+					noteDataWithLift="0x000004B0000000306C4014000004E0000000906C4014" />
+				<noteRow
+					y="88"
+					noteDataWithLift="0x000003F0000000306C4014000004200000008F6C401400000570000000306C4014000005A0000000606C401400000660000000306C401400000750000000306C4014" />
+				<noteRow
+					y="89"
+					noteDataWithLift="0x00000780000000906C401400000900000000906C4014" />
+				<noteRow
+					y="90"
+					noteDataWithLift="0x00000360000000906C401400000690000000306C401400000720000000306C401400000840000000906C4014000009C0000000606C4014" />
+				<noteRow
+					y="91"
+					noteDataWithLift="0x000006C0000000606C4014" />
+				<noteRow
+					y="92"
+					noteDataWithLift="0x00000900000000906C4014" />
+				<noteRow
+					y="94"
+					noteDataWithLift="0x000009C0000000606C4014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="48"
+			yScrollKeyboard="50"
+			instrumentPresetName="Wizard"
+			instrumentPresetFolder="SYNTHS/Keyboard"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="3072"
+			colourOffset="13"
+			section="3">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x1999997E"
+				oscBPulseWidth="0x1C28F5B8"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x76000000"
+				lpfResonance="0xC2000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0xCCCCCCBF"
+				modFXDepth="0x3D70A3B5"
+				delayRate="0xBA000000"
+				delayFeedback="0xC2000000"
+				reverbAmount="0x08000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x23D70A20"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x8A3D70A2"
+					decay="0xA8F5C288"
+					sustain="0xD1EB8510"
+					release="0xA3D70A37" />
+				<envelope2
+					attack="0x147AE12D"
+					decay="0xE6666654"
+					sustain="0x80000000"
+					release="0x33333313" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="42"
+					noteDataWithLift="0x00000B7000000030684014" />
+				<noteRow
+					y="43"
+					noteDataWithLift="0x00000600000000306840140000078000000030684014" />
+				<noteRow
+					y="44"
+					noteDataWithLift="0x0000057000000030684014000005A000000060684014" />
+				<noteRow
+					y="45"
+					noteDataWithLift="0x000004B000000030684014000004E000000090684014" />
+				<noteRow
+					y="46"
+					noteDataWithLift="0x000003F000000030684014000004200000008F684014" />
+				<noteRow
+					y="47"
+					noteDataWithLift="0x0000018000000090684014000002A0000000306840140000036000000090684014" />
+				<noteRow
+					y="49"
+					noteDataWithLift="0x00000AB000000030684014" />
+				<noteRow
+					y="52"
+					noteDataWithLift="0x000006C0000000606840140000084000000060684014" />
+				<noteRow
+					y="54"
+					noteDataWithLift="0x000001500000003068401400000270000000306840140000033000000030684014000006900000003068401400000720000000306840140000081000000030684014000008A000000030684014000009F00000003068401400000BA000000060684014" />
+				<noteRow
+					y="55"
+					noteDataWithLift="0x0000060000000030684014000006600000003068401400000750000000306840140000078000000030684014000007E000000030684014000008D000000030684014" />
+				<noteRow
+					y="56"
+					noteDataWithLift="0x0000057000000030684014000005A0000000606840140000093000000030684014" />
+				<noteRow
+					y="57"
+					noteDataWithLift="0x000004B000000030684014000004E000000090684014" />
+				<noteRow
+					y="58"
+					noteDataWithLift="0x000003F000000030684014000004200000008F684014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x000000600000009068401400000120000000306840140000024000000030684014000003000000003068401400000360000000906840140000063000000090684014000006C0000000C0684014000007B00000009068401400000840000000C0684014" />
+				<noteRow
+					y="61"
+					noteDataWithLift="0x000009600000009068401400000A200000009068401400000AE000000090684014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x000006C0000000606840140000084000000060684014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x0000003000000030684014000000F0000000306840140000021000000030684014000002D000000030684014000006900000003068401400000720000000306840140000081000000030684014000008A000000030684014000009F000000030684014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x00000660000000306840140000075000000030684014000007E000000030684014000008D000000030684014" />
+				<noteRow
+					y="68"
+					noteDataWithLift="0x0000093000000030684014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="54"
+			yScrollKeyboard="50"
+			instrumentPresetName="Cello Db"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="3072"
+			colourOffset="-62"
+			section="3">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x10000000"
+				lpfResonance="0x80000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0x80000000"
+				reverbAmount="0x2E000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x0E000000"
+					decay="0xE6666654"
+					sustain="0x7FFFFFFF"
+					release="0x88000000" />
+				<envelope2
+					attack="0x570A3D4A"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo2"
+						destination="lpfFrequency"
+						amount="0x0147AE14" />
+					<patchCable
+						source="note"
+						destination="lpfFrequency"
+						amount="0x08F5C28C" />
+					<patchCable
+						source="envelope2"
+						destination="lpfFrequency"
+						amount="0x170A3D68" />
+					<patchCable
+						source="compressor"
+						destination="volumePostReverbSend"
+						amount="0x27800000" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03D70A3C" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="54"
+					noteDataWithLift="0x00000090000000307F4014000001B000000030794014000002700000003079401400000B40000000607F4014" />
+				<noteRow
+					y="56"
+					noteDataWithLift="0x00000A80000000907F4014" />
+				<noteRow
+					y="58"
+					noteDataWithLift="0x000009C0000000907F4014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x0000000000000090794014000000C0000000307F4014000001200000008E794014000001E00000003079401400000240000000307F4014000002A000000030794014000005D0000000307F401400000900000000907F4014" />
+				<noteRow
+					y="61"
+					noteDataWithLift="0x00000450000000307F401400000600000000907F401400000750000000307F401400000780000000607F4014000007E0000000307F4014000008D0000000307F401400000990000000307F401400000A50000000307F401400000B10000000307F4014" />
+				<noteRow
+					y="62"
+					noteDataWithLift="0x000000F0000000307F40140000021000000030794014000002D00000003079401400000690000000307F401400000720000000307F401400000810000000307F4014000008A0000000307F4014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x000006C0000000607F401400000870000000307F4014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x00000300000000907F401400000480000000907F401400000840000000307F4014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x00000390000000307F4014000003C0000000907F4014" />
+				<noteRow
+					y="71"
+					noteDataWithLift="0x00000510000000307F401400000540000000907F4014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="71"
+			yScrollKeyboard="50"
+			instrumentPresetName="Wizard"
+			instrumentPresetFolder="SYNTHS/Keyboard"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="1536"
+			colourOffset="13"
+			section="2">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x1999997E"
+				oscBPulseWidth="0x1C28F5B8"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x76000000"
+				lpfResonance="0xC2000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0xCCCCCCBF"
+				modFXDepth="0x3D70A3B5"
+				delayRate="0xBA000000"
+				delayFeedback="0xC2000000"
+				reverbAmount="0x08000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x23D70A20"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x8A3D70A2"
+					decay="0xA8F5C288"
+					sustain="0xD1EB8510"
+					release="0xA3D70A37" />
+				<envelope2
+					attack="0x147AE12D"
+					decay="0xE6666654"
+					sustain="0x80000000"
+					release="0x33333313" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="30"
+					muted="1"
+					noteDataWithLift="0x0000000000000060654014" />
+				<noteRow
+					y="42"
+					noteDataWithLift="0x000000000000006065401400000180000000C065401400000240000000306540140000030000000030684014" />
+				<noteRow
+					y="49"
+					noteDataWithLift="0x000001E000000060654014" />
+				<noteRow
+					y="50"
+					noteDataWithLift="0x0000018000000060654014" />
+				<noteRow
+					y="52"
+					noteDataWithLift="0x000000C0000000C0654014" />
+				<noteRow
+					y="54"
+					noteDataWithLift="0x000000300000003065401400000270000000307640140000030000000030684014" />
+				<noteRow
+					y="58"
+					noteDataWithLift="0x0000006000000030654014000002A0000000307040140000033000000030684014" />
+				<noteRow
+					y="61"
+					noteDataWithLift="0x0000009000000030654014000002D0000000306F40140000036000000030684014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x000000C0000000C06540140000039000000030684014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x00000480000000C068401400000540000000C0684014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x000003C0000000C0684014" />
+				<noteRow
+					y="73"
+					noteDataWithLift="0x000005A000000060684014" />
+				<noteRow
+					y="74"
+					noteDataWithLift="0x0000054000000060684014" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x00000240000000C0654014000004E000000060684014" />
+				<noteRow
+					y="78"
+					noteDataWithLift="0x0000000000000060654014000001B0000000306640140000048000000060684014" />
+				<noteRow
+					y="79"
+					noteDataWithLift="0x000003C0000000C0684014" />
+				<noteRow
+					y="82"
+					noteDataWithLift="0x0000000000000060654014000001E000000030674014000003F000000030684014000005A000000060684014" />
+				<noteRow
+					y="85"
+					noteDataWithLift="0x000002100000003068401400000360000000606840140000042000000030684014" />
+				<noteRow
+					y="86"
+					noteDataWithLift="0x0000030000000060684014" />
+				<noteRow
+					y="88"
+					noteDataWithLift="0x00000240000000C06540140000045000000030684014000005A000000060684014" />
+				<noteRow
+					y="90"
+					noteDataWithLift="0x00000000000000606540140000054000000060684014" />
+				<noteRow
+					y="91"
+					noteDataWithLift="0x00000480000000C0684014" />
+				<noteRow
+					y="94"
+					noteDataWithLift="0x000003F000000030684014000005A000000060684014" />
+				<noteRow
+					y="97"
+					noteDataWithLift="0x0000042000000030684014" />
+				<noteRow
+					y="100"
+					noteDataWithLift="0x0000045000000030684014" />
+				<noteRow
+					y="102"
+					noteDataWithLift="0x0000054000000060684014" />
+				<noteRow
+					y="103"
+					noteDataWithLift="0x00000480000000C0684014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="52"
+			yScrollKeyboard="50"
+			instrumentPresetName="Cello Db"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="1536"
+			colourOffset="-62"
+			section="2">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x30000000"
+				lpfResonance="0x80000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0x80000000"
+				reverbAmount="0x2E000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x0E000000"
+					decay="0xE6666654"
+					sustain="0x7FFFFFFF"
+					release="0x88000000" />
+				<envelope2
+					attack="0x570A3D4A"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo2"
+						destination="lpfFrequency"
+						amount="0x0147AE14" />
+					<patchCable
+						source="note"
+						destination="lpfFrequency"
+						amount="0x08F5C28C" />
+					<patchCable
+						source="envelope2"
+						destination="lpfFrequency"
+						amount="0x170A3D68" />
+					<patchCable
+						source="compressor"
+						destination="volumePostReverbSend"
+						amount="0x27800000" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03D70A3C" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="54"
+					noteDataWithLift="0x000000F0000000306340140000033000000030634014000005D000000030794014" />
+				<noteRow
+					y="58"
+					noteDataWithLift="0x000000000000006063401400000120000000306340140000036000000030634014" />
+				<noteRow
+					y="61"
+					noteDataWithLift="0x0000015000000030634014000002A0000000606340140000039000000030634014000004E000000060634014" />
+				<noteRow
+					y="62"
+					noteDataWithLift="0x00000240000000606340140000048000000060634014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x00000180000000C0634014000003C0000000C0634014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="82"
+			yScrollKeyboard="50"
+			instrumentPresetSlot="1"
+			instrumentPresetSubSlot="-1"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="7680"
+			colourOffset="13"
+			section="1">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x18000000"
+				pan="0x00000000"
+				lpfFrequency="0x38000000"
+				lpfResonance="0xAE000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x94000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x86000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0xBA000000"
+				reverbAmount="0xF6000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x80000000"
+					decay="0xB851EB7B"
+					sustain="0xB333332A"
+					release="0x80000000" />
+				<envelope2
+					attack="0xE6666654"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03000000" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="72"
+					noteDataWithLift="0x00000CA0000000206C401400000D00000000206C401400000D60000000206C4014" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x00000E20000000206C401400000E80000000206C4014" />
+				<noteRow
+					y="77"
+					noteDataWithLift="0x00000BC0000000206C401400000EE0000000206C401400001D80000000206C4014" />
+				<noteRow
+					y="78"
+					noteDataWithLift="0x00001DE0000000206C4014" />
+				<noteRow
+					y="79"
+					noteDataWithLift="0x00000C40000000206C401400000FA0000000206C401400001000000000206C401400001060000000206C401400001D20000000206C4014" />
+				<noteRow
+					y="81"
+					noteDataWithLift="0x00000D40000000206C401400000EC0000000206C401400000F40000000206C401400001CC0000000206C4014" />
+				<noteRow
+					y="82"
+					noteDataWithLift="0x00000C20000000206C401400000C80000000206C401400000CE0000000206C401400000DC0000000206C401400000E00000000206C401400000E60000000206C401400001BA0000000206C401400001C00000000206C4014" />
+				<noteRow
+					y="83"
+					noteDataWithLift="0x00000980000000206C4014000009E0000000206C401400000B60000000206C401400001120000000206C401400001180000000206C401400001B40000000206C401400001C60000000206C401400001D00000000206C401400001D60000000206C401400001DC0000000206C4014" />
+				<noteRow
+					y="84"
+					noteDataWithLift="0x00000000000000206C401400000140000000206C4014000001A0000000206C4014000001E0000000206C401400000220000000206C401400000260000000206C401400000440000000206C4014000004A0000000206C4014000004E0000000206C401400000520000000206C401400000560000000206C401400000860000000206C4014000008C0000000206C401400000920000000206C401400000A40000000206C401400000AA0000000206C401400000AE0000000206C401400000B20000000206C401400000C60000000206C401400000CC0000000206C401400000D20000000206C4014000011E0000000206C401400001200000000C06C4014000012C0000000606C401400001320000000606C401400001380000000C06C401400001440000000606C4014000014A0000000606C401400001500000000C06C4014000015C0000000606C401400001620000000606C401400001680000000C06C401400001740000000606C4014000017A0000000606C4014000018A0000000206C401400001900000000206C401400001A20000000206C401400001A80000000206C4014" />
+				<noteRow
+					y="85"
+					noteDataWithLift="0x00001840000000206C401400001960000000206C4014000019C0000000206C401400001AE0000000206C401400001B80000000206C401400001BE0000000206C401400001CA0000000206C4014" />
+				<noteRow
+					y="86"
+					noteDataWithLift="0x000000E0000000206C4014000007A0000000206C401400000800000000206C401400000960000000206C4014000009A0000000206C4014000009C0000000206C401400000A00000000206C401400000BA0000000206C401400000BE0000000206C401400001B20000000206C401400001C40000000206C4014" />
+				<noteRow
+					y="87"
+					noteDataWithLift="0x00000180000000206C4014000001C0000000206C401400000200000000206C401400000320000000206C401400000380000000206C401400000480000000206C4014000004C0000000206C401400000500000000206C401400001880000000206C4014000018E0000000206C401400001A00000000206C401400001A60000000206C4014" />
+				<noteRow
+					y="88"
+					noteDataWithLift="0x00000020000000206C401400000080000000206C401400000120000000206C401400000160000000206C401400000240000000206C401400000280000000206C4014000002C0000000206C4014000003E0000000206C401400000420000000206C401400000460000000206C401400000540000000206C401400000580000000206C4014000005C0000000206C4014000006E0000000206C401400000740000000206C4014000008A0000000206C4014000008E0000000206C401400000900000000206C401400000940000000206C401400000A20000000206C401400000A60000000206C401400000DA0000000206C401400000DE0000000206C401400000E40000000206C401400001040000000206C4014000011C0000000206C401400001820000000206C401400001940000000206C4014000019A0000000206C401400001AC0000000206C4014" />
+				<noteRow
+					y="89"
+					noteDataWithLift="0x000000C0000000206C401400000100000000206C401400000620000000206C401400000680000000206C401400000780000000206C4014000007C0000000206C401400000B40000000206C401400000B80000000206C401400000EA0000000206C401400000F20000000206C401400000F80000000206C401400000FE0000000206C4014000010C0000000206C401400001DA0000000206C4014" />
+				<noteRow
+					y="90"
+					noteDataWithLift="0x00001100000000206C401400001160000000206C4014" />
+				<noteRow
+					y="91"
+					noteDataWithLift="0x00000060000000206C4014000000A0000000206C4014000002A0000000206C4014000002E0000000206C4014000003C0000000206C401400000400000000206C4014000005A0000000206C4014000005E0000000206C4014000006C0000000206C401400000700000000206C401400000A80000000206C401400000AC0000000206C401400000B00000000206C401400000C00000000206C401400000F60000000206C401400000FC0000000206C401400001020000000206C4014000010A0000000206C401400001CE0000000206C401400001D40000000206C4014" />
+				<noteRow
+					y="92"
+					noteDataWithLift="0x00000300000000206C401400000340000000206C4014" />
+				<noteRow
+					y="93"
+					noteDataWithLift="0x00000600000000206C401400000640000000206C401400000840000000206C401400000880000000206C401400000F00000000206C401400001C80000000206C4014" />
+				<noteRow
+					y="94"
+					noteDataWithLift="0x00000D80000000206C401400001B60000000206C401400001BC0000000206C4014" />
+				<noteRow
+					y="95"
+					noteDataWithLift="0x000007E0000000206C401400000820000000206C4014000010E0000000206C401400001140000000206C401400001B00000000206C401400001C20000000206C4014" />
+				<noteRow
+					y="96"
+					noteDataWithLift="0x00000000000000206C401400000040000000206C401400000360000000206C4014000003A0000000206C401400000720000000206C401400000760000000206C4014000011A0000000206C401400001200000000C06C401400001380000000C06C401400001500000000C06C401400001680000000C06C401400001860000000206C4014000018C0000000206C4014000019E0000000206C401400001A40000000206C4014" />
+				<noteRow
+					y="97"
+					noteDataWithLift="0x00001800000000206C401400001920000000206C401400001980000000206C401400001AA0000000206C4014" />
+				<noteRow
+					y="98"
+					noteDataWithLift="0x00000660000000206C4014000006A0000000206C4014" />
+				<noteRow
+					y="101"
+					noteDataWithLift="0x00001080000000206C4014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="46"
+			yScrollKeyboard="50"
+			instrumentPresetName="Wizard"
+			instrumentPresetFolder="SYNTHS/Keyboard"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="7680"
+			colourOffset="13"
+			section="1">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x1999997E"
+				oscBPulseWidth="0x1C28F5B8"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x76000000"
+				lpfResonance="0xC2000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0xCCCCCCBF"
+				modFXDepth="0x3D70A3B5"
+				delayRate="0xBA000000"
+				delayFeedback="0xC2000000"
+				reverbAmount="0x08000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x23D70A20"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x8A3D70A2"
+					decay="0xA8F5C288"
+					sustain="0xD1EB8510"
+					release="0xA3D70A37" />
+				<envelope2
+					attack="0x147AE12D"
+					decay="0xE6666654"
+					sustain="0x80000000"
+					release="0x33333313" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="30"
+					noteDataWithLift="0x00001B0000000180654014" />
+				<noteRow
+					y="42"
+					noteDataWithLift="0x000016E0000000206540140000174000000020654014000018000000030065401400001B000000018065401400001C8000000180654014" />
+				<noteRow
+					y="43"
+					noteDataWithLift="0x0000156000000020654014000015C0000000206540140000168000000020654014000017A000000020654014" />
+				<noteRow
+					y="44"
+					noteDataWithLift="0x00001500000000206540140000162000000020654014" />
+				<noteRow
+					y="45"
+					noteDataWithLift="0x0000126000000020654014000012C000000020654014000013E0000000206540140000144000000020654014" />
+				<noteRow
+					y="46"
+					noteDataWithLift="0x000012000000002065401400001320000000206540140000138000000020654014000014A000000020654014" />
+				<noteRow
+					y="48"
+					noteDataWithLift="0x00000CC00000006065401400000D200000006065401400000E400000006065401400000EA00000006065401400000FC00000006065401400001020000000606540140000114000000060654014000011A00000006065401400001220000000206540140000128000000020654014000012E0000000206540140000134000000020654014000013A00000002065401400001400000000206540140000146000000020654014000014C00000002065401400001520000000206540140000158000000020654014000015E0000000206540140000164000000020654014000016A00000002065401400001700000000206540140000176000000020654014000017C000000020654014" />
+				<noteRow
+					y="53"
+					noteDataWithLift="0x00001720000000206540140000178000000020654014" />
+				<noteRow
+					y="54"
+					noteDataWithLift="0x000016C000000020654014000017E0000000206540140000180000000300654014" />
+				<noteRow
+					y="55"
+					noteDataWithLift="0x000015A0000000206540140000160000000020654014" />
+				<noteRow
+					y="56"
+					noteDataWithLift="0x00001540000000206540140000166000000020654014" />
+				<noteRow
+					y="57"
+					noteDataWithLift="0x000012A000000020654014000013000000002065401400001420000000206540140000148000000020654014" />
+				<noteRow
+					y="58"
+					noteDataWithLift="0x00001240000000206540140000136000000020654014000013C000000020654014000014E000000020654014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x00000C00000000C065401400000D80000000C065401400000F00000000C065401400001080000000C0654014" />
+				<noteRow
+					y="62"
+					noteDataWithLift="0x00000A80000000C0654014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x000009C0000000C0634014" />
+				<noteRow
+					y="65"
+					noteDataWithLift="0x00000900000000C0634014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x00000180000000C063401400000480000000C0634014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x00000240000000606340140000042000000060634014000005400000006063401400000B40000000C0654014" />
+				<noteRow
+					y="69"
+					noteDataWithLift="0x00000A83000000BD654014" />
+				<noteRow
+					y="71"
+					noteDataWithLift="0x0000096000000060634014000009C00000006065401400000B40000000C0654014" />
+				<noteRow
+					y="72"
+					noteDataWithLift="0x0000000000000060634014000001200000006063401400000180000000C06340140000024000000060634014000002A00000006063401400000300000000C0634014000003C000000060634014000004200000006063401400000480000000C063401400000540000000606340140000084000000060634014000008A000000060634014000009000000006063401400000A200000006063401400000A86000000BA654014" />
+				<noteRow
+					y="74"
+					noteDataWithLift="0x000000C00000006063401400000780000000C06340140000096000000060634014000009C00000006063401400000BA000000060654014" />
+				<noteRow
+					y="75"
+					noteDataWithLift="0x00000180000000C063401400000300000000C063401400000480000000C0634014" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x0000000000000060634014000000600000006063401400000120000000606340140000024000000060634014000002A000000060634014000003C00000006063401400000420000000606340140000054000000060634014000005A000000060634014000006C0000000606340140000072000000060634014000008A000000060634014000009000000006063401400000A2000000060634014" />
+				<noteRow
+					y="77"
+					noteDataWithLift="0x000000C00000006063401400000600000000C0634014000007800000006063401400000B4000000060654014" />
+				<noteRow
+					y="79"
+					noteDataWithLift="0x0000006000000060634014000002A000000060634014000003C000000060634014000005A0000000606340140000060000000060634014000006C00000006063401400000A89000000B7654014" />
+				<noteRow
+					y="80"
+					noteDataWithLift="0x0000030000000060634014" />
+				<noteRow
+					y="81"
+					noteDataWithLift="0x0000084000000060634014" />
+				<noteRow
+					y="83"
+					noteDataWithLift="0x000007E000000060634014" />
+				<noteRow
+					y="84"
+					noteDataWithLift="0x00000360000000606340140000072000000060634014" />
+				<noteRow
+					y="86"
+					noteDataWithLift="0x0000066000000060634014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="57"
+			yScrollKeyboard="50"
+			instrumentPresetName="Cello Db"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="7680"
+			colourOffset="-62"
+			section="1">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0xFE000000"
+				lpfResonance="0xB4000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0x80000000"
+				reverbAmount="0x2E000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x0E000000"
+					decay="0xE6666654"
+					sustain="0x7FFFFFFF"
+					release="0x88000000" />
+				<envelope2
+					attack="0x570A3D4A"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo2"
+						destination="lpfFrequency"
+						amount="0x0147AE14" />
+					<patchCable
+						source="note"
+						destination="lpfFrequency"
+						amount="0x08F5C28C" />
+					<patchCable
+						source="envelope2"
+						destination="lpfFrequency"
+						amount="0x170A3D68" />
+					<patchCable
+						source="compressor"
+						destination="volumePostReverbSend"
+						amount="0x27800000" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03D70A3C" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="36"
+					noteDataWithLift="0x00000000000000C0634014" />
+				<noteRow
+					y="38"
+					noteDataWithLift="0x00000A80000000C0634014" />
+				<noteRow
+					y="40"
+					noteDataWithLift="0x000000C000000090634014000009C0000000C0634014" />
+				<noteRow
+					y="41"
+					noteDataWithLift="0x000003600000003063401400000900000000C0634014" />
+				<noteRow
+					y="42"
+					noteDataWithLift="0x000003000000003063401400000348000000186340140000039000000030634014" />
+				<noteRow
+					y="43"
+					noteDataWithLift="0x000001500000003063401400000240000000C06340140000033000000018634014000003C00000009063401400000450000000306340140000054000000060634014000005A000000060634014000006C00000006063401400000720000000606340140000084000000060634014000008A00000006063401400000B40000000C0634014" />
+				<noteRow
+					y="44"
+					noteDataWithLift="0x00000480000000C0634014" />
+				<noteRow
+					y="45"
+					noteDataWithLift="0x00000180000000C0634014" />
+				<noteRow
+					y="48"
+					noteDataWithLift="0x00000EA000000060634014" />
+				<noteRow
+					y="52"
+					noteDataWithLift="0x00000C600000006063401400000CC000000060634014" />
+				<noteRow
+					y="53"
+					noteDataWithLift="0x00000C000000006063401400000D2000000060634014" />
+				<noteRow
+					y="55"
+					noteDataWithLift="0x00000600000000C063401400000780000000C063401400000E4000000060634014000011A000000060634014" />
+				<noteRow
+					y="57"
+					noteDataWithLift="0x00000D80000000C0634014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x00000F600000006063401400000FC00000006063401400001CE00000006063401400001D4000000060634014" />
+				<noteRow
+					y="60"
+					noteDataWithLift="0x00000F00000000606340140000102000000060634014" />
+				<noteRow
+					y="61"
+					noteDataWithLift="0x00001B600000006063401400001BC00000006063401400001C800000006063401400001DA000000060634014" />
+				<noteRow
+					y="62"
+					noteDataWithLift="0x0000114000000060634014000016E000000060634014000017400000006063401400001B000000006063401400001C2000000060634014" />
+				<noteRow
+					y="63"
+					noteDataWithLift="0x0000168000000060634014000017A0000000606340140000186000000060634014000018C000000060634014000019E00000006063401400001A4000000060634014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x00001080000000C06340140000156000000060634014000015C00000006063401400001800000000606340140000192000000060634014000019800000006063401400001AA000000060634014" />
+				<noteRow
+					y="65"
+					noteDataWithLift="0x00001500000000606340140000162000000060634014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x0000126000000060634014000012C000000060634014000013E0000000606340140000144000000060634014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x000012000000006063401400001320000000606340140000138000000060634014000014A000000060634014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="92"
+			yScrollKeyboard="50"
+			instrumentPresetSlot="1"
+			instrumentPresetSubSlot="-1"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="12864"
+			colourOffset="13"
+			section="0">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x18000000"
+				pan="0x00000000"
+				lpfFrequency="0x32000000"
+				lpfResonance="0x9E000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x94000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x86000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0xBA000000"
+				reverbAmount="0xF6000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x80000000"
+					decay="0xB851EB7B"
+					sustain="0xB333332A"
+					release="0x80000000" />
+				<envelope2
+					attack="0xE6666654"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03000000" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="45"
+					noteDataWithLift="0x00002A00000000306C4014" />
+				<noteRow
+					y="47"
+					noteDataWithLift="0x00002B80000000306C4014" />
+				<noteRow
+					y="48"
+					noteDataWithLift="0x00002700000000306C4014" />
+				<noteRow
+					y="53"
+					noteDataWithLift="0x000029A0000000606C4014" />
+				<noteRow
+					y="55"
+					noteDataWithLift="0x00002730000000306C4014" />
+				<noteRow
+					y="57"
+					noteDataWithLift="0x00002A30000000306C4014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x00002BB0000000306C4014" />
+				<noteRow
+					y="60"
+					noteDataWithLift="0x00002760000000306C401400002820000000606C401400002880000000C06C401400002A60000000306C4014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x00002580000001806C401400002730000000306C401400002790000000306C401400002BE0000000306C4014" />
+				<noteRow
+					y="65"
+					noteDataWithLift="0x00002880000000C06C401400002A90000000306C4014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x00002280000000C06C401400002340000000C06C401400002580000001806C401400002760000000306C4014000027C0000000606C401400002C10000000306C401400002D30000000306C401400002F400000017F6C4014000030C0000000C06C4014" />
+				<noteRow
+					y="69"
+					noteDataWithLift="0x00002880000000C06C401400002A30000000306C401400002AC0000000306C4014" />
+				<noteRow
+					y="71"
+					noteDataWithLift="0x00002BB0000000306C401400002C40000000306C401400002CA0000000306C401400002CD0000000306C401400002D00000000306C401400002D60000000306C4014" />
+				<noteRow
+					y="72"
+					noteDataWithLift="0x00002580000001806C401400002790000000306C401400002820000000606C401400002880000000C06C401400002A60000000306C401400002AF0000000306C4014" />
+				<noteRow
+					y="74"
+					noteDataWithLift="0x00002340000000C06C401400002430000000306C4014000030C0000000C06C4014" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x00001E00000000C05C401400001F80000000C063401400002100000001806C401400002280000000C06C401400002580000001806C401400002730000000306C4014000027C0000000906C401400002BE0000000306C401400002C70000000306C401400002D90000000306C401400002F400000017F6C4014" />
+				<noteRow
+					y="77"
+					noteDataWithLift="0x00002340000000C06C401400002460000000306C401400002940000000C06C401400002A90000000306C401400002B20000000306C4014000030C0000000C06C4014" />
+				<noteRow
+					y="78"
+					noteDataWithLift="0x00001F800000006063401400002CD0000000306C4014" />
+				<noteRow
+					y="79"
+					noteDataWithLift="0x00001EC000000090634014000020A00000006063401400002160000000306C401400002250000000306C401400002280000000C06C401400002340000000C06C401400002640000000C06C401400002760000000306C401400002C10000000306C401400002D00000000306C401400002D30000000306C401400002DC0000000306C401400002F400000017F6C4014" />
+				<noteRow
+					y="81"
+					noteDataWithLift="0x00001FE0000000C063401400002100000000306C401400002148000000186C401400002190000000306C401400002850000000306C401400002880000000C06C401400002940000000C06C401400002AC0000000306C401400002CA0000000306C4014" />
+				<noteRow
+					y="83"
+					noteDataWithLift="0x00001F500000003063401400002130000000186C4014000021C0000000906C401400002490000000306C401400002C40000000306C401400002CA0000000606C401400002D00000000306C401400002D60000000306C401400002DF0000000306C401400002E20000000606C401400002E80000000606C4014" />
+				<noteRow
+					y="84"
+					noteDataWithLift="0x00001F80000000C063401400002790000000306C401400002AF0000000306C4014" />
+				<noteRow
+					y="85"
+					noteDataWithLift="0x00002E20000000306C4014" />
+				<noteRow
+					y="86"
+					noteDataWithLift="0x00002340000000C06C401400002430000000306C4014000024C0000000906C4014000030C0000000C06C4014" />
+				<noteRow
+					y="87"
+					noteDataWithLift="0x00002E50000000306C4014" />
+				<noteRow
+					y="88"
+					noteDataWithLift="0x00001E00000000C06C401400001F80000000C063401400002040000000C063401400002280000000C06C4014000027C0000000906C401400002C70000000306C401400002D90000000306C401400002E80000000606C401400002F400000017D6C4014" />
+				<noteRow
+					y="89"
+					noteDataWithLift="0x00002340000000C06C401400002460000000306C401400002850000000306C401400002880000000C06C401400002B20000000306C4014000030C0000000C06C4014" />
+				<noteRow
+					y="90"
+					noteDataWithLift="0x00002CD0000000306C4014" />
+				<noteRow
+					y="91"
+					noteDataWithLift="0x00001EC0000000906B401400002160000000306C401400002250000000306C401400002550000000306C401400002580000000C06C401400002640000000C06C401400002D00000000306C401400002DC0000000306C401400002E80000000606C401400002F400000017F6C4014" />
+				<noteRow
+					y="93"
+					noteDataWithLift="0x00002100000000306C401400002148000000186C401400002190000000306C401400002850000000306C401400002880000000C06C401400002CA0000000306C401400002E20000000306C4014" />
+				<noteRow
+					y="95"
+					noteDataWithLift="0x00001F50000000306C401400002040000000C063401400002130000000186C4014000021C0000000906C401400002490000000306C401400002DF0000000306C4014000030C0000000C06C401400003180000000C06C4014" />
+				<noteRow
+					y="96"
+					noteDataWithLift="0x00001F80000000C0634014" />
+				<noteRow
+					y="97"
+					noteDataWithLift="0x00002E20000000306C4014" />
+				<noteRow
+					y="98"
+					noteDataWithLift="0x000024C0000000906C4014000030C0000000C06C4014" />
+				<noteRow
+					y="99"
+					noteDataWithLift="0x00002E50000000306C4014" />
+				<noteRow
+					y="100"
+					noteDataWithLift="0x00002E80000000606C401400002F400000017F6C4014" />
+				<noteRow
+					y="103"
+					noteDataWithLift="0x00002550000000306C401400002580000000C06C4014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="103"
+			yScrollKeyboard="50"
+			instrumentPresetName="Wizard"
+			instrumentPresetFolder="SYNTHS/Keyboard"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="12864"
+			colourOffset="13"
+			section="0"
+			selected="1">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x1999997E"
+				oscBPulseWidth="0x1C28F5B8"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x62000000"
+				lpfResonance="0xD8000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0xCCCCCCBF"
+				modFXDepth="0x3D70A3B5"
+				delayRate="0xBA000000"
+				delayFeedback="0xC2000000"
+				reverbAmount="0x08000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x23D70A20"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x8A3D70A2"
+					decay="0xA8F5C288"
+					sustain="0xD1EB8510"
+					release="0xA3D70A37" />
+				<envelope2
+					attack="0x147AE12D"
+					decay="0xE6666654"
+					sustain="0x80000000"
+					release="0x33333313" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="45"
+					noteDataWithLift="0x00002A00000000306C4014" />
+				<noteRow
+					y="47"
+					noteDataWithLift="0x00002B80000000306C4014" />
+				<noteRow
+					y="48"
+					noteDataWithLift="0x00002700000000306C4014" />
+				<noteRow
+					y="53"
+					noteDataWithLift="0x000029A0000000606C4014" />
+				<noteRow
+					y="55"
+					noteDataWithLift="0x00002730000000306C4014" />
+				<noteRow
+					y="57"
+					noteDataWithLift="0x00002A30000000306C4014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x00000BA00000006063401400002BB0000000306C4014" />
+				<noteRow
+					y="60"
+					noteDataWithLift="0x00002760000000306C401400002820000000606C401400002880000000C06C401400002A60000000306C4014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x00000060000000606340140000012000000060634014000001E000000060634014000002A00000006063401400000360000000606340140000042000000060634014000004E00000006063401400002580000001806C401400002730000000306C401400002790000000306C401400002BE0000000306C4014" />
+				<noteRow
+					y="65"
+					noteDataWithLift="0x00002880000000C06C401400002A90000000306C4014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x000001E0000000606340140000036000000060634014000005A00000006063401400000660000000606340140000072000000060634014000007E000000060634014000008A000000060634014000009600000006063401400000AE000000060634014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x00000060000000606340140000012000000060634014000002A0000000606340140000042000000060634014000004E00000006063401400000A200000006063401400002280000000C06C401400002340000000C06C401400002580000001806C401400002760000000306C4014000027C0000000606C401400002C10000000306C401400002D30000000306C401400002F40000000C06C4014000030C0000000C06C4014" />
+				<noteRow
+					y="69"
+					noteDataWithLift="0x000001E00000006063401400000D20000000606340140000102000000060634014000013200000006063401400002880000000C06C401400002A30000000306C401400002AC0000000306C4014" />
+				<noteRow
+					y="70"
+					noteDataWithLift="0x000005A00000006063401400000660000000606340140000072000000060634014000008A00000006063401400000A2000000060634014" />
+				<noteRow
+					y="71"
+					noteDataWithLift="0x00000060000000606340140000012000000060634014000002A0000000606340140000042000000060634014000004E000000060634014000007E000000060634014000009600000006063401400000AE00000006063401400000BA00000006063401400000C600000006063401400000EA00000006063401400000F6000000060634014000011A0000000606340140000126000000060634014000014A00000006063401400002BB0000000306C401400002C40000000306C401400002CA0000000306C401400002CD0000000306C401400002D00000000306C401400002D60000000306C4014" />
+				<noteRow
+					y="72"
+					noteDataWithLift="0x000003600000006063401400000DE000000060634014000010E000000060634014000013E000000060634014000016200000006063401400002580000001806C401400002790000000306C401400002820000000606C401400002880000000C06C401400002A60000000306C401400002AF0000000306C4014" />
+				<noteRow
+					y="73"
+					noteDataWithLift="0x000005A000000060634014000007E000000060634014000008A000000060634014000009600000006063401400000A2000000060634014" />
+				<noteRow
+					y="74"
+					noteDataWithLift="0x00000DE00000006063401400000EA000000060634014000010E000000060634014000011A000000060634014000015600000006063401400002340000000C06C401400002430000000306C4014000030C0000000C06C4014" />
+				<noteRow
+					y="75"
+					noteDataWithLift="0x0000066000000060634014000007200000006063401400000AE00000006063401400000BA0000000606340140000186000000120634014" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x00000060000000606340140000012000000060634014000001E000000060634014000002A00000006063401400000360000000606340140000042000000060634014000009600000006063401400000C600000006063401400000D200000006063401400000F6000000060634014000010200000006063401400001260000000606340140000132000000060634014000017A00000006063401400001E00000000C05C401400001F80000000C063401400002100000001806C401400002280000000C06C401400002580000001806C401400002730000000306C4014000027C0000000906C401400002BE0000000306C401400002C70000000306C401400002D90000000306C401400002F40000000C06C4014" />
+				<noteRow
+					y="77"
+					noteDataWithLift="0x00002340000000C06C401400002460000000306C401400002940000000C06C401400002A90000000306C401400002B20000000306C4014000030C0000000C06C4014" />
+				<noteRow
+					y="78"
+					noteDataWithLift="0x000001E000000060634014000003600000006063401400000660000000606340140000072000000060634014000007E000000060634014000008A00000006063401400000A200000006063401400000AE00000006063401400000BA00000006063401400000DE000000060634014000010E000000060634014000013E000000060634014000014A000000060634014000016E000000060634014000018630000011D63401400001F800000006063401400002CD0000000306C4014" />
+				<noteRow
+					y="79"
+					noteDataWithLift="0x00000060000000606340140000012000000060634014000002A0000000606340140000042000000060634014000004E000000060634014000005A00000006063401400000C600000006063401400000D200000006063401400000EA00000006063401400000F6000000060634014000011A00000006063401400001260000000606340140000156000000060634014000017A00000006063401400001EC000000090634014000020A00000006063401400002160000000306C401400002250000000306C401400002280000000C06C401400002340000000C06C401400002640000000C06C401400002760000000306C401400002C10000000306C401400002D00000000306C401400002D30000000306C401400002DC0000000306C401400002F40000000C06C4014" />
+				<noteRow
+					y="81"
+					noteDataWithLift="0x000001E00000006063401400000DE0000000606340140000102000000060634014000010E0000000606340140000132000000060634014000013E0000000606340140000162000000060634014000016E000000060634014000017A000000060634014000018660000011A63401400001FE0000000C063401400002100000000306C401400002148000000186C401400002190000000306C401400002850000000306C401400002880000000C06C401400002940000000C06C401400002AC0000000306C401400002CA0000000306C4014" />
+				<noteRow
+					y="82"
+					noteDataWithLift="0x000005A000000060634014000008A00000006063401400000A2000000060634014" />
+				<noteRow
+					y="83"
+					noteDataWithLift="0x00000060000000606340140000012000000060634014000002A0000000606340140000042000000060634014000004E00000006063401400000660000000606340140000072000000060634014000007E000000060634014000009600000006063401400000AE00000006063401400000BA000000060634014000014A000000060634014000015600000006063401400001F500000003063401400002130000000186C4014000021C0000000906C401400002490000000306C401400002C40000000306C401400002CA0000000606C401400002D00000000306C401400002D60000000306C401400002DF0000000306C401400002E20000000606C401400002E80000000606C4014" />
+				<noteRow
+					y="84"
+					noteDataWithLift="0x0000036000000060634014000009600000006063401400000C600000006063401400000D200000006063401400000F60000000606340140000102000000060634014000012600000006063401400001320000000606340140000162000000060634014000016E000000060634014000017A000000060634014000018690000011763401400001F80000000C063401400002790000000306C401400002AF0000000306C4014" />
+				<noteRow
+					y="85"
+					noteDataWithLift="0x000005A000000060634014000007E000000060634014000008A00000006063401400000A200000006063401400002E20000000306C4014" />
+				<noteRow
+					y="86"
+					noteDataWithLift="0x00000DE00000006063401400000EA000000060634014000010E000000060634014000011A000000060634014000013E000000060634014000014A00000006063401400002340000000C06C401400002430000000306C4014000024C0000000906C4014000030C0000000C06C4014" />
+				<noteRow
+					y="87"
+					noteDataWithLift="0x0000066000000060634014000007200000006063401400000AE00000006063401400002E50000000306C4014" />
+				<noteRow
+					y="88"
+					noteDataWithLift="0x00000060000000606340140000012000000060634014000001E000000060634014000002A00000006063401400000360000000606340140000042000000060634014000004E00000006063401400000960000000606340140000156000000060634014000016200000006063401400001E00000000C06C401400001F80000000C063401400002040000000C063401400002280000000C06C4014000027C0000000906C401400002C70000000306C401400002D90000000306C401400002E80000000606C401400002F40000000C06C4014" />
+				<noteRow
+					y="89"
+					noteDataWithLift="0x00002340000000C06C401400002460000000306C401400002850000000306C401400002880000000C06C401400002B20000000306C4014000030C0000000C06C4014" />
+				<noteRow
+					y="90"
+					noteDataWithLift="0x000005A00000006063401400000660000000606340140000186C0000011463401400002CD0000000306C4014" />
+				<noteRow
+					y="91"
+					noteDataWithLift="0x000004E000000060634014000017A00000006063401400001EC0000000906B401400002160000000306C401400002250000000306C401400002550000000306C401400002580000000C06C401400002640000000C06C401400002D00000000306C401400002DC0000000306C401400002E80000000606C401400002F40000000C06C4014" />
+				<noteRow
+					y="93"
+					noteDataWithLift="0x000016E0000000606340140000186F0000011163401400002100000000306C401400002148000000186C401400002190000000306C401400002850000000306C401400002880000000C06C401400002CA0000000306C401400002E20000000306C4014" />
+				<noteRow
+					y="95"
+					noteDataWithLift="0x00001F50000000306C401400002040000000C063401400002130000000186C4014000021C0000000906C401400002490000000306C401400002DF0000000306C4014000030C0000000C06C401400003180000000C0634014" />
+				<noteRow
+					y="96"
+					noteDataWithLift="0x000017A000000060634014000018720000010E63401400001F80000000C0634014" />
+				<noteRow
+					y="97"
+					noteDataWithLift="0x00002E20000000306C4014" />
+				<noteRow
+					y="98"
+					noteDataWithLift="0x000024C0000000906C4014000030C0000000C06C4014" />
+				<noteRow
+					y="99"
+					noteDataWithLift="0x00002E50000000306C4014" />
+				<noteRow
+					y="100"
+					noteDataWithLift="0x00002E80000000606C401400002F40000000C06C4014" />
+				<noteRow
+					y="102"
+					noteDataWithLift="0x000018750000010B634014" />
+				<noteRow
+					y="103"
+					noteDataWithLift="0x00002550000000306C401400002580000000C06C4014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="39"
+			yScrollKeyboard="50"
+			instrumentPresetName="Cello Db"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="12864"
+			colourOffset="-62"
+			section="0">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA87800000000001E004CCCCCA800001E60"
+				pan="0x00000000"
+				lpfFrequency="0x000000000A00000000001E000000000000001E60"
+				lpfResonance="0xB4000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0x80000000"
+				reverbAmount="0x2E000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x1A000000"
+					decay="0xE6666654"
+					sustain="0x7FFFFFFF"
+					release="0x88000000" />
+				<envelope2
+					attack="0x570A3D4A"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo2"
+						destination="lpfFrequency"
+						amount="0x0147AE14" />
+					<patchCable
+						source="note"
+						destination="lpfFrequency"
+						amount="0x08F5C28C" />
+					<patchCable
+						source="envelope2"
+						destination="lpfFrequency"
+						amount="0x170A3D68" />
+					<patchCable
+						source="compressor"
+						destination="volumePostReverbSend"
+						amount="0x27800000" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03D70A3C" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="36"
+					noteDataWithLift="0x000025B000000030704014" />
+				<noteRow
+					y="39"
+					noteDataWithLift="0x0000063000000030634014" />
+				<noteRow
+					y="40"
+					noteDataWithLift="0x00000000000000C063401400000480000000C0634014000022200000006063401400002E8000000180634014" />
+				<noteRow
+					y="41"
+					noteDataWithLift="0x000028B000000030704014" />
+				<noteRow
+					y="42"
+					noteDataWithLift="0x00000540000000F0634014000006600000003063401400000840000000C0634014000009C000000090634014000023800000004063401400002E5000000030634014" />
+				<noteRow
+					y="43"
+					noteDataWithLift="0x000000C00000009063401400000360000000306340140000045000000030634014000021C000000060634014000023C00000004063401400002400000000C06340140000252000000060524014000025E000000030634014000030000000023F634014" />
+				<noteRow
+					y="44"
+					noteDataWithLift="0x00000A5000000018634014" />
+				<noteRow
+					y="45"
+					noteDataWithLift="0x000003000000003063401400000348000000186340140000039000000030634014000023000000004063401400002E2000000030634014" />
+				<noteRow
+					y="46"
+					noteDataWithLift="0x00000A6800000018634014000027C0000000C0634014" />
+				<noteRow
+					y="47"
+					noteDataWithLift="0x000001500000003063401400000240000000C06340140000033000000018634014000003C000000090634014000006900000003063401400000A80000000C06340140000216000000060634014000022C000000040634014000023400000004063401400002B800000015063401400002D60000000C0634014" />
+				<noteRow
+					y="48"
+					noteDataWithLift="0x00000180000000C0634014000021000000006063401400002280000000406340140000261000000030634014000028E00000003063401400002AC0000000C0634014" />
+				<noteRow
+					y="49"
+					noteDataWithLift="0x00002CD000000018634014" />
+				<noteRow
+					y="51"
+					noteDataWithLift="0x000006C000000090634014000020800000004063401400002CE800000018634014" />
+				<noteRow
+					y="52"
+					noteDataWithLift="0x00001F2000000060634014000020C000000040634014000026400000009063401400002D0000000060634014" />
+				<noteRow
+					y="53"
+					noteDataWithLift="0x0000291000000030634014" />
+				<noteRow
+					y="54"
+					noteDataWithLift="0x000007500000003063401400000780000000C063401400001EC0000000606340140000200000000040634014" />
+				<noteRow
+					y="55"
+					noteDataWithLift="0x00000900000000C063401400001E600000006063401400001FC0000000406340140000204000000040634014" />
+				<noteRow
+					y="57"
+					noteDataWithLift="0x00001DA00000006063401400001E000000006063401400001F80000000486340140000294000000090634014" />
+				<noteRow
+					y="58"
+					noteDataWithLift="0x000026D00000003063401400002700000000C0634014" />
+				<noteRow
+					y="59"
+					noteDataWithLift="0x00001D4000000060634014" />
+				<noteRow
+					y="60"
+					noteDataWithLift="0x00000C00000000C063401400000F00000000C063401400001CE000000060634014000029D00000003063401400002A00000000C0634014" />
+				<noteRow
+					y="62"
+					noteDataWithLift="0x00000CC00000009063401400000D800000018063401400000FC000000040634014000010E00000012063401400001C8000000060634014" />
+				<noteRow
+					y="63"
+					noteDataWithLift="0x00001B600000006063401400001C2000000060634014" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x00000D500000001863401400000D68000000186340140000100000000040634014000010800000006063401400001200000000C063401400001B0000000060634014" />
+				<noteRow
+					y="66"
+					noteDataWithLift="0x0000104000000040634014000012C00000009063401400001380000000C0634014000019E00000006063401400001AA00000006063401400001BC000000060634014" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x0000135000000030634014000014400000009063401400001500000000C06340140000198000000060634014" />
+				<noteRow
+					y="69"
+					noteDataWithLift="0x000014D000000030634014000015C000000090634014000019200000006063401400001A4000000060634014" />
+				<noteRow
+					y="71"
+					noteDataWithLift="0x0000165000000030634014" />
+				<noteRow
+					y="72"
+					noteDataWithLift="0x00001680000000C063401400001740000000C06340140000180000000120634014" />
+			</noteRows>
+		</instrumentClip>
+	</sessionClips>
+	<arrangementOnlyTracks>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="64"
+			yScrollKeyboard="50"
+			instrumentPresetSlot="1"
+			instrumentPresetSubSlot="-1"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="384"
+			colourOffset="13">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0xDE000000"
+				pan="0x00000000"
+				lpfFrequency="0x32000000"
+				lpfResonance="0x9E000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x94000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x86000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0xBA000000"
+				reverbAmount="0xF6000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x80000000"
+					decay="0xB851EB7B"
+					sustain="0xB333332A"
+					release="0x80000000" />
+				<envelope2
+					attack="0xE6666654"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03000000" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="45" />
+				<noteRow
+					y="47" />
+				<noteRow
+					y="48" />
+				<noteRow
+					y="53" />
+				<noteRow
+					y="55" />
+				<noteRow
+					y="57" />
+				<noteRow
+					y="59" />
+				<noteRow
+					y="60" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="65" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="69" />
+				<noteRow
+					y="71"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="72" />
+				<noteRow
+					y="74" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="77" />
+				<noteRow
+					y="78" />
+				<noteRow
+					y="79"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="81" />
+				<noteRow
+					y="83"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="84" />
+				<noteRow
+					y="85" />
+				<noteRow
+					y="86" />
+				<noteRow
+					y="87" />
+				<noteRow
+					y="88"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="89" />
+				<noteRow
+					y="90" />
+				<noteRow
+					y="91" />
+				<noteRow
+					y="93" />
+				<noteRow
+					y="95" />
+				<noteRow
+					y="96" />
+				<noteRow
+					y="97" />
+				<noteRow
+					y="98" />
+				<noteRow
+					y="99" />
+				<noteRow
+					y="100" />
+				<noteRow
+					y="103" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="64"
+			yScrollKeyboard="50"
+			instrumentPresetName="Wizard"
+			instrumentPresetFolder="SYNTHS/Keyboard"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="384"
+			colourOffset="13">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x1999997E"
+				oscBPulseWidth="0x1C28F5B8"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x76000000"
+				lpfResonance="0xC2000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0xCCCCCCBF"
+				modFXDepth="0x3D70A3B5"
+				delayRate="0xBA000000"
+				delayFeedback="0xC2000000"
+				reverbAmount="0x08000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x23D70A20"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x8A3D70A2"
+					decay="0xA8F5C288"
+					sustain="0xD1EB8510"
+					release="0xA3D70A37" />
+				<envelope2
+					attack="0x147AE12D"
+					decay="0xE6666654"
+					sustain="0x80000000"
+					release="0x33333313" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="45" />
+				<noteRow
+					y="47" />
+				<noteRow
+					y="48" />
+				<noteRow
+					y="53" />
+				<noteRow
+					y="55" />
+				<noteRow
+					y="57" />
+				<noteRow
+					y="59" />
+				<noteRow
+					y="60" />
+				<noteRow
+					y="64"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="65" />
+				<noteRow
+					y="66" />
+				<noteRow
+					y="67"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="69" />
+				<noteRow
+					y="70" />
+				<noteRow
+					y="71"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="72" />
+				<noteRow
+					y="73" />
+				<noteRow
+					y="74" />
+				<noteRow
+					y="75" />
+				<noteRow
+					y="76"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="77" />
+				<noteRow
+					y="78" />
+				<noteRow
+					y="79"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="81" />
+				<noteRow
+					y="82" />
+				<noteRow
+					y="83"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="84" />
+				<noteRow
+					y="85" />
+				<noteRow
+					y="86" />
+				<noteRow
+					y="87" />
+				<noteRow
+					y="88"
+					noteDataWithLift="0x00000000000001805E4014" />
+				<noteRow
+					y="89" />
+				<noteRow
+					y="90" />
+				<noteRow
+					y="91" />
+				<noteRow
+					y="93" />
+				<noteRow
+					y="95" />
+				<noteRow
+					y="96" />
+				<noteRow
+					y="97" />
+				<noteRow
+					y="98" />
+				<noteRow
+					y="99" />
+				<noteRow
+					y="100" />
+				<noteRow
+					y="102" />
+				<noteRow
+					y="103" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="39"
+			yScrollKeyboard="50"
+			instrumentPresetName="Cello Db"
+			instrumentPresetFolder="SYNTHS"
+			isPlaying="0"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="384"
+			colourOffset="-62">
+			<soundParams
+				arpeggiatorGate="0x00000000"
+				portamento="0x80000000"
+				compressorShape="0xDC28F5B2"
+				oscAVolume="0x7FFFFFFF"
+				oscAPulseWidth="0x00000000"
+				oscAWavetablePosition="0x00000000"
+				oscBVolume="0x80000000"
+				oscBPulseWidth="0x00000000"
+				oscBWavetablePosition="0x00000000"
+				noiseVolume="0x80000000"
+				volume="0x4CCCCCA8"
+				pan="0x00000000"
+				lpfFrequency="0x00000000"
+				lpfResonance="0xB4000000"
+				hpfFrequency="0x80000000"
+				hpfResonance="0x80000000"
+				lfo1Rate="0x1999997E"
+				lfo2Rate="0x00000000"
+				modulator1Amount="0x80000000"
+				modulator1Feedback="0x80000000"
+				modulator2Amount="0x80000000"
+				modulator2Feedback="0x80000000"
+				carrier1Feedback="0x80000000"
+				carrier2Feedback="0x80000000"
+				modFXRate="0x00000000"
+				modFXDepth="0x00000000"
+				delayRate="0x00000000"
+				delayFeedback="0x80000000"
+				reverbAmount="0x2E000000"
+				arpeggiatorRate="0x00000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x00000000">
+				<envelope1
+					attack="0x1A000000"
+					decay="0xE6666654"
+					sustain="0x7FFFFFFF"
+					release="0x88000000" />
+				<envelope2
+					attack="0x570A3D4A"
+					decay="0xE6666654"
+					sustain="0xFFFFFFE9"
+					release="0xE6666654" />
+				<patchCables>
+					<patchCable
+						source="velocity"
+						destination="volume"
+						amount="0x3FFFFFE8" />
+					<patchCable
+						source="aftertouch"
+						destination="volume"
+						amount="0x2A3D7094" />
+					<patchCable
+						source="y"
+						destination="lpfFrequency"
+						amount="0x19999990" />
+					<patchCable
+						source="lfo2"
+						destination="lpfFrequency"
+						amount="0x0147AE14" />
+					<patchCable
+						source="note"
+						destination="lpfFrequency"
+						amount="0x08F5C28C" />
+					<patchCable
+						source="envelope2"
+						destination="lpfFrequency"
+						amount="0x170A3D68" />
+					<patchCable
+						source="compressor"
+						destination="volumePostReverbSend"
+						amount="0x27800000" />
+					<patchCable
+						source="lfo1"
+						destination="pitch"
+						amount="0x03D70A3C" />
+				</patchCables>
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</soundParams>
+			<noteRows>
+				<noteRow
+					y="36" />
+				<noteRow
+					y="39" />
+				<noteRow
+					y="40"
+					noteDataWithLift="0x0000000000000180634014" />
+				<noteRow
+					y="41" />
+				<noteRow
+					y="42" />
+				<noteRow
+					y="43" />
+				<noteRow
+					y="44" />
+				<noteRow
+					y="45" />
+				<noteRow
+					y="46" />
+				<noteRow
+					y="47" />
+				<noteRow
+					y="48" />
+				<noteRow
+					y="49" />
+				<noteRow
+					y="51" />
+				<noteRow
+					y="52" />
+				<noteRow
+					y="53" />
+				<noteRow
+					y="54" />
+				<noteRow
+					y="55" />
+				<noteRow
+					y="57" />
+				<noteRow
+					y="58" />
+				<noteRow
+					y="59" />
+				<noteRow
+					y="60" />
+				<noteRow
+					y="62" />
+				<noteRow
+					y="63" />
+				<noteRow
+					y="64" />
+				<noteRow
+					y="66" />
+				<noteRow
+					y="67" />
+				<noteRow
+					y="69" />
+				<noteRow
+					y="71" />
+				<noteRow
+					y="72" />
+			</noteRows>
+		</instrumentClip>
+	</arrangementOnlyTracks>
+</song>
