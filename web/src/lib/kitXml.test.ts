@@ -9,6 +9,7 @@ import {
   type KitRow,
   panToHex,
   parseKitXml,
+  readWavFrameCount,
   volumeToHex,
 } from "./kitXml";
 
@@ -127,7 +128,9 @@ describe("parseKitXml", () => {
   it("parses attribute-style sound elements", () => {
     const xml = `<kit><soundSources>
       <sound name="KICK" polyphonic="2">
-        <osc1 fileName="SAMPLES/kick.wav" loopMode="2" />
+        <osc1 fileName="SAMPLES/kick.wav" loopMode="2">
+          <zone startSamplePos="0" endSamplePos="22051" />
+        </osc1>
         <defaultParams volume="0x7FFFFFFF" pan="0x00000000" />
       </sound>
     </soundSources></kit>`;
@@ -140,6 +143,8 @@ describe("parseKitXml", () => {
         pan: 0,
         loopMode: "loop",
         polyphonic: "poly",
+        startSamplePos: 0,
+        endSamplePos: 22051,
       },
     ]);
     expect(kit.selectedIndex).toBe(0);
@@ -169,6 +174,8 @@ describe("parseKitXml", () => {
         pan: 50,
         loopMode: "cut",
         polyphonic: "choke",
+        startSamplePos: undefined,
+        endSamplePos: undefined,
       },
     ]);
   });
@@ -184,6 +191,8 @@ describe("parseKitXml", () => {
         pan: hexToPan("0x00000000"),
         loopMode: "once",
         polyphonic: "auto",
+        startSamplePos: undefined,
+        endSamplePos: undefined,
       },
     ]);
   });
@@ -216,6 +225,98 @@ describe("parseKitXml", () => {
   });
 });
 
+describe("generateKitXml Deluge compatibility", () => {
+  it("uses explicit </osc2> close tag, not self-closing", () => {
+    const kit: Kit = {
+      name: "Kit",
+      selectedIndex: 0,
+      rows: [createEmptyRow("KICK", "SAMPLES/kick.wav")],
+    };
+    const xml = generateKitXml(kit);
+    expect(xml).toContain("</osc2>");
+    expect(xml).not.toMatch(/<osc2[^>]*\/>/);
+  });
+
+  it("emits zone with startSamplePos and endSamplePos", () => {
+    const kit: Kit = {
+      name: "Kit",
+      selectedIndex: 0,
+      rows: [
+        {
+          ...createEmptyRow("KICK", "SAMPLES/kick.wav"),
+          startSamplePos: 0,
+          endSamplePos: 22051,
+        },
+      ],
+    };
+    const xml = generateKitXml(kit);
+    expect(xml).toContain('startSamplePos="0"');
+    expect(xml).toContain('endSamplePos="22051"');
+  });
+
+  it("defaults zone positions to 0 when not provided", () => {
+    const kit: Kit = {
+      name: "Kit",
+      selectedIndex: 0,
+      rows: [createEmptyRow("KICK", "SAMPLES/kick.wav")],
+    };
+    const xml = generateKitXml(kit);
+    expect(xml).toContain('startSamplePos="0"');
+    expect(xml).toContain('endSamplePos="0"');
+  });
+});
+
+describe("readWavFrameCount", () => {
+  function makeWav(numFrames: number, channels = 1, bitsPerSample = 16): Blob {
+    const bytesPerFrame = channels * (bitsPerSample / 8);
+    const dataSize = numFrames * bytesPerFrame;
+    const buf = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buf);
+    const write4 = (off: number, s: string) => {
+      for (let i = 0; i < 4; i++) view.setUint8(off + i, s.charCodeAt(i));
+    };
+    write4(0, "RIFF");
+    view.setUint32(4, 36 + dataSize, true);
+    write4(8, "WAVE");
+    write4(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, channels, true);
+    view.setUint32(24, 44100, true);
+    view.setUint32(28, 44100 * bytesPerFrame, true);
+    view.setUint16(32, bytesPerFrame, true);
+    view.setUint16(34, bitsPerSample, true);
+    write4(36, "data");
+    view.setUint32(40, dataSize, true);
+    return new Blob([buf]);
+  }
+
+  it("reads frame count from a mono 16-bit WAV", async () => {
+    const wav = makeWav(22051, 1, 16);
+    expect(await readWavFrameCount(wav)).toBe(22051);
+  });
+
+  it("reads frame count from a stereo 16-bit WAV", async () => {
+    const wav = makeWav(44100, 2, 16);
+    expect(await readWavFrameCount(wav)).toBe(44100);
+  });
+
+  it("reads frame count from a stereo 24-bit WAV", async () => {
+    const wav = makeWav(1000, 2, 24);
+    expect(await readWavFrameCount(wav)).toBe(1000);
+  });
+
+  it("returns undefined for non-RIFF data", async () => {
+    const blob = new Blob(["not a wav file at all"]);
+    expect(await readWavFrameCount(blob)).toBeUndefined();
+  });
+
+  it("returns undefined for too-small data", async () => {
+    const blob = new Blob([new ArrayBuffer(10)]);
+    expect(await readWavFrameCount(blob)).toBeUndefined();
+  });
+});
+
 describe("generateKitXml -> parseKitXml round trip", () => {
   it("preserves row data through a full save/load cycle", () => {
     const rows: KitRow[] = [
@@ -226,6 +327,8 @@ describe("generateKitXml -> parseKitXml round trip", () => {
         pan: -20,
         loopMode: "once",
         polyphonic: "mono",
+        startSamplePos: 0,
+        endSamplePos: 22051,
       },
       {
         name: "SNARE & CLAP",
@@ -234,6 +337,8 @@ describe("generateKitXml -> parseKitXml round trip", () => {
         pan: 50,
         loopMode: "loop",
         polyphonic: "poly",
+        startSamplePos: 100,
+        endSamplePos: 44100,
       },
       {
         name: "HAT",
@@ -242,6 +347,8 @@ describe("generateKitXml -> parseKitXml round trip", () => {
         pan: 0,
         loopMode: "cut",
         polyphonic: "choke",
+        startSamplePos: 0,
+        endSamplePos: 11025,
       },
     ];
     const kit: Kit = { name: "Kit", selectedIndex: 1, rows };
@@ -257,6 +364,8 @@ describe("generateKitXml -> parseKitXml round trip", () => {
       expect(row.polyphonic).toBe(rows[i].polyphonic);
       expect(row.volume).toBeCloseTo(rows[i].volume, 0);
       expect(row.pan).toBeCloseTo(rows[i].pan, 0);
+      expect(row.startSamplePos).toBe(rows[i].startSamplePos);
+      expect(row.endSamplePos).toBe(rows[i].endSamplePos);
     });
   });
 });

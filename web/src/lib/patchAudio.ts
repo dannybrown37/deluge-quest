@@ -336,6 +336,11 @@ export function playPreview(patch: AudioPatch, onStop?: () => void) {
   }, cleanupTime);
 }
 
+export interface VoiceNodes {
+  sources: (OscillatorNode | AudioBufferSourceNode)[];
+  outputs: AudioNode[];
+}
+
 export function createSubVoice(
   ctx: AudioContext,
   freq: number,
@@ -346,12 +351,16 @@ export function createSubVoice(
   dur: number,
   lfo: OscillatorNode | null,
   lfoCable: PatchCable | undefined,
-) {
+  sharedNoiseBuffer?: AudioBuffer | null,
+): VoiceNodes {
   const oscAType = OSC_MAP[patch.osc1.type] || "sawtooth";
   const oscBType = OSC_MAP[patch.osc2.type] || "square";
   const oscBVol = patch.params.oscBVolume
     ? volumeLevel(patch.params.oscBVolume)
     : 0;
+
+  const sources: (OscillatorNode | AudioBufferSourceNode)[] = [];
+  const outputs: AudioNode[] = [];
 
   const oscA = ctx.createOscillator();
   oscA.type = oscAType;
@@ -365,12 +374,15 @@ export function createSubVoice(
   gainA.gain.value = 1;
   oscA.connect(gainA);
   gainA.connect(dest);
+  sources.push(oscA);
+  outputs.push(oscA, gainA);
 
   if (lfo && lfoCable) {
     const lfoGain = ctx.createGain();
     lfoGain.gain.value = hexToNorm(lfoCable.amount) * 50;
     lfo.connect(lfoGain);
     lfoGain.connect(oscA.detune);
+    outputs.push(lfoGain);
   }
 
   oscA.start(start);
@@ -389,12 +401,15 @@ export function createSubVoice(
     gainB.gain.value = oscBVol;
     oscB.connect(gainB);
     gainB.connect(dest);
+    sources.push(oscB);
+    outputs.push(oscB, gainB);
 
     if (lfo && lfoCable) {
       const lfoGain = ctx.createGain();
       lfoGain.gain.value = hexToNorm(lfoCable.amount) * 50;
       lfo.connect(lfoGain);
       lfoGain.connect(oscB.detune);
+      outputs.push(lfoGain);
     }
 
     oscB.start(start);
@@ -405,10 +420,15 @@ export function createSubVoice(
     ? volumeLevel(patch.params.noiseVolume)
     : 0;
   if (noiseVol > 0.01) {
-    const bufferSize = ctx.sampleRate * 2;
-    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    let noiseBuffer: AudioBuffer;
+    if (sharedNoiseBuffer) {
+      noiseBuffer = sharedNoiseBuffer;
+    } else {
+      const bufferSize = ctx.sampleRate * 2;
+      noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    }
     const noise = ctx.createBufferSource();
     noise.buffer = noiseBuffer;
     const noiseGain = ctx.createGain();
@@ -417,7 +437,20 @@ export function createSubVoice(
     noiseGain.connect(dest);
     noise.start(start);
     noise.stop(start + dur);
+    sources.push(noise);
+    outputs.push(noise, noiseGain);
   }
+
+  const allOutputs = outputs;
+  oscA.onended = () => {
+    for (const n of allOutputs) {
+      try {
+        n.disconnect();
+      } catch {}
+    }
+  };
+
+  return { sources, outputs };
 }
 
 export function createFMVoice(
@@ -430,7 +463,7 @@ export function createFMVoice(
   dur: number,
   lfo: OscillatorNode | null,
   lfoCable: PatchCable | undefined,
-) {
+): VoiceNodes {
   const carrierFreq = freq * Math.pow(2, detuneCents / 1200);
 
   const mod1Amt =
@@ -495,6 +528,17 @@ export function createFMVoice(
   carrier2.connect(c2Gain);
   c2Gain.connect(dest);
 
+  const outputs: AudioNode[] = [
+    mod1,
+    mod1Gain,
+    mod2,
+    mod2Gain,
+    carrier1,
+    c1Gain,
+    carrier2,
+    c2Gain,
+  ];
+
   if (lfo && lfoCable) {
     const lfoGain = ctx.createGain();
     lfoGain.gain.value = hexToNorm(lfoCable.amount) * 50;
@@ -504,6 +548,7 @@ export function createFMVoice(
     lfoGain2.gain.value = hexToNorm(lfoCable.amount) * 50;
     lfo.connect(lfoGain2);
     lfoGain2.connect(carrier2.detune);
+    outputs.push(lfoGain, lfoGain2);
   }
 
   mod1.start(start);
@@ -514,4 +559,14 @@ export function createFMVoice(
   mod2.stop(start + dur);
   carrier1.stop(start + dur);
   carrier2.stop(start + dur);
+
+  carrier1.onended = () => {
+    for (const n of outputs) {
+      try {
+        n.disconnect();
+      } catch {}
+    }
+  };
+
+  return { sources: [mod1, mod2, carrier1, carrier2], outputs };
 }

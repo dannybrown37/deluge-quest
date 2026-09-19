@@ -5,6 +5,8 @@ export interface KitRow {
   pan: number;
   loopMode: "once" | "loop" | "cut";
   polyphonic: "auto" | "choke" | "mono" | "poly";
+  startSamplePos?: number;
+  endSamplePos?: number;
   fileHandle?: FileSystemFileHandle;
 }
 
@@ -116,6 +118,13 @@ export function parseKitXml(xml: string): Kit {
     const osc1 = sound.querySelector("osc1");
     const samplePath = osc1 ? (getAttrOrChild(osc1, "fileName") ?? "") : "";
     const loopRaw = osc1 ? (getAttrOrChild(osc1, "loopMode") ?? "1") : "1";
+    const zone = osc1?.querySelector("zone");
+    const startSamplePos = zone
+      ? parseInt(zone.getAttribute("startSamplePos") ?? "0", 10)
+      : undefined;
+    const endSamplePos = zone
+      ? parseInt(zone.getAttribute("endSamplePos") ?? "0", 10)
+      : undefined;
 
     const params = sound.querySelector("defaultParams");
     const volHex = params
@@ -132,6 +141,8 @@ export function parseKitXml(xml: string): Kit {
       pan: hexToPan(panHex),
       loopMode: LOOP_MODE_MAP[loopRaw] ?? "once",
       polyphonic: POLY_MAP[polyRaw] ?? "auto",
+      startSamplePos,
+      endSamplePos,
     });
   }
 
@@ -196,6 +207,8 @@ function generateSoundXml(row: KitRow): string {
   const pan = panToHex(row.pan);
   const loop = LOOP_MODE_TO_NUM[row.loopMode];
   const poly = POLY_TO_ATTR[row.polyphonic];
+  const start = row.startSamplePos ?? 0;
+  const end = row.endSamplePos ?? 0;
 
   return `\t\t<sound
 \t\t\tname="${escapeXml(row.name)}"
@@ -211,14 +224,17 @@ function generateSoundXml(row: KitRow): string {
 \t\t\t\ttimeStretchEnable="0"
 \t\t\t\ttimeStretchAmount="0"
 \t\t\t\tfileName="${escapeXml(row.samplePath)}">
-\t\t\t\t<zone startSamplePos="0" endSamplePos="0" />
+\t\t\t\t<zone
+\t\t\t\t\tstartSamplePos="${start}"
+\t\t\t\t\tendSamplePos="${end}" />
 \t\t\t</osc1>
 \t\t\t<osc2
 \t\t\t\ttype="sample"
 \t\t\t\tloopMode="0"
 \t\t\t\treversed="0"
 \t\t\t\ttimeStretchEnable="0"
-\t\t\t\ttimeStretchAmount="0" />
+\t\t\t\ttimeStretchAmount="0">
+\t\t\t</osc2>
 \t\t\t<lfo1 type="triangle" syncLevel="0" />
 \t\t\t<lfo2 type="triangle" />
 \t\t\t<unison num="1" detune="8" />
@@ -299,6 +315,41 @@ function generateSoundXml(row: KitRow): string {
 \t\t\t\t<modKnob controlsParam="sampleRateReduction" />
 \t\t\t</modKnobs>
 \t\t</sound>`;
+}
+
+export async function readWavFrameCount(
+  file: File | Blob,
+): Promise<number | undefined> {
+  const buf = await file.slice(0, 256).arrayBuffer();
+  const view = new DataView(buf);
+  if (buf.byteLength < 44) return undefined;
+  const riff = String.fromCharCode(
+    view.getUint8(0),
+    view.getUint8(1),
+    view.getUint8(2),
+    view.getUint8(3),
+  );
+  if (riff !== "RIFF") return undefined;
+  const channels = view.getUint16(22, true);
+  const bitsPerSample = view.getUint16(34, true);
+  if (channels === 0 || bitsPerSample === 0) return undefined;
+  const bytesPerFrame = channels * (bitsPerSample / 8);
+  let offset = 12;
+  while (offset + 8 <= buf.byteLength) {
+    const id = String.fromCharCode(
+      view.getUint8(offset),
+      view.getUint8(offset + 1),
+      view.getUint8(offset + 2),
+      view.getUint8(offset + 3),
+    );
+    const size = view.getUint32(offset + 4, true);
+    if (id === "data") {
+      return Math.floor(size / bytesPerFrame);
+    }
+    offset += 8 + size;
+    if (size % 2 !== 0) offset++;
+  }
+  return undefined;
 }
 
 function escapeXml(s: string): string {

@@ -8,6 +8,7 @@ import {
   lpfFreqHz,
   lpfResQ,
   midiToFreq,
+  type VoiceNodes,
 } from "./patchAudio";
 import type { PreviewPatch, PreviewTrack } from "./pyodide";
 
@@ -24,9 +25,10 @@ export interface SongPlaybackOptions {
   ) => Promise<AudioBuffer | null>;
 }
 
-interface ScheduledNode {
-  source: AudioBufferSourceNode | OscillatorNode;
-  gain: GainNode;
+interface ScheduledVoice {
+  sources: (AudioBufferSourceNode | OscillatorNode)[];
+  outputs: AudioNode[];
+  endTime: number;
 }
 
 type DrumType = "kick" | "snare" | "hihat" | "clap" | "tom" | "cymbal" | "perc";
@@ -66,8 +68,9 @@ function classifyDrum(drumName: string | null, midi: number): DrumType {
 }
 
 const WAVEFORMS: OscillatorType[] = ["sawtooth", "square", "triangle", "sine"];
-const LOOKAHEAD_SEC = 5;
+const LOOKAHEAD_SEC = 1;
 const SCHEDULE_INTERVAL_MS = 200;
+const MAX_VOICES = 64;
 
 export type EQBand = "low" | "mid" | "high";
 
@@ -83,7 +86,7 @@ export class SongPlayer {
   private trackBaseGain = 1;
   private trackVolumes: number[] = [];
   private trackMuted: boolean[] = [];
-  private scheduled: ScheduledNode[] = [];
+  private scheduled: ScheduledVoice[] = [];
   private noiseBuffer: AudioBuffer | null = null;
 
   private eqGains: Record<EQBand, number> = { ...DEFAULT_EQ };
@@ -171,6 +174,10 @@ export class SongPlayer {
   }
   get isPaused() {
     return this._isPaused;
+  }
+
+  get activeVoiceCount(): number {
+    return this.scheduled.length;
   }
 
   get currentTick(): number {
@@ -328,21 +335,16 @@ export class SongPlayer {
     this.stopAnimLoop();
     this._isPlaying = false;
     this._isPaused = false;
-    for (const s of this.scheduled) {
-      try {
-        s.source.stop();
-      } catch {
-        /* already stopped */
+    for (const v of this.scheduled) {
+      for (const s of v.sources) {
+        try {
+          s.stop();
+        } catch {}
       }
-      try {
-        s.source.disconnect();
-      } catch {
-        /* already disconnected */
-      }
-      try {
-        s.gain.disconnect();
-      } catch {
-        /* already disconnected */
+      for (const n of v.outputs) {
+        try {
+          n.disconnect();
+        } catch {}
       }
     }
     this.scheduled = [];
@@ -444,6 +446,42 @@ export class SongPlayer {
     if (!this.ctx || !this._isPlaying) return;
 
     const now = this.ctx.currentTime;
+
+    if (this.scheduled.length > 0) {
+      const keep: ScheduledVoice[] = [];
+      for (const v of this.scheduled) {
+        if (v.endTime < now) {
+          for (const s of v.sources) {
+            try {
+              s.stop();
+            } catch {}
+          }
+          for (const n of v.outputs) {
+            try {
+              n.disconnect();
+            } catch {}
+          }
+        } else {
+          keep.push(v);
+        }
+      }
+      this.scheduled = keep;
+    }
+
+    while (this.scheduled.length > MAX_VOICES) {
+      const oldest = this.scheduled.shift()!;
+      for (const s of oldest.sources) {
+        try {
+          s.stop();
+        } catch {}
+      }
+      for (const n of oldest.outputs) {
+        try {
+          n.disconnect();
+        } catch {}
+      }
+    }
+
     const elapsed = now - this.startCtxTime + this.startOffsetSec;
     const horizonSec = elapsed + LOOKAHEAD_SEC;
 
@@ -487,7 +525,11 @@ export class SongPlayer {
     osc.connect(g);
     osc.start(when);
     osc.stop(when + dur + 0.01);
-    this.scheduled.push({ source: osc, gain: g });
+    this.scheduled.push({
+      sources: [osc],
+      outputs: [osc, g],
+      endTime: when + dur + 0.01,
+    });
   }
 
   private scheduleSnare(
@@ -508,7 +550,6 @@ export class SongPlayer {
     osc.connect(toneG);
     osc.start(when);
     osc.stop(when + 0.08 + 0.01);
-    this.scheduled.push({ source: osc, gain: toneG });
 
     const noiseG = ctx.createGain();
     noiseG.gain.setValueAtTime(vol, when);
@@ -523,7 +564,11 @@ export class SongPlayer {
     hpf.connect(noiseG);
     src.start(when);
     src.stop(when + dur + 0.01);
-    this.scheduled.push({ source: src, gain: noiseG });
+    this.scheduled.push({
+      sources: [osc, src],
+      outputs: [osc, toneG, src, hpf, noiseG],
+      endTime: when + dur + 0.01,
+    });
   }
 
   private scheduleHihat(
@@ -552,7 +597,11 @@ export class SongPlayer {
     bpf.connect(g);
     src.start(when);
     src.stop(when + dur + 0.01);
-    this.scheduled.push({ source: src, gain: g });
+    this.scheduled.push({
+      sources: [src],
+      outputs: [src, hpf, bpf, g],
+      endTime: when + dur + 0.01,
+    });
   }
 
   private scheduleClap(
@@ -577,7 +626,11 @@ export class SongPlayer {
     bpf.connect(g);
     src.start(when);
     src.stop(when + dur + 0.01);
-    this.scheduled.push({ source: src, gain: g });
+    this.scheduled.push({
+      sources: [src],
+      outputs: [src, bpf, g],
+      endTime: when + dur + 0.01,
+    });
   }
 
   private scheduleTom(
@@ -601,7 +654,11 @@ export class SongPlayer {
     osc.connect(g);
     osc.start(when);
     osc.stop(when + dur + 0.01);
-    this.scheduled.push({ source: osc, gain: g });
+    this.scheduled.push({
+      sources: [osc],
+      outputs: [osc, g],
+      endTime: when + dur + 0.01,
+    });
   }
 
   private scheduleCymbal(
@@ -625,7 +682,11 @@ export class SongPlayer {
     hpf.connect(g);
     src.start(when);
     src.stop(when + dur + 0.01);
-    this.scheduled.push({ source: src, gain: g });
+    this.scheduled.push({
+      sources: [src],
+      outputs: [src, hpf, g],
+      endTime: when + dur + 0.01,
+    });
   }
 
   private schedulePerc(
@@ -651,7 +712,11 @@ export class SongPlayer {
     bpf.connect(g);
     src.start(when);
     src.stop(when + dur + 0.01);
-    this.scheduled.push({ source: src, gain: g });
+    this.scheduled.push({
+      sources: [src],
+      outputs: [src, bpf, g],
+      endTime: when + dur + 0.01,
+    });
   }
 
   private scheduleSample(
@@ -669,7 +734,11 @@ export class SongPlayer {
     src.buffer = buffer;
     src.connect(g);
     src.start(when);
-    this.scheduled.push({ source: src, gain: g });
+    this.scheduled.push({
+      sources: [src],
+      outputs: [src, g],
+      endTime: when + buffer.duration,
+    });
   }
 
   private schedulePatchVoice(
@@ -709,13 +778,16 @@ export class SongPlayer {
     const audioPatch = patch as unknown as AudioPatch;
     const unisonCount = Math.max(1, patch.unisonNum);
     const voiceDur = durSec + r1 + 0.1;
+    const allSources: (OscillatorNode | AudioBufferSourceNode)[] = [];
+    const allOutputs: AudioNode[] = [noteGain, lpf];
     for (let u = 0; u < unisonCount; u++) {
       const detuneOffset =
         unisonCount === 1
           ? 0
           : (u / (unisonCount - 1) - 0.5) * patch.unisonDetune;
+      let vn: VoiceNodes;
       if (patch.mode === "fm") {
-        createFMVoice(
+        vn = createFMVoice(
           ctx,
           freq,
           detuneOffset,
@@ -727,7 +799,7 @@ export class SongPlayer {
           undefined,
         );
       } else {
-        createSubVoice(
+        vn = createSubVoice(
           ctx,
           freq,
           detuneOffset,
@@ -737,9 +809,17 @@ export class SongPlayer {
           voiceDur,
           null,
           undefined,
+          this.noiseBuffer,
         );
       }
+      allSources.push(...vn.sources);
+      allOutputs.push(...vn.outputs);
     }
+    this.scheduled.push({
+      sources: allSources,
+      outputs: allOutputs,
+      endTime: when + voiceDur,
+    });
   }
 
   private scheduleNote(
@@ -819,7 +899,11 @@ export class SongPlayer {
       osc.connect(noteGain);
       osc.start(when);
       osc.stop(when + note.durSec + 0.01);
-      this.scheduled.push({ source: osc, gain: noteGain });
+      this.scheduled.push({
+        sources: [osc],
+        outputs: [osc, noteGain],
+        endTime: when + note.durSec + 0.01,
+      });
     }
   }
 

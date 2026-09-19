@@ -14,6 +14,7 @@ import {
   type Kit,
   type KitRow,
   parseKitXml,
+  readWavFrameCount,
 } from "../lib/kitXml";
 import { NUM_STEPS, SequencerEngine } from "../lib/sequencerAudio";
 
@@ -513,6 +514,11 @@ async function addSampleToKit(entry: TreeEntry) {
     `${dirName}/${entry.path}`,
   );
   row.fileHandle = entry.handle as FileSystemFileHandle;
+  try {
+    const file = await row.fileHandle.getFile();
+    const frames = await readWavFrameCount(file);
+    if (frames != null) row.endSamplePos = frames;
+  } catch {}
   kit.rows.push(row);
   kit.selectedIndex = kit.rows.length - 1;
   newRowIndex = kit.rows.length - 1;
@@ -580,6 +586,11 @@ async function doAddFolder(entry: TreeEntry) {
       `${dirName}/${f.path}`,
     );
     row.fileHandle = f.handle;
+    try {
+      const file = await f.handle.getFile();
+      const frames = await readWavFrameCount(file);
+      if (frames != null) row.endSamplePos = frames;
+    } catch {}
     kit.rows.push(row);
   }
   kit.selectedIndex = kit.rows.length - 1;
@@ -749,7 +760,16 @@ function adjustPan(delta: number) {
 
 // --- Export / Import ---
 
-function exportKit() {
+async function exportKit() {
+  for (const row of kit.rows) {
+    if (row.endSamplePos == null && row.fileHandle) {
+      try {
+        const file = await row.fileHandle.getFile();
+        const frames = await readWavFrameCount(file);
+        if (frames != null) row.endSamplePos = frames;
+      } catch {}
+    }
+  }
   const xml = generateKitXml(kit);
   const blob = new Blob([xml], { type: "application/xml" });
   const url = URL.createObjectURL(blob);

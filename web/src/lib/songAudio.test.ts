@@ -222,7 +222,7 @@ interface SongPlayerInternals {
   secPerTick: number;
   trackGains: { gain: ReturnType<typeof createParam> }[];
   noiseBuffer: AudioBuffer | null;
-  scheduled: { source: unknown; gain: unknown }[];
+  scheduled: { sources: unknown[]; outputs: unknown[]; endTime: number }[];
   sampleBuffers: Map<string, AudioBuffer>;
   scheduleNote: (note: NoteInternal, when: number) => void;
   scheduleChunk: () => void;
@@ -710,6 +710,107 @@ describe("scheduleChunk / onEnd", () => {
     internals(p).scheduleChunk(); // second call sees scheduledUpToSec >= total and elapsed >= total -> stop
     expect(onEnd).toHaveBeenCalledTimes(1);
     expect(p.isPlaying).toBe(false);
+  });
+
+  it("prunes finished voices from scheduled array on next chunk", () => {
+    const p = new SongPlayer(
+      makeOpts({ tracks: [makeTrack({ isKit: true })] }),
+    );
+    p.play();
+    const ctx = internals(p).ctx as unknown as FakeAudioContext;
+    internals(p).scheduleNote(
+      {
+        trackIdx: 0,
+        midi: 45,
+        isKit: true,
+        drumType: "kick",
+        samplePath: null,
+        startSec: 0,
+        durSec: 0.1,
+        vel: 1,
+      },
+      0,
+    );
+    expect(internals(p).scheduled.length).toBeGreaterThan(0);
+    const outputs = internals(p).scheduled[0].outputs;
+    ctx.currentTime = 1;
+    internals(p).scheduleChunk();
+    expect(internals(p).scheduled).toHaveLength(0);
+    expect(outputs[0].disconnect).toHaveBeenCalled();
+  });
+
+  it("tracks patch voice nodes for cleanup", () => {
+    const p = new SongPlayer(
+      makeOpts({ tracks: [makeTrack({ patch: makePatch() })] }),
+    );
+    p.play();
+    internals(p).scheduleNote(
+      {
+        trackIdx: 0,
+        midi: 60,
+        isKit: false,
+        drumType: "perc",
+        samplePath: null,
+        startSec: 0,
+        durSec: 0.5,
+        vel: 1,
+      },
+      0,
+    );
+    expect(internals(p).scheduled.length).toBeGreaterThan(0);
+    const voice = internals(p).scheduled.at(-1)!;
+    expect(voice.outputs.length).toBeGreaterThan(0);
+    expect(voice.endTime).toBeGreaterThan(0);
+  });
+
+  it("patch voice scheduled entry includes child oscillator nodes from createSubVoice", () => {
+    const p = new SongPlayer(
+      makeOpts({ tracks: [makeTrack({ patch: makePatch() })] }),
+    );
+    p.play();
+    internals(p).scheduleNote(
+      {
+        trackIdx: 0,
+        midi: 60,
+        isKit: false,
+        drumType: "perc",
+        samplePath: null,
+        startSec: 0,
+        durSec: 0.5,
+        vel: 1,
+      },
+      0,
+    );
+    const voice = internals(p).scheduled.at(-1)!;
+    expect(voice.sources.length).toBeGreaterThan(0);
+    expect(voice.outputs.length).toBeGreaterThan(2);
+  });
+
+  it("evicts oldest voices when exceeding MAX_VOICES (64)", () => {
+    const p = new SongPlayer(
+      makeOpts({ tracks: [makeTrack({ isKit: true })] }),
+    );
+    p.play();
+    const ctx = internals(p).ctx as unknown as FakeAudioContext;
+    for (let i = 0; i < 70; i++) {
+      internals(p).scheduleNote(
+        {
+          trackIdx: 0,
+          midi: 45,
+          isKit: true,
+          drumType: "kick",
+          samplePath: null,
+          startSec: i * 0.1,
+          durSec: 0.1,
+          vel: 1,
+        },
+        i * 0.1,
+      );
+    }
+    expect(internals(p).scheduled.length).toBe(70);
+    ctx.currentTime = 0;
+    internals(p).scheduleChunk();
+    expect(internals(p).scheduled.length).toBeLessThanOrEqual(64);
   });
 
   it("fetches samples through the resolver and caches them before scheduling", async () => {
