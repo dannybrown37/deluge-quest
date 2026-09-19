@@ -9,6 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PreviewData } from "../lib/pyodide";
 import SongPreview from "./SongPreview.svelte";
 
+async function clickPlay() {
+  await fireEvent.click(
+    document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
+  );
+}
+
 vi.mock("../lib/pyodide", () => ({
   loadPyodide: vi.fn(),
   inspectSong: vi.fn(),
@@ -210,16 +216,13 @@ describe("SongPreview", () => {
     expect(screen.getByText("Drop a Deluge song file")).toBeTruthy();
   });
 
-  it("toggles play/pause and creates a player on first play", async () => {
+  it("plays and pauses", async () => {
     render(SongPreview);
     const dropzone = document.querySelector(".dropzone") as HTMLElement;
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    const playBtn = document.querySelector(
-      '.transport-btn[title="Play"]',
-    ) as HTMLElement;
-    await fireEvent.click(playBtn);
+    await clickPlay();
 
     expect(playerInstances.length).toBe(1);
     expect(playerInstances[0].play).toHaveBeenCalled();
@@ -240,9 +243,7 @@ describe("SongPreview", () => {
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
     const stopBtn = document.querySelector(
       '.transport-btn[title="Stop"]',
     ) as HTMLButtonElement;
@@ -258,9 +259,7 @@ describe("SongPreview", () => {
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
 
     const muteBtn = screen.getByTitle("Mute");
     await fireEvent.click(muteBtn);
@@ -279,9 +278,7 @@ describe("SongPreview", () => {
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
 
     const cutoffKnob = document.querySelector(
       '.knob-hitbox[title="Cutoff"]',
@@ -383,9 +380,7 @@ describe("SongPreview", () => {
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
 
     const lowKnob = document.querySelector(
       '.knob-hitbox[title="Low"]',
@@ -406,9 +401,7 @@ describe("SongPreview", () => {
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
 
     const resKnob = document.querySelector(
       '.knob-hitbox[title="Res"]',
@@ -517,9 +510,7 @@ describe("SongPreview", () => {
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
 
     const scrollEl = document.querySelector(
       ".timeline-scroll",
@@ -591,9 +582,7 @@ describe("SongPreview", () => {
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
 
     const muteBtns = screen.getAllByTitle("Mute");
     await fireEvent.click(muteBtns[1]);
@@ -798,9 +787,7 @@ describe("SongPreview", () => {
     const dropzone = document.querySelector(".dropzone") as HTMLElement;
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
 
     const muteBtn = screen.getByTitle("Mute");
     await fireEvent.click(muteBtn);
@@ -840,9 +827,7 @@ describe("SongPreview", () => {
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
     expect(playerInstances.length).toBe(1);
 
     const svg = document.querySelector(".timeline-svg") as SVGSVGElement;
@@ -868,9 +853,7 @@ describe("SongPreview", () => {
     const dropzone = document.querySelector(".dropzone") as HTMLElement;
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
 
     const midKnob = document.querySelector(
       '.knob-hitbox[title="Mid"]',
@@ -933,9 +916,7 @@ describe("SongPreview", () => {
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
 
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
     expect(playerInstances.length).toBe(1);
 
     const resolver = (
@@ -1013,9 +994,7 @@ describe("SongPreview", () => {
     const dropzone = document.querySelector(".dropzone") as HTMLElement;
     await fireEvent.drop(dropzone, dropEvent(xmlFile("song.XML")));
     await waitFor(() => expect(screen.getByText("120 BPM")).toBeTruthy());
-    await fireEvent.click(
-      document.querySelector('.transport-btn[title="Play"]') as HTMLElement,
-    );
+    await clickPlay();
 
     const highKnob = document.querySelector(
       '.knob-hitbox[title="High"]',

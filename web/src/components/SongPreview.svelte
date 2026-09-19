@@ -5,7 +5,6 @@ import {
   inspectSong,
   loadPyodide,
   type PreviewData,
-  type PreviewTrack,
 } from "../lib/pyodide";
 import { type EQBand, SongPlayer } from "../lib/songAudio";
 
@@ -1202,6 +1201,7 @@ function reset() {
     color: var(--text-secondary);
     min-width: 4ch;
   }
+
 
   .knob-strip {
     display: flex;
