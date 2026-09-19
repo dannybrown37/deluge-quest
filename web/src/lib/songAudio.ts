@@ -88,6 +88,8 @@ export class SongPlayer {
   private trackMuted: boolean[] = [];
   private scheduled: ScheduledVoice[] = [];
   private noiseBuffer: AudioBuffer | null = null;
+  private preRenderedBuffers: AudioBuffer[] | null = null;
+  private preRenderedSources: AudioBufferSourceNode[] = [];
 
   private eqGains: Record<EQBand, number> = { ...DEFAULT_EQ };
   private eqLow: BiquadFilterNode | null = null;
@@ -194,8 +196,15 @@ export class SongPlayer {
       this._isPaused = false;
       this._isPlaying = true;
       this.ctx.resume();
-      this.startCtxTime = this.ctx.currentTime - this.startOffsetSec;
-      this.startScheduler();
+      if (this.preRenderedBuffers && this.preRenderedSources.length === 0) {
+        this.startCtxTime = this.ctx.currentTime;
+        this.startPreRenderedSources();
+      } else {
+        this.startCtxTime = this.ctx.currentTime - this.startOffsetSec;
+        if (!this.preRenderedBuffers) {
+          this.startScheduler();
+        }
+      }
       this.startAnimLoop();
       return;
     }
@@ -260,21 +269,24 @@ export class SongPlayer {
       return g;
     });
 
-    const noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-    const noiseData = noiseBuf.getChannelData(0);
-    for (let i = 0; i < noiseData.length; i++)
-      noiseData[i] = Math.random() * 2 - 1;
-    this.noiseBuffer = noiseBuf;
-
     this._isPlaying = true;
     this._isPaused = false;
     this.startCtxTime = ctx.currentTime;
     this.scheduledUpToSec = this.startOffsetSec;
 
-    this.prefetchSamples().finally(() => {
-      if (this._isPlaying) this.scheduleChunk();
-    });
-    this.startScheduler();
+    if (this.preRenderedBuffers) {
+      this.startPreRenderedSources();
+    } else {
+      const noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const noiseData = noiseBuf.getChannelData(0);
+      for (let i = 0; i < noiseData.length; i++)
+        noiseData[i] = Math.random() * 2 - 1;
+      this.noiseBuffer = noiseBuf;
+      this.prefetchSamples().finally(() => {
+        if (this._isPlaying) this.scheduleChunk();
+      });
+      this.startScheduler();
+    }
     this.startAnimLoop();
   }
 
@@ -316,6 +328,22 @@ export class SongPlayer {
   }
 
   seek(tick: number) {
+    if (this.preRenderedBuffers && this.ctx) {
+      const wasPlaying = this._isPlaying;
+      for (const src of this.preRenderedSources) {
+        try {
+          src.stop();
+        } catch {}
+      }
+      this.preRenderedSources = [];
+      this.startOffsetSec = Math.max(0, tick * this.secPerTick);
+      this.opts.onTick?.(tick);
+      if (wasPlaying) {
+        this.startCtxTime = this.ctx.currentTime;
+        this.startPreRenderedSources();
+      }
+      return;
+    }
     const wasPaused = this._isPaused;
     this.stopInternal();
     this.startOffsetSec = Math.max(0, tick * this.secPerTick);
@@ -328,6 +356,75 @@ export class SongPlayer {
   dispose() {
     this.stopInternal();
     this.startOffsetSec = 0;
+    this.preRenderedBuffers = null;
+  }
+
+  async preRender(
+    onProgress?: (track: number, total: number) => void,
+  ): Promise<void> {
+    const sampleRate = 44100;
+    const totalSamples = Math.ceil((this.totalDurationSec + 2) * sampleRate);
+    const trackCount = this.opts.tracks.length;
+
+    if (this.opts.sampleResolver) {
+      const tempCtx = new AudioContext({ sampleRate });
+      const savedCtx = this.ctx;
+      this.ctx = tempCtx;
+      await this.prefetchSamples();
+      this.ctx = savedCtx;
+      tempCtx.close();
+    }
+
+    const sharedNoiseData = new Float32Array(sampleRate);
+    for (let i = 0; i < sampleRate; i++)
+      sharedNoiseData[i] = Math.random() * 2 - 1;
+
+    this.preRenderedBuffers = [];
+
+    for (let ti = 0; ti < trackCount; ti++) {
+      const offlineCtx = new OfflineAudioContext(2, totalSamples, sampleRate);
+      const dest = offlineCtx.createGain();
+      (dest as GainNode).connect(offlineCtx.destination);
+
+      const noiseBuf = offlineCtx.createBuffer(1, sampleRate, sampleRate);
+      noiseBuf.getChannelData(0).set(sharedNoiseData);
+
+      const savedCtx = this.ctx;
+      const savedGains = this.trackGains;
+      const savedNoise = this.noiseBuffer;
+      const savedScheduled = this.scheduled;
+
+      this.ctx = offlineCtx as unknown as AudioContext;
+      this.trackGains = [];
+      this.trackGains[ti] = dest as unknown as GainNode;
+      this.noiseBuffer = noiseBuf;
+      this.scheduled = [];
+
+      for (const note of this.flatNotes) {
+        if (note.trackIdx !== ti) continue;
+        this.scheduleNote(note, note.startSec);
+      }
+
+      this.ctx = savedCtx;
+      this.trackGains = savedGains;
+      this.noiseBuffer = savedNoise;
+      this.scheduled = savedScheduled;
+
+      const rendered = await offlineCtx.startRendering();
+      this.preRenderedBuffers.push(rendered);
+      onProgress?.(ti + 1, trackCount);
+    }
+  }
+
+  private startPreRenderedSources() {
+    if (!this.ctx || !this.preRenderedBuffers) return;
+    this.preRenderedSources = this.preRenderedBuffers.map((buf, i) => {
+      const src = this.ctx!.createBufferSource();
+      src.buffer = buf;
+      src.connect(this.trackGains[i]);
+      src.start(0, this.startOffsetSec);
+      return src;
+    });
   }
 
   private stopInternal() {
@@ -335,6 +432,12 @@ export class SongPlayer {
     this.stopAnimLoop();
     this._isPlaying = false;
     this._isPaused = false;
+    for (const src of this.preRenderedSources) {
+      try {
+        src.stop();
+      } catch {}
+    }
+    this.preRenderedSources = [];
     for (const v of this.scheduled) {
       for (const s of v.sources) {
         try {
