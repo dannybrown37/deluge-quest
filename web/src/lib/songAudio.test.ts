@@ -896,3 +896,38 @@ describe("animation loop", () => {
     expect(p.isPlaying).toBe(false);
   });
 });
+
+describe("setBpm", () => {
+  it("recalculates secPerTick and totalDurationSec", () => {
+    const p = new SongPlayer(makeOpts({ bpm: 120, durationTicks: 480 }));
+    expect(internals(p).secPerTick).toBeCloseTo(60 / (120 * 48));
+    expect(internals(p).totalDurationSec).toBeCloseTo((480 * 60) / (120 * 48));
+
+    p.setBpm(60);
+    expect(p.bpm).toBe(60);
+    expect(internals(p).secPerTick).toBeCloseTo(60 / (60 * 48));
+    expect(internals(p).totalDurationSec).toBeCloseTo((480 * 60) / (60 * 48));
+  });
+
+  it("re-flattens notes with updated timing", () => {
+    const track = makeTrack({
+      isKit: true,
+      clips: [
+        makeClip({
+          noteRows: [
+            makeNoteRow({
+              drumName: "KICK",
+              notes: [{ pos: 48, len: 12, vel: 100 }],
+            }),
+          ],
+        }),
+      ],
+    });
+    const p = new SongPlayer(makeOpts({ bpm: 120, tracks: [track] }));
+    const origStart = internals(p).flatNotes[0].startSec;
+
+    p.setBpm(60);
+    const newStart = internals(p).flatNotes[0].startSec;
+    expect(newStart).toBeCloseTo(origStart * 2);
+  });
+});

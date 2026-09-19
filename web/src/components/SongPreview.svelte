@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import { trackToolAction } from "../lib/analytics";
 import { cardStore } from "../lib/cardStore";
 import { DEMO_SONG, fetchDemoXml } from "../lib/demoSong";
@@ -69,8 +70,15 @@ function setEQ(band: EQBand, gainDb: number) {
   player?.setEQ(band, gainDb);
 }
 
+let tempoBpm = $state(0);
+let originalBpm = $state(0);
 let filterCutoff = $state(20000);
 let filterRes = $state(0.5);
+
+function setTempo(bpm: number) {
+  tempoBpm = bpm;
+  player?.setBpm(bpm);
+}
 
 function setFilterCutoff(hz: number) {
   filterCutoff = hz;
@@ -363,6 +371,8 @@ async function inspect(name: string, xmlContent: string) {
     }
 
     data = result;
+    tempoBpm = Math.round(result.bpm);
+    originalBpm = Math.round(result.bpm);
     trackVolumes = result.tracks.map(() => 1);
     trackMuted = result.tracks.map(() => false);
     status = "done";
@@ -592,6 +602,11 @@ function reset() {
   fileName = "";
   errorMsg = "";
 }
+
+onDestroy(() => {
+  player?.dispose();
+  player = null;
+});
 </script>
 
 {#if status === "idle"}
@@ -685,7 +700,7 @@ function reset() {
           {#if !data.hasArrangement}
             <span class="chip chip--session">Session</span>
           {/if}
-          <span class="chip">{data.bpm.toFixed(0)} BPM</span>
+          <span class="chip">{tempoBpm} BPM{tempoBpm !== originalBpm ? ` (was ${originalBpm})` : ''}</span>
           <span class="chip">{data.key}</span>
           <span class="chip">{data.durationStr}</span>
           <span class="chip">{data.trackCount} tracks</span>
@@ -765,6 +780,22 @@ function reset() {
           {Math.floor(playheadTick / layout.ticksPerMeasure) + 1}:{Math.floor((playheadTick % layout.ticksPerMeasure) / (layout.ticksPerMeasure / 4)) + 1}
         </span>
       {/if}
+
+      <label class="tempo-label">
+        <span class="tempo-tag">BPM</span>
+        <input
+          type="number"
+          class="tempo-input"
+          min="20"
+          max="300"
+          value={tempoBpm}
+          onchange={(e) => {
+            const v = parseInt((e.target as HTMLInputElement).value);
+            if (!isNaN(v) && v >= 20 && v <= 300) setTempo(v);
+            (e.target as HTMLInputElement).value = String(tempoBpm);
+          }}
+        />
+      </label>
 
       <div class="knob-strip">
         {#each knobDefs as def, ki}
@@ -1284,6 +1315,30 @@ function reset() {
     min-width: 4ch;
   }
 
+
+  .tempo-label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .tempo-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.03em;
+  }
+  .tempo-input {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    width: 3.5rem;
+    background: var(--ground);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.15rem 0.3rem;
+    color: var(--text);
+    text-align: center;
+  }
+  .tempo-input:focus-visible { border-color: var(--accent); outline: none; }
 
   .knob-strip {
     display: flex;

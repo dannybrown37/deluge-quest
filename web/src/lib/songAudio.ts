@@ -310,6 +310,24 @@ export class SongPlayer {
     this.opts.onTick?.(0);
   }
 
+  get bpm(): number {
+    return this.opts.bpm;
+  }
+
+  setBpm(bpm: number) {
+    const tick = this.currentTick;
+    const wasPlaying = this._isPlaying && !this._isPaused;
+    this.stopInternal();
+    this.opts.bpm = bpm;
+    this.secPerTick = 60 / (bpm * this.opts.ticksPerQuarter);
+    this.totalDurationSec = this.opts.durationTicks * this.secPerTick;
+    this.flattenNotes();
+    this.startOffsetSec = Math.max(0, tick * this.secPerTick);
+    if (wasPlaying) {
+      this.play();
+    }
+  }
+
   seek(tick: number) {
     const wasPaused = this._isPaused;
     this.stopInternal();
