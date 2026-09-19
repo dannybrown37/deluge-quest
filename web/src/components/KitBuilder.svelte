@@ -1137,7 +1137,7 @@ function handleKitKey(e: KeyboardEvent) {
         <div class="seq-toolbar">
           <div class="seq-toolbar-left">
             <button
-              class="btn btn-sm {sequencerPlaying ? 'btn-playing' : 'btn-primary'}"
+              class="btn btn-sm btn-playing"
               onclick={seqPlay}
             >{sequencerPlaying ? "Stop" : "Play"}</button>
             <label class="seq-bpm-label">
