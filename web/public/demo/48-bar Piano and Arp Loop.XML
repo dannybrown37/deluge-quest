@@ -1,0 +1,757 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song
+	firmwareVersion="3.1.0"
+	earliestCompatibleFirmware="3.1.0-beta"
+	previewNumPads="144"
+	preview="0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009F6000221502BC4300280F02E21D002F08029F6000221502FE0100350202E21D002F0802BC4300280F029F600022150200FF06005AA54F00B012022512022512022512022512022512022512022512022512022512022512022512022512022512022512022500FF06005AA50000FF0025DA003EC1005AA50214230025DA003EC1005AA50214230025DA003EC1005AA50214230025DA003EC1005AA500FF06005AA500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000FF06005AA500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000FF06005AA500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000FF06005AA5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+	arrangementAutoScrollOn="0"
+	xScroll="0"
+	xZoom="24"
+	yScrollSongView="-1"
+	yScrollArrangementView="-1"
+	xScrollArrangementView="0"
+	xZoomArrangementView="192"
+	timePerTimerTick="224"
+	timerTickFraction="366643550"
+	rootNote="58"
+	inputTickMagnitude="2"
+	swingAmount="0"
+	swingInterval="7"
+	affectEntire="0"
+	activeModFunction="1"
+	lpfMode="24dB"
+	modFXType="flanger"
+	modFXCurrentParam="feedback"
+	currentFilterType="lpf">
+	<modeNotes>
+		<modeNote>0</modeNote>
+		<modeNote>2</modeNote>
+		<modeNote>4</modeNote>
+		<modeNote>5</modeNote>
+		<modeNote>7</modeNote>
+		<modeNote>9</modeNote>
+		<modeNote>10</modeNote>
+	</modeNotes>
+	<reverb
+		roomSize="1288490496"
+		dampening="1546188288"
+		width="2147483647"
+		pan="0">
+		<compressor
+			attack="327244"
+			release="936"
+			volume="-601295438"
+			shape="-601295438"
+			syncLevel="5" />
+	</reverb>
+	<delay
+		pingPong="1"
+		analog="0"
+		syncLevel="8" />
+	<compressor
+		syncLevel="7"
+		attack="327244"
+		release="936" />
+	<songParams
+		reverbAmount="0x80000000"
+		volume="0x3504F334"
+		pan="0x00000000"
+		sidechainCompressorShape="0xDC28F5B2"
+		modFXDepth="0x00000000"
+		modFXRate="0xE0000000"
+		stutterRate="0x00000000"
+		sampleRateReduction="0x80000000"
+		bitCrush="0x80000000"
+		modFXOffset="0x00000000"
+		modFXFeedback="0x80000000">
+		<delay
+			rate="0x00000000"
+			feedback="0x80000000" />
+		<lpf
+			frequency="0x7FFFFFFF"
+			resonance="0x80000000" />
+		<hpf
+			frequency="0x80000000"
+			resonance="0x80000000" />
+		<equalizer
+			bass="0x00000000"
+			treble="0x00000000"
+			bassFrequency="0x00000000"
+			trebleFrequency="0x00000000" />
+	</songParams>
+	<instruments>
+		<midiChannel
+			channel="0"
+			suffix="-1"
+			defaultVelocity="99"
+			isArmedForRecording="0"
+			activeModFunction="0" />
+		<kit
+			presetSlot="1"
+			presetSubSlot="-1"
+			defaultVelocity="99"
+			isArmedForRecording="0"
+			activeModFunction="1"
+			lpfMode="24dB"
+			modFXType="flanger"
+			modFXCurrentParam="feedback"
+			currentFilterType="lpf">
+			<delay
+				pingPong="1"
+				analog="0"
+				syncLevel="8" />
+			<compressor
+				syncLevel="7"
+				attack="327244"
+				release="936" />
+			<soundSources>
+				<midiOutput channel="0" note="0">
+				</midiOutput>
+				<midiOutput channel="0" note="1">
+				</midiOutput>
+				<midiOutput channel="0" note="2">
+				</midiOutput>
+				<midiOutput channel="0" note="3">
+				</midiOutput>
+				<midiOutput channel="0" note="4">
+				</midiOutput>
+				<midiOutput channel="0" note="5">
+				</midiOutput>
+			</soundSources>
+			<selectedDrumIndex>3</selectedDrumIndex>
+		</kit>
+		<midiChannel
+			channel="9"
+			suffix="-1"
+			defaultVelocity="99"
+			isArmedForRecording="0"
+			activeModFunction="1"
+			inputMidiChannel="9">
+			<modKnobs>
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="3" />
+				<modKnob
+					cc="4" />
+				<modKnob
+					cc="33" />
+				<modKnob
+					cc="29" />
+				<modKnob
+					cc="34" />
+				<modKnob
+					cc="27" />
+				<modKnob
+					cc="6" />
+				<modKnob
+					cc="8" />
+				<modKnob
+					cc="5" />
+				<modKnob
+					cc="1" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+			</modKnobs>
+		</midiChannel>
+		<midiChannel
+			channel="6"
+			suffix="-1"
+			defaultVelocity="99"
+			isArmedForRecording="0"
+			activeModFunction="1"
+			inputMidiChannel="6">
+			<modKnobs>
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="21" />
+				<modKnob
+					cc="20" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+			</modKnobs>
+		</midiChannel>
+		<midiChannel
+			channel="7"
+			suffix="-1"
+			defaultVelocity="111"
+			isArmedForRecording="0"
+			activeModFunction="1"
+			inputMidiChannel="7">
+			<modKnobs>
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="9" />
+				<modKnob
+					cc="3" />
+				<modKnob
+					cc="97" />
+				<modKnob
+					cc="89" />
+				<modKnob
+					cc="94" />
+				<modKnob
+					cc="13" />
+				<modKnob
+					cc="91" />
+				<modKnob
+					cc="74" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+			</modKnobs>
+		</midiChannel>
+		<midiChannel
+			channel="8"
+			suffix="-1"
+			defaultVelocity="111"
+			isArmedForRecording="0"
+			activeModFunction="1"
+			inputMidiChannel="8">
+			<modKnobs>
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="79" />
+				<modKnob
+					cc="29" />
+				<modKnob
+					cc="89" />
+				<modKnob
+					cc="86" />
+				<modKnob
+					cc="108" />
+				<modKnob
+					cc="109" />
+				<modKnob
+					cc="112" />
+				<modKnob
+					cc="113" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+				<modKnob
+					cc="none" />
+			</modKnobs>
+		</midiChannel>
+	</instruments>
+	<sections>
+		<section id="0" numRepeats="0" />
+		<section id="1" numRepeats="0" />
+		<section id="2" numRepeats="0" />
+		<section id="3" numRepeats="0" />
+		<section id="4" numRepeats="0" />
+		<section id="5" numRepeats="0" />
+		<section id="6" numRepeats="0" />
+		<section id="7" numRepeats="0" />
+		<section id="8" numRepeats="0" />
+		<section id="9" numRepeats="0" />
+		<section id="10" numRepeats="0" />
+		<section id="11" numRepeats="0" />
+	</sections>
+	<sessionClips>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="55"
+			yScrollKeyboard="50"
+			midiChannel="9"
+			midiBank="0"
+			midiPGM="2"
+			isPlaying="1"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="768"
+			colourOffset="4"
+			section="0">
+			<midiParams>
+				<param>
+					<cc>0</cc>
+					<value>0xC4000000</value>
+				</param>
+				<param>
+					<cc>1</cc>
+					<value>0x80000000</value>
+				</param>
+				<param>
+					<cc>3</cc>
+					<value>0xE0000000</value>
+				</param>
+				<param>
+					<cc>4</cc>
+					<value>0x24000000</value>
+				</param>
+				<param>
+					<cc>5</cc>
+					<value>0x80000000</value>
+				</param>
+				<param>
+					<cc>6</cc>
+					<value>0x80000000</value>
+				</param>
+				<param>
+					<cc>8</cc>
+					<value>0x80000000</value>
+				</param>
+				<param>
+					<cc>23</cc>
+					<value>0x0E000000</value>
+				</param>
+				<param>
+					<cc>27</cc>
+					<value>0x80000000</value>
+				</param>
+				<param>
+					<cc>29</cc>
+					<value>0xDE000000</value>
+				</param>
+				<param>
+					<cc>33</cc>
+					<value>0xE8000000</value>
+				</param>
+				<param>
+					<cc>34</cc>
+					<value>0xEC000000</value>
+				</param>
+				<param>
+					<cc>50</cc>
+					<value>0x80000000</value>
+				</param>
+				<param>
+					<cc>51</cc>
+					<value>0x7E00000080000000800000217E000000000002FA</value>
+				</param>
+				<param>
+					<cc>54</cc>
+					<value>0x800000007E000000000000048000000080000010800000008000016F</value>
+				</param>
+				<param>
+					<cc>bend</cc>
+					<value>0x00000000</value>
+				</param>
+				<param>
+					<cc>aftertouch</cc>
+					<value>0x80000000</value>
+				</param>
+			</midiParams>
+			<noteRows>
+				<noteRow
+					y="51"
+					noteData="0x000002100000002F5F14" />
+				<noteRow
+					y="55"
+					noteData="0x000001800000002F6014" />
+				<noteRow
+					y="56"
+					noteData="0x000001B00000002F6414" />
+				<noteRow
+					y="58"
+					noteData="0x000000000000002F4D14000000900000002F3514000001500000002F5F14000001E00000002F5714000002700000002F4414" />
+				<noteRow
+					y="60"
+					noteData="0x000000300000002F4314000001200000002F4A14000002400000002F3D14" />
+				<noteRow
+					y="63"
+					noteData="0x000000600000002F2E14000000F00000002F3314" />
+				<noteRow
+					y="67"
+					noteData="0x000000C00000002F5614000002D00000002A2D14" />
+				<noteRow
+					y="68"
+					noteData="0x000002A00000002F4014" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="0"
+			yScroll="58"
+			yScrollKeyboard="50"
+			midiChannel="8"
+			midiSub="1"
+			midiPGM="0"
+			isPlaying="1"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="3072"
+			colourOffset="-60"
+			section="0">
+			<midiParams>
+				<param>
+					<cc>1</cc>
+					<value>0x1E000000</value>
+				</param>
+				<param>
+					<cc>29</cc>
+					<value>0xE4000000</value>
+				</param>
+				<param>
+					<cc>59</cc>
+					<value>0x14000000</value>
+				</param>
+				<param>
+					<cc>79</cc>
+					<value>0xE0000000</value>
+				</param>
+				<param>
+					<cc>86</cc>
+					<value>0xEA000000</value>
+				</param>
+				<param>
+					<cc>89</cc>
+					<value>0xF8000000</value>
+				</param>
+				<param>
+					<cc>108</cc>
+					<value>0x4E000000</value>
+				</param>
+				<param>
+					<cc>109</cc>
+					<value>0x32000000480000008000000146000000800000044400000080000006420000008000000840000000800000093E0000008000000B3C0000008000000D3A0000008000000F380000008000001036000000800000123400000080000013320000008000001530000000800000172E000000800000192C0000008000001A2A0000008000001C280000008000001D26000000800000202400000080000021220000008000002520000000800000261E000000800000291C0000008000002C1A0000008000002E18000000800000331600000080000039160000008000008718000000800000941A000000800000991C000000800000A11E000000800000A920000000800000AE22000000800000B624000000800000BC26000000800000C328000000800000C82A000000800000CF2A000000800001442C000000800001492C000000800001BE2A000000800001C528000000800001D326000000800001E224000000800001EB22000000800001FC20000000800002011E000000800002091C0000008000021F1A0000008000022F1800000080000243160000008000024C140000008000025A140000008000047C4A0000000000047F</value>
+				</param>
+				<param>
+					<cc>112</cc>
+					<value>0x12000000</value>
+				</param>
+				<param>
+					<cc>113</cc>
+					<value>0xF0000000</value>
+				</param>
+				<param>
+					<cc>bend</cc>
+					<value>0x00000000</value>
+				</param>
+				<param>
+					<cc>aftertouch</cc>
+					<value>0x8000000082000000000000AE86000000800000B18A000000800000B290000000800000B392000000800000B494000000800000B792000000800000BE90000000800000BF8E000000800000C088000000800000C184000000800000C382000000800000C480000000800000C682000000800000D784000000800000DB86000000800000DC8A000000800000DD8E000000800000DE90000000800000DF92000000800000E290000000800000EA8C000000800000EB88000000800000EC86000000800000ED82000000800000EE80000000800000EF84000000000001C086000000800001C184000000800001C382000000800001C484000000800001CB88000000800001CC8C000000800001CD8E000000800001CE90000000800001CF92000000800001D194000000800001D796000000800001D99600000080000200940000008000020F92000000800002108E000000800002138C000000800002148200000080000219800000008000021A820000008000022786000000800002288C000000800002298E0000008000022D900000008000023192000000800002359400000080000236960000008000024998000000800002529A0000008000025598000000800002609A000000800002779C000000800002799E0000008000027CA00000008000027EA200000080000282A2000000800002A9A0000000800002B99E000000800002BB9C000000800002BD9A000000800002BE98000000800002C096000000800002C18C000000800002C382000000800002C480000000800002C580000000800003FD820000000000041186000000800004128C000000800004139000000080000414920000008000041590000000800004228C000000800004238600000080000424840000008000042582000000800004268000000080000428</value>
+				</param>
+			</midiParams>
+			<noteRows>
+				<noteRow
+					y="49"
+					noteData="0x00000600000006006F14" />
+				<noteRow
+					y="51"
+					noteData="0x00000000000006006F14" />
+				<noteRow
+					y="53" />
+				<noteRow
+					y="58"
+					noteData="0x00000000000006006F1400000600000006006F14" />
+				<noteRow
+					y="62"
+					noteData="0x00000000000006006F14" />
+				<noteRow
+					y="63"
+					noteData="0x00000000000006006F14" />
+				<noteRow
+					y="65"
+					noteData="0x00000600000006006F14" />
+				<noteRow
+					y="67"
+					noteData="0x00000000000006006F14" />
+				<noteRow
+					y="68"
+					noteData="0x00000600000006006F14" />
+				<noteRow
+					y="69" />
+				<noteRow
+					y="72" />
+				<noteRow
+					y="75"
+					noteData="0x00000000000006006F14" />
+				<noteRow
+					y="77"
+					noteData="0x00000600000006006F14" />
+				<noteRow
+					y="81" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="79"
+			yScrollKeyboard="50"
+			midiChannel="7"
+			midiBank="85"
+			midiSub="0"
+			midiPGM="25"
+			isPlaying="1"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="1536"
+			colourOffset="39"
+			section="0">
+			<midiParams>
+				<param>
+					<cc>1</cc>
+					<value>0x86000000</value>
+				</param>
+				<param>
+					<cc>3</cc>
+					<value>0xBC000000</value>
+				</param>
+				<param>
+					<cc>9</cc>
+					<value>0xEC000000</value>
+				</param>
+				<param>
+					<cc>13</cc>
+					<value>0x00000000</value>
+				</param>
+				<param>
+					<cc>50</cc>
+					<value>0x80000000</value>
+				</param>
+				<param>
+					<cc>51</cc>
+					<value>0x80000000</value>
+				</param>
+				<param>
+					<cc>54</cc>
+					<value>0x7E00000080000000800000097E0000000000000A8000000080000018</value>
+				</param>
+				<param>
+					<cc>74</cc>
+					<value>0xFE000000</value>
+				</param>
+				<param>
+					<cc>89</cc>
+					<value>0xB6000000</value>
+				</param>
+				<param>
+					<cc>91</cc>
+					<value>0xF6000000</value>
+				</param>
+				<param>
+					<cc>94</cc>
+					<value>0xF8000000</value>
+				</param>
+				<param>
+					<cc>97</cc>
+					<value>0xD2000000</value>
+				</param>
+				<param>
+					<cc>bend</cc>
+					<value>0x00000000</value>
+				</param>
+				<param>
+					<cc>aftertouch</cc>
+					<value>0x80000000</value>
+				</param>
+			</midiParams>
+			<noteRows>
+				<noteRow
+					y="58"
+					noteData="0x000000000000001F3614000000600000001F6714000000C00000001F3214000001200000001F4414000001800000001F6114000001E00000001F5E14000002400000001F5E14000002A00000001F5514" />
+				<noteRow
+					y="60"
+					noteData="0x000003000000001F4214000003600000001F4214000003C00000001F6214000004200000001F4614000004800000001F2814000004E00000001F5014" />
+				<noteRow
+					y="62"
+					noteData="0x000005400000001F3614" />
+				<noteRow
+					y="63"
+					noteData="0x000000180000001F4214000000780000001F3914000000D80000001F2514000001380000001F4F14000001980000001F3714000001F80000001F4514000002580000001F3B14000002B80000001F3D14000003180000001F3014000003780000001F3414000003D80000001F3E14000004380000001F4B14000004980000001F5414000004F80000001F4F14000005580000001F5D14000005A00000001F6B14" />
+				<noteRow
+					y="65"
+					noteData="0x000000300000001F4314000000900000001F4D14000000F00000001F4614000001500000001F5314000001B00000001F4314000002100000001F3D14000002700000001F3F14000002D00000001F4D14000003300000001F5214000003900000001F4D14000003F00000001F4514000004500000001F3A14000004B00000001F4B14000005100000001F4B14000005700000001F4A14000005B80000001F4114" />
+				<noteRow
+					y="67"
+					noteData="0x000000480000001F5614000000A80000001F4A14000001080000001F3114000001680000001F4C14000001C80000001F4814000002280000001F4614000002880000001F3714000002E80000001F5614000003480000001F3B14000003A80000001F2814000004080000001F4214000004680000001F4714000004C80000001F1714000005280000001F5514000005880000001F5114000005D00000001F4D14" />
+				<noteRow
+					y="68"
+					noteData="0x000005E8000000187914" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="59"
+			yScrollKeyboard="50"
+			midiChannel="6"
+			isPlaying="1"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="13824"
+			colourOffset="69"
+			section="0"
+			selected="1">
+			<midiParams>
+				<param>
+					<cc>1</cc>
+					<value>0x98000000</value>
+				</param>
+				<param>
+					<cc>bend</cc>
+					<value>0x00000000</value>
+				</param>
+				<param>
+					<cc>aftertouch</cc>
+					<value>0x80000000800000008000001C880000000000063394000000800006349C00000080000635A000000080000636A400000080000637A800000080000638AC00000080000639AE0000008000063AB00000008000063CB40000008000063EB60000008000063FBA00000080000640BE00000080000643C000000080000647BE00000080000659BA0000008000065CB60000008000065DB40000008000065FB000000080000661A800000080000663A0000000800006648E0000008000066582000000800006668000000080000667</value>
+				</param>
+			</midiParams>
+			<noteRows>
+				<noteRow
+					y="51"
+					noteData="0x00000BA00000003B5114" />
+				<noteRow
+					y="53"
+					noteData="0x00000A8000000044581400000C00000000935B14" />
+				<noteRow
+					y="55"
+					noteData="0x00000AE000000063521400000CC00000016D4F14000023880000007B521400002460000002E04114" />
+				<noteRow
+					y="58"
+					noteData="0x00000960000000355A14000015C0000000344114000022800000011C4C1400002400000000405614" />
+				<noteRow
+					y="60"
+					noteData="0x000009C0000000394C1400001290000001D72A1400001620000000295F1400002100000001264A14000024300000003B581400002A600000006C5214" />
+				<noteRow
+					y="62"
+					noteData="0x00000600000000875314" />
+				<noteRow
+					y="63"
+					noteData="0x000005A0000000366A14000006C0000001A94A14000012600000001A541400001680000000244A14000020A00000006A3914000022200000003A3E14000029A000000041611400002AC000000221521400002DC0000000444E1400002E50000000453C1400002EE00000003A4C1400002F88000000313E1400003000000003733014" />
+				<noteRow
+					y="65"
+					noteData="0x000004E000000038571400001140000000424D1400001200000000543214000016E000000027441400001DA0000000383F1400001E00000002A53514000022500000003D491400002958000000303714000029D000000049561400002DF0000000315C1400002E8000000031581400002F10000000344B14" />
+				<noteRow
+					y="67"
+					noteData="0x00000540000000412814000010E00000003D4F14000011A00000003A49140000174000000028451400001A28000002573F1400001DD00000004123140000291000000019261400002A30000000273C14" />
+				<noteRow
+					y="70"
+					noteData="0x000010200000005F5914000017A0000000235914000019C80000006D5614000028B0000000252714" />
+				<noteRow
+					y="72"
+					noteData="0x00000FC0000000635D1400001800000000BD521400001920000000AE541400002880000000305814" />
+				<noteRow
+					y="74"
+					noteData="0x000018C0000000475614" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="0"
+			yScrollKeyboard="50"
+			affectEntire="0"
+			instrumentPresetSlot="1"
+			instrumentPresetSubSlot="-1"
+			isPlaying="1"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="18432"
+			colourOffset="6"
+			section="0">
+			<kitParams
+				reverbAmount="0x80000000"
+				volume="0x3504F334"
+				pan="0x00000000"
+				sidechainCompressorShape="0xDC28F5B2"
+				modFXDepth="0x00000000"
+				modFXRate="0xE0000000"
+				stutterRate="0x00000000"
+				sampleRateReduction="0x80000000"
+				bitCrush="0x80000000"
+				modFXOffset="0x00000000"
+				modFXFeedback="0x80000000">
+				<delay
+					rate="0x00000000"
+					feedback="0x80000000" />
+				<lpf
+					frequency="0x7FFFFFFF"
+					resonance="0x80000000" />
+				<hpf
+					frequency="0x80000000"
+					resonance="0x80000000" />
+				<equalizer
+					bass="0x00000000"
+					treble="0x00000000"
+					bassFrequency="0x00000000"
+					trebleFrequency="0x00000000" />
+			</kitParams>
+			<noteRows>
+				<noteRow
+					colourOffset="32"
+					drumIndex="0" />
+				<noteRow
+					colourOffset="28"
+					drumIndex="1" />
+				<noteRow
+					colourOffset="38"
+					drumIndex="2" />
+				<noteRow
+					colourOffset="41"
+					drumIndex="3" />
+				<noteRow
+					colourOffset="57"
+					drumIndex="4" />
+				<noteRow
+					colourOffset="29"
+					drumIndex="5" />
+			</noteRows>
+		</instrumentClip>
+		<instrumentClip
+			inKeyMode="1"
+			yScroll="59"
+			yScrollKeyboard="50"
+			midiChannel="0"
+			midiPGM="1"
+			isPlaying="1"
+			isSoloing="0"
+			isArmedForRecording="1"
+			length="18432"
+			colourOffset="60"
+			section="0">
+		</instrumentClip>
+	</sessionClips>
+</song>

@@ -7,6 +7,7 @@ import {
   removeChannelLabel,
   setChannelLabel,
 } from "../lib/channelLabels";
+import { DEMO_SONGS, fetchAllDemoXmls } from "../lib/demoSong";
 import {
   analyzeStats,
   convertToMusicXML,
@@ -739,6 +740,38 @@ async function handleDrop(e: DragEvent) {
   }
 }
 
+let loadingDemo = $state(false);
+async function loadDemo() {
+  loadingDemo = true;
+  fileCount = DEMO_SONGS.length;
+  status = "loading";
+  try {
+    const pyodide = await loadPyodide((stage, pct) => {
+      progress = stage;
+      progressPct = pct;
+    });
+    status = "processing";
+    progress = `Analyzing ${DEMO_SONGS.length} example songs`;
+    progressPct = 85;
+
+    const fileData = await fetchAllDemoXmls();
+    fileContents = new Map(fileData.map((f) => [f.name, f.content]));
+    filePaths = new Map(fileData.map((f) => [f.name, f.name]));
+
+    const stats = await analyzeStats(fileData, pyodide);
+    results = stats.map((s) => ({ ...s, path: s.filename }));
+    status = "done";
+    progressPct = 100;
+    saveToSession();
+    trackToolAction("stats", "analyze_drop");
+  } catch (e: any) {
+    status = "error";
+    errorMsg = e.message || "Failed to load example songs";
+  } finally {
+    loadingDemo = false;
+  }
+}
+
 function handleDragOver(e: DragEvent) {
   e.preventDefault();
   dragOver = true;
@@ -887,6 +920,15 @@ function reset() {
       {/if}
     </div>
   </div>
+
+  {#if !reconnectAvailable}
+  <div class="demo-cta">
+    <p class="demo-cta-text">No Deluge handy? Try example songs to see what this tool does.</p>
+    <button class="btn btn-primary" onclick={loadDemo} disabled={loadingDemo}>
+      {loadingDemo ? "Loading…" : `Analyze ${DEMO_SONGS.length} example songs`}
+    </button>
+  </div>
+  {/if}
 
 {:else if status === "indexing"}
   <div class="status-card">
@@ -1302,6 +1344,20 @@ function reset() {
     color: var(--text-secondary);
     margin-top: 0.75rem;
     opacity: 0.7;
+  }
+
+  .demo-cta {
+    text-align: center;
+    padding: 1.25rem;
+    margin-top: 1rem;
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .demo-cta-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
   }
 
   .status-card, .error-card {

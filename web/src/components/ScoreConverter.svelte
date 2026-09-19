@@ -241,6 +241,7 @@ function reset() {
   {:else}
     <p class="card-hint">No songs cached yet. <a href="/manage">Scan your card on Card Management</a> to pick a song from a list here instead of dropping a file.</p>
   {/if}
+  {#if cardSongs.length === 0}
   <div class="demo-cta">
     <p class="demo-cta-text">No Deluge handy? Try a demo song to see what this tool does.</p>
     <div class="demo-cta-actions">
@@ -250,6 +251,7 @@ function reset() {
       <a href={DEMO_SONG.songPagePath} class="demo-cta-listen">or listen to the original ↗</a>
     </div>
   </div>
+  {/if}
   <div
     class="dropzone"
     class:dropzone--over={dragOver}
