@@ -2,6 +2,7 @@
 import { trackToolAction } from "../lib/analytics";
 import { basename, cardStore, topDir } from "../lib/cardStore";
 import {
+  CHANNEL_PLACEHOLDERS,
   formatChannel,
   getChannelLabels,
   removeChannelLabel,
@@ -1057,7 +1058,7 @@ function reset() {
                 <input
                   class="label-input"
                   type="text"
-                  placeholder="e.g. Peak"
+                  placeholder={CHANNEL_PLACEHOLDERS[(ch - 1) % CHANNEL_PLACEHOLDERS.length]}
                   value={channelLabels[ch] ?? ""}
                   onchange={(e) => handleLabelChange(ch, (e.target as HTMLInputElement).value)}
                 />

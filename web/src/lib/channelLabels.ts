@@ -1,5 +1,24 @@
 const STORAGE_KEY = "deluge-channel-labels";
 
+export const CHANNEL_PLACEHOLDERS = [
+  "e.g. Peak",
+  "e.g. Hydrasynth",
+  "e.g. Rev2",
+  "e.g. Minilogue XD",
+  "e.g. Bass Station",
+  "e.g. Blofeld",
+  "e.g. Typhon",
+  "e.g. System-8",
+  "e.g. MicroFreak",
+  "e.g. Moog One",
+  "e.g. Virus TI",
+  "e.g. Volca Keys",
+  "e.g. Summit",
+  "e.g. Grandmother",
+  "e.g. Matriarch",
+  "e.g. Prophet-10",
+];
+
 export function getChannelLabels(): Record<number, string> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

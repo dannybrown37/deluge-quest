@@ -2,6 +2,7 @@
 import { trackToolAction } from "../lib/analytics";
 import { cardStore, walkHandle } from "../lib/cardStore";
 import {
+  CHANNEL_PLACEHOLDERS,
   formatChannel,
   getChannelLabels,
   removeChannelLabel,
@@ -1687,7 +1688,7 @@ async function playSample(samplePath: string) {
                     <input
                       class="label-input"
                       type="text"
-                      placeholder="e.g. Peak"
+                      placeholder={CHANNEL_PLACEHOLDERS[(ch - 1) % CHANNEL_PLACEHOLDERS.length]}
                       value={songChannelLabels[ch] ?? ""}
                       onchange={(e) => handleSongLabelChange(ch, (e.target as HTMLInputElement).value)}
                     />
