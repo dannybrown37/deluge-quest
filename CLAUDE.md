@@ -73,9 +73,10 @@ web/                    — Astro + Svelte, static, deployed to Vercel
   src/components/       — the actual product (see table below)
   src/lib/              — shared TS (see table below)
   src/layouts/          — BaseLayout.astro (nav, footer, theme), ProseLayout.astro (Markdown pages)
-  src/styles/           — design tokens
+  src/styles/           — design tokens (spacing scale --space-1..8, color palette, font faces)
   public/py/            — checked-in wheel loaded by Pyodide
   public/audio/         — .mp3 demo tracks served by the home page player
+  public/fonts/         — self-hosted DM Mono + DM Sans woff2 (no Google Fonts CDN dependency)
   build-wheel.sh        — packages deluge_tools as the wheel above
   vercel.json           — deploy config
 docs/handoffs/          — session handoff notes
@@ -99,7 +100,7 @@ Prose-only pages are Markdown instead (see `/faq`).
 | `/backup` | — | Prose tutorial: installing and using `deluge-backup` CLI, written for non-technical users |
 | `/songs` | — | Song index: list of all tracks with links to individual pages |
 | `/songs/[slug]` | `SongPlayer.svelte` | Shareable per-song page with mobile-friendly audio player, OG tags |
-| `/changelog` | — | Content collection (`src/content/changelog/*.md`) rendered by `src/pages/changelog.astro`. Drop a `.md` with `title`, `date`, `tag` (feature/fix/improvement) frontmatter |
+| `/changelog` | — | Content collection (`src/content/changelog/*.md`) rendered by `src/pages/changelog.astro`. Drop a `.md` with `title`, `date`, `tag` (feature/fix/improvement) frontmatter. RSS feed at `/changelog/rss.xml` (`@astrojs/rss`) |
 | `/faq` | — | Hand-written prose. It is `src/pages/faq.md` (Markdown), rendered through `ProseLayout.astro` — edit the Markdown, not HTML |
 | `404` | — | `src/pages/404.astro`. Static not-found page, plain `BaseLayout` wrapper, no Svelte island |
 
@@ -297,9 +298,10 @@ dozens of times per session and would burn the free-tier event quota without tel
 than the completion event already does.
 
 ### Design System
-- **Typography:** DM Mono (headers, code, labels) + DM Sans (body, UI)
+- **Typography:** DM Mono (headers, code, labels) + DM Sans (body, UI) — self-hosted woff2 in `public/fonts/`, no Google Fonts CDN
 - **Palette:** Gold accent (#D4A847 dark / #C4942A light), charcoal ground (#131316 dark / #F2F0EB light), teal secondary (#5AABAC / #3A7B7C)
-- **Theme:** Full light/dark support via CSS custom properties
+- **Theme:** Light/dark/system toggle in nav (cycles system→light→dark). Render-blocking `is:inline` script in `<head>` reads `localStorage('theme')` before paint. CSS uses `data-theme` attribute on `:root`.
+- **Spacing:** `--space-1` (0.25rem) through `--space-8` (4rem) defined in `global.css :root`
 
 ## Deluge Firmware Reference
 

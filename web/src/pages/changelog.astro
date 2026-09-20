@@ -30,7 +30,7 @@ const tagColors: Record<string, string> = {
 <BaseLayout title="Changelog" description="What's new on deluge.quest">
   <section class="changelog">
     <h1 class="changelog-title">Changelog</h1>
-    <p class="changelog-subtitle">Notable updates to deluge.quest — bug fixes, new features, and improvements.</p>
+    <p class="changelog-subtitle">Notable updates to deluge.quest — bug fixes, new features, and improvements.&ensp;<a href="/changelog/rss.xml" class="changelog-rss">RSS</a></p>
     <ol class="changelog-list">
       {rendered.map(({ entry, Content, dateStr, iso }) => (
         <li class="changelog-entry">
@@ -108,5 +108,19 @@ const tagColors: Record<string, string> = {
   }
   .changelog-body p + p {
     margin-top: 0.5rem;
+  }
+  .changelog-rss {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    vertical-align: middle;
+  }
+  .changelog-rss:hover {
+    text-decoration: none;
+    border-color: var(--accent);
   }
 </style>
