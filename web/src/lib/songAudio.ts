@@ -76,7 +76,9 @@ const DEFAULT_EQ: Record<EQBand, number> = { low: -4, mid: 0, high: 0 };
 export class SongPlayer {
   private opts: SongPlaybackOptions;
   private ctx: AudioContext | null = null;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: GC root — prevents Web Audio node from being collected while playing
   private masterGain: GainNode | null = null;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: GC root — prevents Web Audio node from being collected while playing
   private compressor: DynamicsCompressorNode | null = null;
   private trackGains: GainNode[] = [];
   private trackBaseGain = 1;

@@ -151,11 +151,9 @@ describe("HomeAudioPlayer", () => {
 
     mockAudioEl = createMockAudioElement();
 
-    // biome-ignore lint/complexity/useArrowFunction: must be constructable via `new`
     vi.stubGlobal("AudioContext", function () {
       return mockCtx;
     });
-    // biome-ignore lint/complexity/useArrowFunction: must be constructable via `new`
     vi.stubGlobal("Audio", function () {
       return mockAudioEl;
     });

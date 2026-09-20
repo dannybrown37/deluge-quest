@@ -60,8 +60,8 @@ const songs: SongInfo[] = await Promise.all(
 );
 
 const byYear = [...songs].sort((a, b) => {
-  const ya = parseInt(a.year ?? "0");
-  const yb = parseInt(b.year ?? "0");
+  const ya = parseInt(a.year ?? "0", 10);
+  const yb = parseInt(b.year ?? "0", 10);
   return yb - ya || a.name.localeCompare(b.name);
 });
 ---

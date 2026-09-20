@@ -50,6 +50,19 @@
       "semicolons": "always"
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/**/*.svelte", "src/**/*.astro"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedVariables": "off",
+            "noUnusedImports": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": {

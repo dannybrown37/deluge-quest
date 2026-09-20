@@ -111,7 +111,7 @@ let filtered = $derived.by(() => {
   const bpmMax = filterBpmMax ? parseFloat(filterBpmMax) : Infinity;
   if (bpmMin > 0 || bpmMax < Infinity)
     items = items.filter((s) => s.bpm >= bpmMin && s.bpm <= bpmMax);
-  const notesMin = filterNotesMin ? parseInt(filterNotesMin) : 0;
+  const notesMin = filterNotesMin ? parseInt(filterNotesMin, 10) : 0;
   if (notesMin > 0) items = items.filter((s) => s.totalNotes >= notesMin);
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
@@ -679,7 +679,7 @@ async function tryAdoptDroppedDirectoryHandle(
   if (!item || typeof getAsFileSystemHandle !== "function") return false;
 
   const handle = await getAsFileSystemHandle.call(item);
-  if (!handle || handle.kind !== "directory") return false;
+  if (handle?.kind !== "directory") return false;
 
   try {
     await (handle as any).requestPermission?.({ mode: "readwrite" });

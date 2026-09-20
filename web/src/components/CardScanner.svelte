@@ -290,17 +290,7 @@ async function runScanFromCardStore() {
     ...[...cardStore.presetIndex.entries()],
   ];
 
-  const getSampleFile = async (path: string) => {
-    const cached = sampleHandles.get(path);
-    if (cached) return cached;
-    const info = cardStore.sampleIndex.get(path.toLowerCase());
-    if (!info) throw new Error(`Sample not indexed: ${path}`);
-    const file = await info.handle.getFile();
-    sampleHandles.set(path, file);
-    return file;
-  };
-
-  await computeReport(allSamples, xmlEntries, getSampleFile);
+  await computeReport(allSamples, xmlEntries);
   fileHandles = sampleHandles;
   usingCardStore = true;
 }
@@ -377,11 +367,7 @@ async function scanCard(files: File[]) {
     }
   }
 
-  await computeReport(allSamples, xmlEntries, async (rel) => {
-    const file = handles.get(rel);
-    if (!file) throw new Error(`Sample not indexed: ${rel}`);
-    return file;
-  });
+  await computeReport(allSamples, xmlEntries);
 }
 
 function stripRootPrefix(p: string, rootPrefix: string): string {
@@ -394,7 +380,6 @@ function stripRootPrefix(p: string, rootPrefix: string): string {
 async function computeReport(
   allSamples: Map<string, number>,
   xmlEntries: [string, string][],
-  getSampleFile: (relPath: string) => Promise<File>,
 ) {
   const localRefSources = new Map<string, Set<string>>();
   const songsByType = {

@@ -24,6 +24,7 @@ export class SequencerEngine {
   private onStopCb?: () => void;
 
   private ctx: AudioContext | null = null;
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: GC root — prevents Web Audio node from being collected while playing
   private masterGain: GainNode | null = null;
   private rowGains: GainNode[] = [];
   private sampleBuffers: (AudioBuffer | null)[] = [];
