@@ -198,7 +198,9 @@ from deluge_tools.bridges import inspect_song_json
 inspect_song_json(_js_xml_content)
   `);
 
-  return JSON.parse(json);
+  const parsed = JSON.parse(json);
+  if (parsed.error) throw new Error(parsed.error);
+  return parsed;
 }
 
 export async function convertToMusicXML(
@@ -207,8 +209,13 @@ export async function convertToMusicXML(
 ): Promise<string> {
   pyodide.globals.set("_js_xml_content", xmlContent);
 
-  return pyodide.runPythonAsync(`
+  const result = await pyodide.runPythonAsync(`
 from deluge_tools.bridges import convert_to_musicxml
 convert_to_musicxml(_js_xml_content)
   `);
+  if (result.startsWith("{")) {
+    const parsed = JSON.parse(result);
+    if (parsed.error) throw new Error(parsed.error);
+  }
+  return result;
 }

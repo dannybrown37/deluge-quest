@@ -697,18 +697,19 @@ class TestConvertToMusicxml:
         mock_musicxml.assert_called_once_with(mock_song)
 
     @patch("deluge_tools.bridges.parse_song_xml")
-    def test_parse_exception_propagates(
+    def test_parse_exception_returns_error_json(
         self,
         mock_parse: Mock,
     ) -> None:
         mock_parse.side_effect = ValueError("Invalid XML")
 
-        with pytest.raises(ValueError, match="Invalid XML"):
-            convert_to_musicxml("<invalid>")
+        result = json.loads(convert_to_musicxml("<invalid>"))
+        assert "error" in result
+        assert "Invalid XML" in result["error"]
 
     @patch("deluge_tools.converter.song_to_musicxml")
     @patch("deluge_tools.bridges.parse_song_xml")
-    def test_musicxml_conversion_exception_propagates(
+    def test_musicxml_conversion_exception_returns_error_json(
         self,
         mock_parse: Mock,
         mock_musicxml: Mock,
@@ -717,8 +718,9 @@ class TestConvertToMusicxml:
         mock_parse.return_value = mock_song
         mock_musicxml.side_effect = RuntimeError("Conversion failed")
 
-        with pytest.raises(RuntimeError, match="Conversion failed"):
-            convert_to_musicxml("<song></song>")
+        result = json.loads(convert_to_musicxml("<song></song>"))
+        assert "error" in result
+        assert "Conversion failed" in result["error"]
 
 
 class TestInspectSongJsonSessionOnly:

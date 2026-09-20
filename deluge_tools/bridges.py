@@ -14,7 +14,10 @@ from deluge_tools.parser import (
 
 
 def analyze_stats_json(files_json: str) -> str:
-    files: list[dict[str, str]] = json.loads(files_json)
+    try:
+        files: list[dict[str, str]] = json.loads(files_json)
+    except (json.JSONDecodeError, TypeError):
+        return json.dumps([])
     results: list[dict[str, Any]] = []
 
     for f in files:
@@ -65,6 +68,13 @@ def analyze_stats_json(files_json: str) -> str:
 
 
 def inspect_song_json(xml_content: str) -> str:
+    try:
+        return _inspect_song_json_inner(xml_content)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def _inspect_song_json_inner(xml_content: str) -> str:
     song = parse_song_xml(xml_content)
     stats = analyze_song(song)
 
@@ -179,10 +189,13 @@ def inspect_song_json(xml_content: str) -> str:
 
 
 def convert_to_musicxml(xml_content: str) -> str:
-    from deluge_tools.converter import song_to_musicxml
+    try:
+        from deluge_tools.converter import song_to_musicxml
 
-    song = parse_song_xml(xml_content)
-    return song_to_musicxml(song)
+        song = parse_song_xml(xml_content)
+        return song_to_musicxml(song)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
 
 
 def convert_midi_to_deluge_xml(midi_bytes: bytes) -> str:

@@ -526,10 +526,18 @@ def _remote_url_to_web(url: str) -> str:
         host, _, path = url.partition(":")
         host = host.removeprefix("git@")
         url = f"https://{host}/{path}"
-    return url.removesuffix(".git")
+    url = url.removesuffix(".git")
+    url = "".join(c for c in url if c not in '"&|;<>')
+    return url
+
+
+_SAFE_URL_RE = __import__("re").compile(r"^https?://[^\x00-\x1f\"&|;<>]+$")
 
 
 def _open_browser(url: str) -> None:
+    if not _SAFE_URL_RE.match(url):
+        print(f"error: refusing to open suspicious URL: {url}", file=__import__("sys").stderr)
+        return
     if _is_wsl():
         subprocess.run(["cmd.exe", "/c", "start", "", url], check=False)
     else:
