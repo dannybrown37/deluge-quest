@@ -1,5 +1,5 @@
 ---
-title: "Kit Builder gets a sequencers"
+title: "Kit Builder gets a sequencer"
 date: 2026-09-17
 tag: feature
 ---

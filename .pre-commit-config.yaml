@@ -23,6 +23,7 @@ repos:
       - id: biome
         args: [--dir=web]
         files: ^web/
+        exclude: ^web/public/py/
 
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.17.0

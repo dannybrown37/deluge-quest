@@ -71,8 +71,9 @@ def _extract_tracks(
 
     for track in mid.tracks:
         abs_time = 0
-        pending: dict[int, tuple[int, int]] = {}
-        notes_by_pitch: dict[int, list[Note]] = defaultdict(list)
+        # key: (channel, note) so overlapping notes on different channels stay separate
+        pending: dict[tuple[int, int], tuple[int, int]] = {}
+        channels: dict[int, dict[int, list[Note]]] = defaultdict(lambda: defaultdict(list))
         has_notes = False
 
         for msg in track:
@@ -80,21 +81,24 @@ def _extract_tracks(
             if msg.type == "set_tempo":
                 bpm = mido.tempo2bpm(msg.tempo)
             elif msg.type == "note_on" and msg.velocity > 0:
-                pending[msg.note] = (_scale_tick(abs_time, mid.ticks_per_beat), msg.velocity)
+                ch = getattr(msg, "channel", 0)
+                pending[(ch, msg.note)] = (_scale_tick(abs_time, mid.ticks_per_beat), msg.velocity)
             elif msg.type in ("note_off", "note_on"):
-                start_info = pending.pop(msg.note, None)
+                ch = getattr(msg, "channel", 0)
+                start_info = pending.pop((ch, msg.note), None)
                 if start_info is None:
                     continue
                 start_tick, vel = start_info
                 end_tick = _scale_tick(abs_time, mid.ticks_per_beat)
                 length = max(end_tick - start_tick, 1)
-                notes_by_pitch[msg.note].append(
+                channels[ch][msg.note].append(
                     Note(position=start_tick, length=length, velocity=vel, lift_velocity=64)
                 )
                 has_notes = True
 
         if has_notes:
-            tracks.append(dict(notes_by_pitch))
+            for ch in sorted(channels):
+                tracks.append(dict(channels[ch]))
 
     return bpm, tracks
 
@@ -263,7 +267,7 @@ def midi_to_deluge_xml(
         clip_length = _ceil_to_bar(max_end)
 
         ci = ClipInstance(
-            position=0 if clip_idx == 0 else clip_idx * clip_length,
+            position=0,
             length=clip_length,
             clip_index=clip_idx,
         )

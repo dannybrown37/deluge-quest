@@ -299,7 +299,7 @@ class TestMidiToDelugeXmlEdgeCases:
         song = parse_song(out)
         assert song.clips[0].length % (TICKS_PER_QUARTER * 4) == 0
 
-    def test_second_clip_instance_position_offset(self, tmp_path: Path) -> None:
+    def test_all_clip_instances_start_at_zero(self, tmp_path: Path) -> None:
         mid = mido.MidiFile(ticks_per_beat=480)
         for i, pitch in enumerate([60, 72]):
             track = mido.MidiTrack()
@@ -317,8 +317,8 @@ class TestMidiToDelugeXmlEdgeCases:
         from deluge_tools.parser import parse_song
 
         song = parse_song(out)
-        second_inst = song.instruments[1]
-        assert second_inst.clip_instances[0].position != 0
+        for inst in song.instruments:
+            assert inst.clip_instances[0].position == 0
 
     def test_zero_length_note_clamped_to_one(self, tmp_path: Path) -> None:
         mid = mido.MidiFile(ticks_per_beat=480)
@@ -338,6 +338,27 @@ class TestMidiToDelugeXmlEdgeCases:
         song = parse_song(out)
         row = next(r for r in song.clips[0].rows if r.y == 60)
         assert row.notes[0].length == 1
+
+    def test_type0_channels_split_into_separate_clips(self, tmp_path: Path) -> None:
+        mid = mido.MidiFile(type=0, ticks_per_beat=480)
+        track = mido.MidiTrack()
+        mid.tracks.append(track)
+        track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(120)))
+        track.append(mido.Message("note_on", note=60, velocity=100, time=0, channel=0))
+        track.append(mido.Message("note_on", note=36, velocity=100, time=0, channel=9))
+        track.append(mido.Message("note_off", note=60, velocity=0, time=480, channel=0))
+        track.append(mido.Message("note_off", note=36, velocity=0, time=0, channel=9))
+        track.append(mido.MetaMessage("end_of_track"))
+        path = tmp_path / "type0.mid"
+        mid.save(str(path))
+
+        out = tmp_path / "output.XML"
+        midi_to_deluge_xml(path, out)
+        from deluge_tools.parser import parse_song
+
+        song = parse_song(out)
+        assert len(song.clips) == 2
+        assert len(song.instruments) == 2
 
 
 class TestMidoMissing:
