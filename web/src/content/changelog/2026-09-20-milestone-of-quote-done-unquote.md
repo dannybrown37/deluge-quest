@@ -131,6 +131,6 @@ Again, I *really* want to push this to all 100, but as the saying goes: [practic
 
 In this case, I'm losing some accessibility points because some of the DelugeUI's pads are too small on mobile. This seems acceptable to me: these pads are essentially just a toy/demo, not crucial to the site's tools. I think having a small DelugeUI on mobile beats a "please rotate phone to landscape" or a different mobile view altogether.
 
-On the performance end, I'm torn. On one hand, I want 100. On the other, the solution here seems to be maintaining two different versions of the DelugeUI: one in HTML/CSS for faster pageload, then the other in my Svelte island to hydrate the functionality. I... am allergic to maintaining two copies of the same thing. I'm declaring 94 a perfect score for a site of this nature!
+On the performance end, I'm torn. On one hand, I want 100. On the other, the solution here seems to be maintaining two different versions of the DelugeUI: one in HTML/CSS for faster pageload, then the other in my Svelte island to hydrate the functionality. I... am allergic to maintaining two copies of the same thing. I'm declaring 96 a perfect score for a site of this nature!
 
 The perfectionist in me is truly running out of things to test, shore up, or otherwise improve. The main thing left to do for this site is... share it? As someone who tends toward "lurker", this is easier said than done.
