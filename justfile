@@ -210,8 +210,38 @@ deluge-backup-win cmd msg="":
 # Full install (Python + web)
 setup: install web-install
 
-# Run full test suite
-check: lint typecheck test web-lint web-typecheck web-test
+# Run full test suite with summary
+check:
+  #!/bin/bash
+  set +e
+  results=()
+  run_step() {
+    local label="$1"; shift
+    printf "\n\033[1m▸ %s\033[0m\n" "$label"
+    "$@" 2>&1
+    local rc=$?
+    if [ $rc -eq 0 ]; then
+      results+=("$(printf '\033[32m✓\033[0m %s' "$label")")
+    else
+      results+=("$(printf '\033[31m✗\033[0m %s' "$label")")
+    fi
+    return $rc
+  }
+  failed=0
+  run_step "ruff check"      uv run ruff check deluge_tools/ tests/ || failed=1
+  run_step "pyright"          uv run pyright || failed=1
+  run_step "pytest"           uv run pytest tests/ -v || failed=1
+  run_step "biome lint"       bash -c 'cd web && npm run lint' || failed=1
+  run_step "svelte-check"     bash -c 'cd web && npx svelte-check --tsconfig ./tsconfig.json' || failed=1
+  run_step "vitest"           bash -c 'cd web && npm test' || failed=1
+  printf "\n\033[1m─── Summary ───\033[0m\n"
+  for r in "${results[@]}"; do echo -e "$r"; done
+  if [ $failed -ne 0 ]; then
+    printf "\n\033[1;31mSome checks failed.\033[0m\n"
+    exit 1
+  else
+    printf "\n\033[1;32mAll checks passed.\033[0m\n"
+  fi
 
 # Build everything (Python + web)
 build: web-rebuild-wheel web-build

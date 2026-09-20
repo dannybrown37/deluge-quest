@@ -544,9 +544,7 @@ async function findDuplicates() {
 
   async function hashOne(path: string) {
     const info = cardStore.sampleIndex.get(path.toLowerCase());
-    const file = info
-      ? await info.handle.getFile()
-      : fileHandles.get(path);
+    const file = info ? await info.handle.getFile() : fileHandles.get(path);
     if (!file) return;
     const buf = await (file instanceof File ? file : file).arrayBuffer();
     const hashBuf = await crypto.subtle.digest("SHA-256", buf);

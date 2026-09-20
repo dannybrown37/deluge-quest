@@ -25,6 +25,7 @@ const canonicalURL = new URL(Astro.url.pathname, "https://deluge.quest");
     <meta name="twitter:title" content={`${title} — deluge.quest`} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content="https://deluge.quest/og-image.png" />
+    <link rel="canonical" href={canonicalURL.href} />
     <title>{title} — deluge.quest</title>
     <link rel="icon" type="image/svg+xml" href="/grid-logo.svg" />
     <ClientRouter />

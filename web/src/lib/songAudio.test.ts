@@ -253,7 +253,11 @@ interface SongPlayerInternals {
   secPerTick: number;
   trackGains: { gain: ReturnType<typeof createParam> }[];
   noiseBuffer: AudioBuffer | null;
-  scheduled: { sources: unknown[]; outputs: unknown[]; endTime: number }[];
+  scheduled: {
+    sources: unknown[];
+    outputs: { disconnect: ReturnType<typeof vi.fn> }[];
+    endTime: number;
+  }[];
   sampleBuffers: Map<string, AudioBuffer>;
   scheduleNote: (note: NoteInternal, when: number) => void;
   scheduleChunk: () => void;
