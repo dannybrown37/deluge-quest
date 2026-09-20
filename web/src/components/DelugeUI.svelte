@@ -488,7 +488,7 @@ function handlePadLeave() {
     : idleSubtext();
 }
 
-function ensurePadAudio() {
+async function ensurePadAudio() {
   if (!padAudioCtx) {
     padAudioCtx = new AudioContext();
     padEffects = new PadEffectsChain(padAudioCtx);
@@ -497,12 +497,12 @@ function ensurePadAudio() {
     padEffects.updateReverb(knobValues[4]);
     padEffects.updateDelay(knobValues[0], knobValues[1]);
   }
-  if (padAudioCtx.state === "suspended") padAudioCtx.resume();
+  if (padAudioCtx.state === "suspended") await padAudioCtx.resume();
 }
 
-function handlePadClick(pad: Pad) {
+async function handlePadClick(pad: Pad) {
   if (pad.soundIndex !== undefined && pad.velocity !== undefined) {
-    ensurePadAudio();
+    await ensurePadAudio();
     PAD_SOUNDS[pad.soundIndex].play(
       padAudioCtx!,
       padEffects!.input,

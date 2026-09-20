@@ -11,4 +11,4 @@ individual sounds, but not to make a sequence that helps one understand how the 
 
 That is no longer true! The Kit Builder now has a 16-step sequencer. It's very basic, but it allows
 you to validate that the kit has the sounds you need before you save. It does not have the ability
-to save track, as one recreating one measure on the Delgue isn't really a tall order.
+to save the *song*, as one measure on the Delgue isn't really a tall order for a user.
