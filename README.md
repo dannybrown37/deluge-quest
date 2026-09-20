@@ -168,8 +168,9 @@ Two licenses, split cleanly:
   scripts. See [`LICENSE`](LICENSE).
 
 - **Creative media** — All Rights Reserved. The `.mp3` demo tracks in
-  [`web/public/audio/`](web/public/audio/) and the site's logo/OG image/favicons are original
-  works by Danny Brown and are **not** covered by the GPL. They ride along so the site can play
+  [`web/public/audio/`](web/public/audio/), the `.XML` demo tracks in [`web/public/demo`](web/public/demo),
+  and the site's logo/OG image/favicons are original
+  works by Danny Brown and are **not** covered by the GPL. They ride along so the site can play/demo
   them, but may not be redistributed, remixed, sampled, used commercially, or used as ML
   training data without permission. See [`web/public/audio/LICENSE`](web/public/audio/LICENSE)
   and [`NOTICE`](NOTICE) for the full breakdown.
