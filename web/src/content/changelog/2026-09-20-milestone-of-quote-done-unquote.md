@@ -122,3 +122,15 @@ With the commit including this changelog, I've been adding niceties that subtly 
 * An RSS feed on the changelog for those who want to follow
 * Self-hosted fonts rather than pointing at the Google CDN
 * A tri-modal theme toggle (as opposed to only following the system theme)
+
+Finally, I made a few improvements to push my [Lighthouse](https://developer.chrome.com/docs/lighthouse) report to all green:
+
+![Lighthouse report](./../../../public/images/lighthouse-report-2026-09-20.png)
+
+Again, I *really* want to push this to all 100, but as the saying goes: [practicality beats purity](https://peps.python.org/pep-0020/).
+
+In this case, I'm losing some accessibility points because some of the DelugeUI's pads are too small on mobile. This seems acceptable to me: these pads are essentially just a toy/demo, not crucial to the site's tools. I think having a small DelugeUI on mobile beats a "please rotate phone to landscape" or a different mobile view altogether.
+
+On the performance end, I'm torn. On one hand, I want 100. On the other, the solution here seems to be maintaining two different versions of the DelugeUI: one in HTML/CSS for faster pageload, then the other in my Svelte island to hydrate the functionality. I... am allergic to maintaining two copies of the same thing. I'm declaring 94 a perfect score for a site of this nature!
+
+The perfectionist in me is truly running out of things to test, shore up, or otherwise improve. The main thing left to do for this site is... share it? As someone who tends toward "lurker", this is easier said than done.

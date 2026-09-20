@@ -106,19 +106,12 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   /* Opt-in reveal: the server always ships this markup, so a default of opacity 0
      is what keeps it from flashing before the seen-this-session check runs. */
   .first-visit-hint.show {
-    animation:
-      hint-fade-in 0.4s ease both,
-      hint-pulse 1.8s ease-in-out 0.4s infinite;
+    animation: hint-fade-in 0.4s ease both;
   }
 
   @keyframes hint-fade-in {
     from { opacity: 0; }
-    to { opacity: 0.75; }
-  }
-
-  @keyframes hint-pulse {
-    0%, 100% { opacity: 0.75; }
-    50% { opacity: 1; }
+    to { opacity: 1; }
   }
 
   :global(body:has(.landing)) {
