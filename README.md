@@ -25,10 +25,10 @@ Live at [deluge.quest](https://deluge.quest).
 
 Two halves joined by a Python wheel:
 
-```
+```filesystem
 deluge_tools/   Pure-stdlib Python: parses Deluge XML, converts formats, analyzes songs.
                 Compiled to a wheel and loaded into the browser via Pyodide (Python-in-WASM).
-                Also usable as CLIs — see below.
+                Also usable as CLIs (see below).
 web/            Astro + Svelte site. This is the product. All file processing happens
                 client-side; the Python wheel above is what does the work in-browser.
 ```
@@ -95,7 +95,7 @@ deluge-backup save "Added drum kit patches"   # sync from card + commit
 That's the one command you need. For more control:
 
 | CLI command | Just recipe | What it does |
-|---|---|---|
+| --- | --- | --- |
 | `deluge-backup init` | `just card-init` | Copy SD card → `~/deluge-card`, initialize git |
 | `deluge-backup sync` | `just card-sync` | Dry-run rsync from card (pass `--go` to apply) |
 | `deluge-backup commit "msg"` | `just card-commit "msg"` | Stage everything and commit |
@@ -120,7 +120,7 @@ deluge-backup push "Added new drum patterns"
 ```
 
 | CLI command | Just recipe | What it does |
-|---|---|---|
+| --- | --- | --- |
 | `deluge-backup remote-init <url>` | `just card-remote-init <url>` | Set up GitHub remote (initial XML commit + push) |
 | `deluge-backup push "msg"` | `just card-push "msg"` | Sync XML/JSON → shadow repo, commit, push |
 
@@ -139,7 +139,7 @@ client-side — Python logic executes in the browser via Pyodide (CPython compil
 and SD card access uses the File System Access API (Chromium only; Firefox/Safari fall back to
 read-only drag-and-drop).
 
-```
+```filesystem
 Browser
   ├── Astro shell (.astro pages)
   │     └── Svelte island (one component per tool)

@@ -8,7 +8,7 @@ tag: feature
 
 I've put a lot of work into this site!
 
-Almost every page has something one can do without *requiring* owning a Deluge or using one's personal's files:
+Almost every page has something one can do without *requiring* owning a Deluge or using one's personal files:
 
 * [Homepage](/): play audio, use DelugeUI's knobs to change audio
 * [Card Management](/manage): Links to factory card for testing. (I don't own this data and it's also quite large, so I chose to not self-host it here as a default.)
@@ -20,7 +20,7 @@ Almost every page has something one can do without *requiring* owning a Deluge o
 * [MIDI Import](/import): There's no default here. Even pre-loading a MIDI file just outputs an XML, not a very interesting experience. I was able to play "Bohemian Rhapsody" from [bitmidi.com](https://bitmidi.com/queen-bohemian-rhapsody-mid) on my Deluge yesterday, and that wasy pretty cool, I must say.
 * [Card Backup](/backup): This is CLI documentation, so there won't be anything to do here except read the docs, but docs are awesome, so that's quite a treat imo.
 * [FAQ](/faq): Another reading page, but more focused on the site itself rather than a particular tool.
-* [Songs](/songs): This is a selection of 100% Deluge tracks I've made over the last seven years, with knobs to turn as you listen. All of this is hooked into the system player, so you can hit Play/Pause/Next/Previous on your keyboard, and the music keeps playing as you navigate to other pages of the site, with a status bar featuring pause button at the top of each page.
+* [Songs](/songs): This is a selection of 100%-Deluge-produced tracks I've made over the last seven years, with knobs to turn as you listen. All of this is hooked into the system player, so you can hit Play/Pause/Next/Previous on your keyboard, and the music keeps playing as you navigate to other pages of the site, with a status bar with a pause button at the top of each page.
 * [Changelog](/changelog): You're reading this page now, hopefully its purpose is self-evident!
 
 I've tested every tool on this site with my own files and am feeling rather chuffed about the experience. I'm more driven to make music on my Deluge thanks to a better organized, better understood SD card.
@@ -44,7 +44,7 @@ All checks passed.
   48.674s
 ```
 
-`just coverage` runs three different test suites and stitches their coverage levels together into a final report. I can't deny that I really want 90%+ in all three categories, but the untested branches in particular have some pretty trickly logic to substantially increase coverage from here.
+`just coverage` runs three different test suites and stitches their coverage levels together into a final report. I can't deny that I really want 90%+ in all three categories, but the untested branches in particular have some pretty tricky logic to substantially increase coverage from here.
 
 ```console
 ❯ just coverage

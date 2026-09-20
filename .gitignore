@@ -25,3 +25,5 @@ tests/fixtures/factory-card/
 !.env.example
 *.pem
 credentials*
+
+.astro/

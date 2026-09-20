@@ -57,6 +57,9 @@ let screenText = "DELUGE.QUEST";
 let screenSubtext = "drop a song to begin";
 let pads: Pad[][] = [];
 let sidebarPads: Pad[][] = [];
+
+// Populated below at module level (after initPads is defined) so the pad grid
+// renders in the first frame without waiting for onMount, avoiding a layout shift.
 let mounted = false;
 let draggingKnob: number | null = null;
 let dragStartY = 0;
@@ -455,6 +458,7 @@ function initPads() {
     sidebarPads.push(row);
   }
 }
+initPads();
 
 function handlePadHover(pad: Pad) {
   if (!pad.label) return;
@@ -734,7 +738,6 @@ onMount(() => {
   // A /songs/[slug] visit leaves its navigate-on-advance hook on the shared
   // player; the home page advances in place instead.
   homeAudio.onNavigate = null;
-  initPads();
   fetchSongList();
 
   requestAnimationFrame(() => {
@@ -787,7 +790,7 @@ onMount(() => {
 </script>
 
 <div class="deluge-layout">
-<div class="deluge-scaler" bind:this={scalerEl} bind:clientWidth={wrapperWidth} style="height: {housingHeight * scale}px;">
+<div class="deluge-scaler" bind:this={scalerEl} bind:clientWidth={wrapperWidth} style={housingHeight > 0 ? `height: ${housingHeight * scale}px` : ''}>
 <div class="deluge-housing" bind:clientHeight={housingHeight} style="transform: scale({scale}); transform-origin: top left; position: relative; left: {offsetX}px;">
   <div class="wood-panel wood-panel--left"></div>
 
@@ -1016,39 +1019,37 @@ onMount(() => {
     </div>
 
     <!-- Pad grid: 18 columns (16 main + gap + 2 sidebar) -->
-    {#if mounted}
-      <div class="pad-grid">
-        {#each { length: ROWS } as _, r}
-          {#each pads[r] as pad}
-            <button
-              class="pad"
-              class:pad--lit={pad.glowIntensity > 0}
-              class:pad--clickable={!!pad.link || pad.soundIndex !== undefined}
-              style="--glow-color: {pad.color}; --glow-intensity: {pad.glowIntensity}"
-              on:mouseenter={() => handlePadHover(pad)}
-              on:mouseleave={handlePadLeave}
-              on:click={() => handlePadClick(pad)}
-              aria-label={pad.label || `Pad ${pad.row + 1}-${pad.col + 1}`}
-              title={pad.label}
-            ></button>
-          {/each}
-          <div class="grid-gap"></div>
-          {#each sidebarPads[r] as pad}
-            <button
-              class="pad"
-              class:pad--lit={pad.glowIntensity > 0}
-              class:pad--clickable={!!pad.link || pad.soundIndex !== undefined}
-              style="--glow-color: {pad.color}; --glow-intensity: {pad.glowIntensity}"
-              on:mouseenter={() => handlePadHover(pad)}
-              on:mouseleave={handlePadLeave}
-              on:click={() => handlePadClick(pad)}
-              aria-label={pad.label || `Sidebar ${pad.row + 1}-${pad.col + 1}`}
-              title={pad.label}
-            ></button>
-          {/each}
+    <div class="pad-grid">
+      {#each { length: ROWS } as _, r}
+        {#each pads[r] as pad}
+          <button
+            class="pad"
+            class:pad--lit={pad.glowIntensity > 0}
+            class:pad--clickable={!!pad.link || pad.soundIndex !== undefined}
+            style="--glow-color: {pad.color}; --glow-intensity: {pad.glowIntensity}"
+            on:mouseenter={() => handlePadHover(pad)}
+            on:mouseleave={handlePadLeave}
+            on:click={() => handlePadClick(pad)}
+            aria-label={pad.label || `Pad ${pad.row + 1}-${pad.col + 1}`}
+            title={pad.label}
+          ></button>
         {/each}
-      </div>
-    {/if}
+        <div class="grid-gap"></div>
+        {#each sidebarPads[r] as pad}
+          <button
+            class="pad"
+            class:pad--lit={pad.glowIntensity > 0}
+            class:pad--clickable={!!pad.link || pad.soundIndex !== undefined}
+            style="--glow-color: {pad.color}; --glow-intensity: {pad.glowIntensity}"
+            on:mouseenter={() => handlePadHover(pad)}
+            on:mouseleave={handlePadLeave}
+            on:click={() => handlePadClick(pad)}
+            aria-label={pad.label || `Sidebar ${pad.row + 1}-${pad.col + 1}`}
+            title={pad.label}
+          ></button>
+        {/each}
+      {/each}
+    </div>
 
     <div class="grid-labels">
       <div class="grid-label-group grid-label-group--sound0"><span class="grid-label-text">Kick ↑</span></div>
@@ -1098,6 +1099,7 @@ onMount(() => {
     position: relative;
     overflow: hidden;
     flex-shrink: 0;
+    aspect-ratio: 5 / 3;
   }
 
   /* === Housing === */
@@ -1567,7 +1569,7 @@ onMount(() => {
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.5);
   }
   .grid-label-text {
     line-height: 1;
