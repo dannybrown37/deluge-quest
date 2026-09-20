@@ -1107,31 +1107,6 @@ function handleKitKey(e: KeyboardEvent) {
       </div>
     </div>
   {:else}
-    <!-- Two-pane layout -->
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <span class="toolbar-label">KIT</span>
-        <span class="toolbar-title">{kit.name}</span>
-        {#if loadedFileName}
-          <span class="toolbar-file">{loadedFileName}</span>
-        {/if}
-      </div>
-      <div class="toolbar-right">
-        <button class="btn btn-sm btn-secondary" onclick={startNewKit}>New Kit</button>
-        {#if reconnectAvailable && !samplesDir}
-          <button class="btn btn-sm btn-primary" onclick={reconnectSamplesDir}>Use loaded SD card</button>
-        {/if}
-        <button class="btn btn-sm btn-secondary" onclick={openSamplesDir}>
-          {samplesDir ? "Change Folder" : "Open Folder"}
-        </button>
-        <label class="btn btn-sm btn-secondary">
-          Load XML
-          <input type="file" accept=".xml,.XML" hidden onchange={handleFileInput} />
-        </label>
-        <button class="btn btn-sm btn-primary" onclick={exportKit}>Export</button>
-      </div>
-    </div>
-
     <!-- Sequencer panel -->
       <div class="sequencer-panel">
         <div class="seq-toolbar">
@@ -1157,6 +1132,7 @@ function handleKitKey(e: KeyboardEvent) {
                 onkeydown={(e) => e.stopPropagation()}
               />
             </label>
+            <span class="seq-hint">16-step sequencer — test your kit as you build</span>
           </div>
           <div class="seq-toolbar-right">
             <button class="btn btn-sm btn-secondary" onclick={seqClearAll}>Clear All</button>
@@ -1189,6 +1165,31 @@ function handleKitKey(e: KeyboardEvent) {
           {/if}
         </div>
       </div>
+
+    <!-- Kit toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <span class="toolbar-label">KIT</span>
+        <span class="toolbar-title">{kit.name}</span>
+        {#if loadedFileName}
+          <span class="toolbar-file">{loadedFileName}</span>
+        {/if}
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-sm btn-secondary" onclick={startNewKit}>New Kit</button>
+        {#if reconnectAvailable && !samplesDir}
+          <button class="btn btn-sm btn-primary" onclick={reconnectSamplesDir}>Use loaded SD card</button>
+        {/if}
+        <button class="btn btn-sm btn-secondary" onclick={openSamplesDir}>
+          {samplesDir ? "Change Folder" : "Open Folder"}
+        </button>
+        <label class="btn btn-sm btn-secondary">
+          Load XML
+          <input type="file" accept=".xml,.XML" hidden onchange={handleFileInput} />
+        </label>
+        <button class="btn btn-sm btn-primary" onclick={exportKit}>Export</button>
+      </div>
+    </div>
 
     <div class="panes">
       <!-- Left: Sample Browser -->
@@ -1246,6 +1247,7 @@ function handleKitKey(e: KeyboardEvent) {
               <div class="pane-empty">
                 <p>No folder open.</p>
                 <button class="btn btn-secondary btn-sm" onclick={openSamplesDir}>Open SAMPLES Folder</button>
+                <p class="pane-empty-hint">Load your SD card's SAMPLES folder here (or on the <a href="/manage">Card Management</a> page) to browse and build kits entirely with your keyboard.</p>
               </div>
             {:else if visibleEntries.length === 0}
               <div class="pane-empty"><p>No matching files.</p></div>
@@ -1543,7 +1545,7 @@ function handleKitKey(e: KeyboardEvent) {
     padding: 0.5rem 0.75rem;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px 8px 0 0;
+    border-top: none;
     gap: 0.5rem;
   }
   .toolbar-left { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
@@ -1687,6 +1689,11 @@ function handleKitKey(e: KeyboardEvent) {
     margin-top: 0.5rem;
     color: var(--text-secondary);
   }
+  .pane-empty-hint a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .pane-empty-hint a:hover { text-decoration: underline; }
   .pane-empty-hint kbd {
     font-family: 'DM Mono', monospace;
     font-size: 0.68rem;
@@ -2011,7 +2018,7 @@ function handleKitKey(e: KeyboardEvent) {
   /* Sequencer panel */
   .sequencer-panel {
     border: 1px solid var(--border);
-    border-top: none;
+    border-radius: 8px 8px 0 0;
     overflow-x: auto;
   }
   .seq-toolbar {
@@ -2057,6 +2064,11 @@ function handleKitKey(e: KeyboardEvent) {
     text-align: center;
   }
   .seq-bpm-input:focus-visible { border-color: var(--accent); outline: none; }
+  .seq-hint {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+  }
   .seq-grid {
     padding: 0.3rem 0.4rem;
   }
@@ -2141,5 +2153,6 @@ function handleKitKey(e: KeyboardEvent) {
     .step-cell { min-width: 20px; height: 22px; }
     .seq-row-label { width: 60px; }
     .seq-toolbar { flex-direction: column; align-items: stretch; }
+    .seq-hint { display: none; }
   }
 </style>
