@@ -163,7 +163,7 @@ card-ensure-mount:
   sudo mkdir -p "{{card-mount}}"
   sudo mount -t drvfs "{{card-drive}}" "{{card-mount}}"
 
-# All card-* recipes delegate to the deluge-backup CLI (pip install deluge-tools)
+# All card-* recipes delegate to the deluge-backup CLI (uv tool install deluge-quest)
 
 card-init source="": card-ensure-mount
   deluge-backup init {{ if source != "" { source } else { "" } }}
