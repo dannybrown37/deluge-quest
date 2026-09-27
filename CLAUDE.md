@@ -80,6 +80,9 @@ web/                    — Astro + Svelte, static, deployed to Vercel
   public/fonts/         — self-hosted DM Mono + DM Sans woff2 (no Google Fonts CDN dependency)
   build-wheel.sh        — packages deluge_tools as the wheel above
   vercel.json           — deploy config
+  scripts/vendor-pyodide.mjs — copies Pyodide runtime into public/pyodide/ (predev/prebuild)
+  vendor/pyodide/       — committed, hash-pinned wheels npm's `pyodide` doesn't ship (micropip,
+                          packaging, mido)
 docs/handoffs/          — session handoff notes (BACKLOG.md is the running backlog)
 docs/                   — web_architecture.md, deluge-backup.md
 ```
@@ -122,7 +125,7 @@ per audio file for shareable song links.
 
 | Module | Role |
 |---|---|
-| `pyodide.ts` | The Python↔JS seam. Lazy singleton loader + 4 bridges: `analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML`. Bridges covered by a real-Pyodide integration test, see Known Issues |
+| `pyodide.ts` | The Python↔JS seam. Lazy singleton loader (from self-hosted `/pyodide/`) + 4 bridges: `analyzeStats`, `convertMidiToDelugeXml`, `inspectSong`, `convertToMusicXML`. Bridges covered by a real-Pyodide integration test, see Known Issues |
 | `cardStore.ts` | Singleton `cardStore` — the SD card handle, sample index, and song cache, shared across `/manage`, `/stats`, `/kits`, `/preview`. Persists the `FileSystemDirectoryHandle` and a song-XML cache in IndexedDB (`deluge-card-store`, v2). Also exports `walkHandle()` for walking arbitrary directory handles (used by backup) and `APP_MANAGED_DIRS` |
 | `softDelete.ts` | `moveToTrash(root, path)`, `restoreFile(root, path, xml)` — soft-delete to `SOFT_DELETE/` and restore with backup to `HISTORY_BACKUP/` |
 | `patchAudio.ts` | Web Audio synth engine (subtractive + FM voices, envelopes) for `/patch` |
@@ -179,7 +182,7 @@ per audio file for shareable song links.
   covered by a real-runtime integration test (`web/src/lib/pyodide.integration.test.ts`, real
   Pyodide/WASM + the real wheel, no DOM mocks) — run directly with `just web-test-pyodide`,
   or as part of `just coverage` (not part of `just check`, since it's the one recipe with
-  out-of-repo network I/O on a cold cache). `loadPyodide()` itself (the browser CDN
+  out-of-repo network I/O on a cold cache). `loadPyodide()` itself (the browser
   loader/wiring) is still untested. Every `web/src/components/*.svelte` has a sibling
   `.test.ts` (see below), though depth varies; the largest components still carry a lot of
   logic that would be easier to test from `lib/` (backlog #7).
@@ -228,10 +231,27 @@ Static Astro + Svelte on Vercel (free tier). All file processing is client-side 
 
 - `parser.py` → `converter.py` → `musicxml_writer.py` → `analyzer.py` → `card_scanner.py` are
   **pure stdlib** (struct, xml.etree, dataclasses) and work as-is in the browser.
-- `midi_to_deluge.py` needs `mido` (pure Python, installed via micropip on demand).
+- `midi_to_deluge.py` needs `mido` (pure Python, installed via micropip on demand from the
+  self-hosted wheel — see **Self-hosted Pyodide** below).
 - `song_to_score()` uses `music21` (~50MB) — **CLI only**, never loaded in the browser.
 
 Keep new `deluge_tools` code stdlib-only unless it is deliberately CLI-only.
+
+### Self-hosted Pyodide
+
+No Python runtime code comes from a third-party CDN. `scripts/vendor-pyodide.mjs` runs as
+`predev`/`prebuild` and fills `web/public/pyodide/` (gitignored) with:
+
+- core runtime (`pyodide.mjs`, `.asm.js`, `.asm.wasm`, `python_stdlib.zip`, `pyodide-lock.json`)
+  copied from the pinned `pyodide` npm package — integrity comes from `package-lock.json`
+- `vendor/pyodide/*.whl` — committed, each checked against `WHEEL_HASHES` in the script; the
+  build fails on a mismatch or an unpinned wheel
+
+SRI isn't an option: a dynamic `import()` can't carry `integrity`, and Pyodide then fetches its
+wasm/stdlib/packages itself. **Upgrading Pyodide**: bump `pyodide` in `web/package.json`, replace
+the micropip/packaging wheels with the ones named in the new `pyodide-lock.json` (update hashes
+from it), and re-run `just web-test-pyodide`. Needing any other Pyodide package means vendoring
+its wheel the same way — `loadPackage()` only resolves against `/pyodide/`.
 
 ### Browser API Constraints
 

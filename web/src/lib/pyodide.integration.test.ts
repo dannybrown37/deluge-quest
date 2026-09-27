@@ -22,6 +22,7 @@ const manifest = JSON.parse(
   fs.readFileSync(path.join(PY_DIR, "manifest.json"), "utf-8"),
 );
 const WHEEL_PATH = path.join(PY_DIR, manifest.wheel);
+const VENDOR_DIR = path.resolve(__dirname, "../../vendor/pyodide");
 const FIXTURE_XML_PATH = path.resolve(
   __dirname,
   "../../../tests/fixtures/square_spelunking.XML",
@@ -40,6 +41,17 @@ let fixtureXml: string;
 
 beforeAll(async () => {
   fixtureXml = fs.readFileSync(FIXTURE_XML_PATH, "utf-8");
+
+  // In the browser, the bridges fetch same-origin /pyodide/* (self-hosted,
+  // see scripts/vendor-pyodide.mjs); Node's fetch rejects relative URLs.
+  // Installed before loadPyodide() because Pyodide captures fetch at load.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (!url.startsWith("/pyodide/")) return realFetch(input, init);
+    const bytes = fs.readFileSync(path.join(VENDOR_DIR, path.basename(url)));
+    return new Response(bytes);
+  }) as typeof fetch;
 
   pyodide = await loadPyodide();
   await pyodide.loadPackage("micropip");

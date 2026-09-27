@@ -1,6 +1,14 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Python<->JS is an untyped string seam, see CLAUDE.md
 export type Pyodide = any;
 
+// Self-hosted by scripts/vendor-pyodide.mjs (runs before dev/build).
+const PYODIDE_BASE = "/pyodide/";
+const MIDO_WHEEL = "mido-1.3.3-py3-none-any.whl";
+
+interface PyodideModule {
+  loadPyodide(options: { indexURL: string }): Promise<Pyodide>;
+}
+
 let pyodidePromise: Promise<Pyodide> | null = null;
 
 export type ProgressCallback = (stage: string, pct: number) => void;
@@ -13,12 +21,12 @@ export async function loadPyodide(
   pyodidePromise = (async () => {
     onProgress?.("Loading Python runtime", 10);
 
-    const { loadPyodide: load } = await import(
-      "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.mjs"
+    const { loadPyodide: load }: PyodideModule = await import(
+      /* @vite-ignore */ `${PYODIDE_BASE}pyodide.mjs`
     );
 
     onProgress?.("Initializing Pyodide", 40);
-    const pyodide = await load();
+    const pyodide = await load({ indexURL: PYODIDE_BASE });
 
     onProgress?.("Loading deluge_tools", 70);
     await pyodide.loadPackage("micropip");
@@ -86,7 +94,10 @@ export async function convertMidiToDelugeXml(
 ): Promise<string> {
   await pyodide.loadPackage("micropip");
   const micropip = pyodide.pyimport("micropip");
-  await micropip.install("mido");
+  // mido's only runtime dep, packaging, is already loaded as micropip's dependency.
+  await micropip.install.callKwargs(`${PYODIDE_BASE}${MIDO_WHEEL}`, {
+    deps: false,
+  });
 
   const uint8 = new Uint8Array(midiBytes);
   pyodide.globals.set("_js_midi_bytes", pyodide.toPy(uint8));
