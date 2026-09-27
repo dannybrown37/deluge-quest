@@ -5,14 +5,21 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 jobs:
+  check:
+    uses: $/.github/workflows/check.yml
+    permissions:
+      contents: read
+
   publish:
+    needs: check
     runs-on: ubuntu-latest
     environment: pypi
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v7
         with:
