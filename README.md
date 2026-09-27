@@ -42,7 +42,7 @@ Requires [`uv`](https://docs.astral.sh/uv/) (Python) and Node 22+, plus
 [`just`](https://github.com/casey/just) as the task runner:
 
 ```bash
-just setup      # uv venv + pip install -e ".[dev]" + npm install
+just setup      # uv venv + uv pip install -e ".[dev]" + npm install
 just check      # lint + typecheck + test, both Python and web
 just web-dev    # Astro dev server at localhost:4321
 just build      # rebuild the Python wheel, then the static site
@@ -76,7 +76,7 @@ Two interfaces: the `deluge-backup` CLI (pip-installable, no repo clone needed) 
 ### Setup
 
 ```bash
-pip install deluge-quest
+uv tool install deluge-quest
 deluge-backup init /mnt/c/Users/you/path/to/backup
 # — or, with the card plugged in (defaults to /mnt/d) —
 deluge-backup init

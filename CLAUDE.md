@@ -27,8 +27,8 @@ rather than trusting what's written here.
 ## Quick Start
 
 ```bash
-just setup          # uv venv + pip install -e ".[dev]" + npm install
-just check          # ruff check + pytest
+just setup          # uv venv + uv pip install -e ".[dev]" + npm install
+just check          # ruff + pyright + pytest + biome + svelte-check + vitest
 just web-dev        # Astro dev server at localhost:4321
 just build          # rebuild wheel, then static build
 just coverage       # pytest + vitest coverage (+ real-Pyodide integration test), merged into one local HTML report
@@ -66,8 +66,8 @@ deluge_tools/           — pure-stdlib format logic (except music21/mido, CLI-o
   cli_clean.py          — `deluge-clean`   (card scan/cleanup)
   cli_backup.py         — `deluge-backup`  (git-based SD card backup)
   cli_quest.py          — `deluge-quest`   (lists all CLI entrypoints; discovery/help command)
-tests/                  — test_parser, test_converter, test_analyzer, test_card_scanner,
-                          test_cli_clean, test_cli_stats, test_cli_backup, test_midi_to_deluge
+tests/                  — one test_<module>.py per deluge_tools module (incl. every cli_*),
+                          plus test_security; fixtures/ holds a real song XML
 web/                    — Astro + Svelte, static, deployed to Vercel
   src/pages/            — one .astro shell per tool, each mounting one Svelte island
   src/components/       — the actual product (see table below)
@@ -75,11 +75,13 @@ web/                    — Astro + Svelte, static, deployed to Vercel
   src/layouts/          — BaseLayout.astro (nav, footer, theme), ProseLayout.astro (Markdown pages)
   src/styles/           — design tokens (spacing scale --space-1..8, color palette, font faces)
   public/py/            — checked-in wheel loaded by Pyodide
+  public/demo/          — bundled song XMLs for "try a demo" (see lib/demoSong.ts)
   public/audio/         — .mp3 demo tracks served by the home page player
   public/fonts/         — self-hosted DM Mono + DM Sans woff2 (no Google Fonts CDN dependency)
   build-wheel.sh        — packages deluge_tools as the wheel above
   vercel.json           — deploy config
-docs/handoffs/          — session handoff notes
+docs/handoffs/          — session handoff notes (BACKLOG.md is the running backlog)
+docs/                   — web_architecture.md, deluge-backup.md
 ```
 
 ### Pages → components
@@ -133,6 +135,7 @@ per audio file for shareable song links.
 | `homeAudio.ts` | Singleton `homeAudio` — the site-wide `<audio>` player + Web Audio FX chain (filter, reverb, delay, analyser), song list, MediaSession wiring. Shared by the home page, the mini-player in `BaseLayout`, and `/songs/[slug]`. Also emits the song analytics events |
 | `screenGuard.ts` | `shouldSyncScreen(state)` — decides whether the DelugeUI screen may revert to song info, or is currently claimed by a held knob value or a hovered pad |
 | `analytics.ts` | Vercel Web Analytics wrapper. `track()` (never throws), `trackToolVisit()`, `trackToolAction()`, plus pure `crossedMarks()`/`percentPlayed()` for listen milestones |
+| `demoSong.ts` | `DEMO_SONG`/`DEMO_SONGS` + `fetchDemoXml()` — bundled demo XMLs in `public/demo/`, used by `/preview`'s "try a demo" state |
 | `channelLabels.ts` | `getChannelLabels()`/setter, `localStorage`-backed custom names for MIDI/CV channel numbers |
 
 ## Key Design Decisions
@@ -177,9 +180,9 @@ per audio file for shareable song links.
   Pyodide/WASM + the real wheel, no DOM mocks) — run directly with `just web-test-pyodide`,
   or as part of `just coverage` (not part of `just check`, since it's the one recipe with
   out-of-repo network I/O on a cold cache). `loadPyodide()` itself (the browser CDN
-  loader/wiring) is still untested. `web/src/components/*.svelte` (~9,000 lines) is now
-  testable — see below — but only `SongPlayer.svelte` has a test so far; the other 8 components
-  are still uncovered.
+  loader/wiring) is still untested. Every `web/src/components/*.svelte` has a sibling
+  `.test.ts` (see below), though depth varies; the largest components still carry a lot of
+  logic that would be easier to test from `lib/` (backlog #7).
 - **Svelte component testing** — `@testing-library/svelte` + `@sveltejs/vite-plugin-svelte`
   (already a transitive dep via `@astrojs/svelte`) are wired into `web/vitest.config.ts`.
   Two non-obvious pieces were required to make `.svelte` files importable in tests at all:
