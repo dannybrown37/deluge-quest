@@ -6,7 +6,10 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "vendor:pyodide": "node scripts/vendor-pyodide.mjs",
+    "predev": "npm run vendor:pyodide",
     "dev": "astro dev",
+    "prebuild": "npm run vendor:pyodide",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",

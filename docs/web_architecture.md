@@ -93,7 +93,7 @@ untyped string seam — Python and TypeScript share no type system.
 
 ```diagram
 loadPyodide()
-  → import pyodide.mjs from CDN
+  → import /pyodide/pyodide.mjs (self-hosted, see scripts/vendor-pyodide.mjs)
   → pyodide.loadPackage("micropip")
   → micropip.install.callKwargs(wheel_path, {deps: false})
 ```

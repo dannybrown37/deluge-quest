@@ -2,6 +2,8 @@
 dist/
 coverage/
 coverage-integration/
+# copied from node_modules/pyodide by scripts/vendor-pyodide.mjs
+public/pyodide/
 # generated types
 .astro/
 
