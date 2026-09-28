@@ -6,14 +6,19 @@ repos:
     hooks:
       - id: changelog-reminder
         name: changelog reminder
-        entry: bash -c 'if ! git diff --cached --name-only | grep -q "^web/src/content/changelog/"; then echo "⚠  No changelog entry. Add one in web/src/content/changelog/, or skip with SKIP=changelog-reminder"; exit 1; fi'
+        # main is only pushed by `just release`; feature branches are checked against their merge-base
+        entry: >-
+          bash -c '[ "$(git branch --show-current)" = main ] && exit 0;
+          if ! git diff --name-only "$(git merge-base origin/main "${PRE_COMMIT_TO_REF:-HEAD}")" "${PRE_COMMIT_TO_REF:-HEAD}" | grep -q "^web/src/content/changelog/"; then
+          echo "⚠  No changelog entry on this branch. Add one in web/src/content/changelog/, or skip with SKIP=changelog-reminder"; exit 1; fi'
         language: system
+        stages: [pre-push]
         always_run: true
         pass_filenames: false
         fail_fast: true
 
   - repo: https://github.com/dannybrown37/git-a-grip
-    rev: v0.14.1
+    rev: v0.15.1
     hooks:
       - id: commitizen-early
       - id: block-private-terms
