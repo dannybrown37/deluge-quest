@@ -13,7 +13,7 @@ repos:
         fail_fast: true
 
   - repo: https://github.com/dannybrown37/git-a-grip
-    rev: v0.13.0
+    rev: v0.14.1
     hooks:
       - id: commitizen-early
       - id: block-private-terms
