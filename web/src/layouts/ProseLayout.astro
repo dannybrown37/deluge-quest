@@ -17,6 +17,33 @@ const { title, description } = Astro.props.frontmatter ?? Astro.props;
   </section>
 </BaseLayout>
 
+<script>
+  function addHeadingLinks(): void {
+    for (const heading of document.querySelectorAll<HTMLElement>(".prose :is(h2, h3, h4)[id]")) {
+      if (heading.querySelector(".heading-link")) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "heading-link";
+      button.textContent = "#";
+      button.setAttribute("aria-label", `Copy link to "${heading.textContent}"`);
+      button.addEventListener("click", async () => {
+        const url = `${location.origin}${location.pathname}#${heading.id}`;
+        history.replaceState(null, "", `#${heading.id}`);
+        try {
+          await navigator.clipboard.writeText(url);
+          button.textContent = "copied";
+        } catch {
+          button.textContent = "#";
+          return;
+        }
+        setTimeout(() => (button.textContent = "#"), 1500);
+      });
+      heading.append(button);
+    }
+  }
+  document.addEventListener("astro:page-load", addHeadingLinks);
+</script>
+
 <style is:global>
   .prose {
     max-width: 600px;
@@ -109,6 +136,30 @@ const { title, description } = Astro.props.frontmatter ?? Astro.props;
     padding: 0.4rem 0.6rem;
     border-bottom: 1px solid var(--border);
     color: var(--text-secondary);
+  }
+  .prose :is(h2, h3, h4)[id] {
+    scroll-margin-top: 4rem;
+  }
+  .heading-link {
+    margin-left: 0.5rem;
+    padding: 0 0.3rem;
+    font: inherit;
+    font-size: 0.8em;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .prose :is(h2, h3, h4):hover .heading-link,
+  .heading-link:focus-visible {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .heading-link {
+      opacity: 0.6;
+    }
   }
   .prose strong {
     color: var(--text-primary);
