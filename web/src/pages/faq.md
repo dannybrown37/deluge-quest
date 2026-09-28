@@ -67,6 +67,14 @@ The site is tracking song plays and tool usage counts: basic analytics to unders
 - Hosted on [Vercel](https://vercel.com)
 - The code is on [GitHub](https://github.com/dannybrown37/deluge-quest)
 
+## Did you use AI to help you write this site?
+
+I certainly did! I worked with Claude Code to plan, do most of the mechanical work, and learn tech I don't touch at my day job. One of the goals of this project was leveling up how I work with LLMs.
+
+I made the architecture and design descions, reviewed and fixed code as I went, and wrote nearly all of the site's copy by hand.
+
+The music has zero AI. Every track was made on the Deluge by me.
+
 ## Who wrote the music on the site?
 
 [I did](#who-are-you)! Check out the load/play buttons on the [home page's "Deluge"](/) or the [Songs](/songs) page to see what I've made.
