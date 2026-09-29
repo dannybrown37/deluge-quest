@@ -15,6 +15,11 @@ vi.mock("../lib/pyodide", () => ({
   convertToMusicXML: vi.fn(),
 }));
 
+vi.mock("../lib/demoSong", () => ({
+  DEMO_SONGS: [{ file: "DEMO1.XML" }, { file: "DEMO2.XML" }],
+  fetchAllDemoXmls: vi.fn(),
+}));
+
 vi.mock("../lib/softDelete", () => ({
   moveToTrash: vi.fn(),
 }));
@@ -24,6 +29,7 @@ vi.mock("../lib/analytics", () => ({
 }));
 
 vi.mock("../lib/channelLabels", () => ({
+  CHANNEL_PLACEHOLDERS: ["Synth"],
   getChannelLabels: vi.fn().mockReturnValue({}),
   setChannelLabel: vi.fn(),
   removeChannelLabel: vi.fn(),
@@ -54,6 +60,7 @@ vi.mock("../lib/cardStore", async (importOriginal) => {
 
 import { trackToolAction } from "../lib/analytics";
 import { cardStore } from "../lib/cardStore";
+import { fetchAllDemoXmls } from "../lib/demoSong";
 import { analyzeStats, convertToMusicXML, loadPyodide } from "../lib/pyodide";
 import { moveToTrash } from "../lib/softDelete";
 
@@ -1405,5 +1412,157 @@ it("shows a generic error message when the folder picker fails without a message
 
   await waitFor(() =>
     expect(screen.getByText("Failed to open folder")).toBeTruthy(),
+  );
+});
+
+// happy-dom never matches option:checked, so Svelte's bind:value falls back to the first
+// enabled option; disabling the others makes that fallback the one we want.
+async function selectOption(select: HTMLSelectElement, value: string) {
+  const others = Array.from(select.options).filter((o) => o.value !== value);
+  for (const o of others) o.disabled = true;
+  await fireEvent.change(select, { target: { value } });
+  for (const o of others) o.disabled = false;
+}
+
+describe("SongAnalyzer filters", () => {
+  const visibleSongs = () =>
+    Array.from(document.querySelectorAll(".cell-name-text"))
+      .map((el) => el.textContent?.trim() ?? "")
+      .sort();
+
+  async function renderWith(stats: SongStats[]) {
+    mockAnalyzeStats.mockResolvedValue(stats);
+    render(SongAnalyzer);
+    const dropzone = document.querySelector(".dropzone") as HTMLElement;
+    await fireEvent.drop(
+      dropzone,
+      dropEvent(stats.map((s) => xmlFile(s.filename))),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText(`${stats.length}/${stats.length} songs`),
+      ).toBeTruthy(),
+    );
+  }
+
+  const channelSongs = [
+    stat({ filename: "a.XML", midiCount: 1, midiChannels: [1] }),
+    stat({ filename: "ab.XML", midiCount: 2, midiChannels: [1, 2] }),
+    stat({ filename: "abc.XML", midiCount: 3, midiChannels: [1, 2, 3] }),
+    stat({ filename: "none.XML" }),
+  ];
+
+  it.each([
+    ["OR", 0, ["a", "ab", "abc"]],
+    ["AND", 1, ["ab", "abc"]],
+    ["ONLY", 2, ["a", "ab"]],
+  ])("MIDI channels 1+2 in %s mode", async (label, modeClicks, expected) => {
+    await renderWith(channelSongs);
+    await fireEvent.click(screen.getByText("Ch 1"));
+    await fireEvent.click(screen.getByText("Ch 2"));
+    const toggle = document.querySelector(".mode-toggle") as HTMLElement;
+    for (let i = 0; i < modeClicks; i++) await fireEvent.click(toggle);
+
+    expect(toggle.textContent).toBe(label);
+    expect(visibleSongs()).toEqual(expected);
+  });
+
+  it("cycles the mode toggle back to OR and deselects a channel chip", async () => {
+    await renderWith(channelSongs);
+    const chip = screen.getByText("Ch 3");
+    await fireEvent.click(chip);
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    expect(visibleSongs()).toHaveLength(1);
+
+    const toggle = document.querySelector(".mode-toggle") as HTMLElement;
+    for (let i = 0; i < 3; i++) await fireEvent.click(toggle);
+    expect(toggle.textContent).toBe("OR");
+
+    await fireEvent.click(chip);
+    expect(chip.getAttribute("aria-pressed")).toBe("false");
+    expect(visibleSongs()).toHaveLength(4);
+  });
+
+  it("edits and clears a channel label", async () => {
+    const labels = await import("../lib/channelLabels");
+    await renderWith(channelSongs);
+
+    await fireEvent.click(document.querySelector(".gear-btn") as HTMLElement);
+    await waitFor(() =>
+      expect(document.querySelectorAll(".label-input")).toHaveLength(3),
+    );
+    const inputs = document.querySelectorAll<HTMLInputElement>(".label-input");
+
+    inputs[0].value = "Minilogue";
+    await fireEvent.change(inputs[0]);
+    expect(labels.setChannelLabel).toHaveBeenCalledWith(1, "Minilogue");
+
+    inputs[1].value = "   ";
+    await fireEvent.change(inputs[1]);
+    expect(labels.removeChannelLabel).toHaveBeenCalledWith(2);
+
+    await fireEvent.click(document.querySelector(".gear-btn") as HTMLElement);
+    expect(document.querySelector(".label-editor")).toBeNull();
+  });
+
+  it.each([
+    ["arrangement yes", 0, "yes", ["arr"]],
+    ["arrangement no", 0, "no", ["cv", "midi", "noarr"]],
+    ["gear deluge", 1, "deluge", ["arr", "noarr"]],
+    ["gear external", 1, "external", ["cv", "midi"]],
+  ])("filters by %s", async (_label, selectIdx, value, expected) => {
+    await renderWith([
+      stat({ filename: "arr.XML" }),
+      stat({ filename: "noarr.XML", hasArrangement: false }),
+      stat({ filename: "midi.XML", midiCount: 1, hasArrangement: false }),
+      stat({ filename: "cv.XML", cvCount: 1, hasArrangement: false }),
+    ]);
+    const select =
+      document.querySelectorAll<HTMLSelectElement>(".filter-select")[selectIdx];
+    await selectOption(select, value);
+
+    await waitFor(() => expect(visibleSongs()).toEqual(expected));
+  });
+});
+
+describe("SongAnalyzer demo", () => {
+  const mockFetchDemos = fetchAllDemoXmls as unknown as ReturnType<
+    typeof vi.fn
+  >;
+
+  it("analyzes the bundled example songs", async () => {
+    mockFetchDemos.mockResolvedValue([
+      { name: "DEMO1.XML", content: "<song/>" },
+      { name: "DEMO2.XML", content: "<song/>" },
+    ]);
+    mockAnalyzeStats.mockResolvedValue([
+      stat({ filename: "DEMO1.XML" }),
+      stat({ filename: "DEMO2.XML" }),
+    ]);
+    render(SongAnalyzer);
+
+    await fireEvent.click(screen.getByText("Analyze 2 example songs"));
+
+    await waitFor(() => expect(screen.getByText("2/2 songs")).toBeTruthy());
+    expect(mockAnalyzeStats.mock.calls[0][0]).toHaveLength(2);
+    expect(mockTrack).toHaveBeenCalledWith("stats", "analyze_drop");
+    expect(
+      JSON.parse(sessionStorage.getItem("deluge-stats-results") ?? "[]"),
+    ).toHaveLength(2);
+  });
+
+  it.each([
+    [new Error("network down"), "network down"],
+    [new Error(""), "Failed to load example songs"],
+  ])(
+    "shows an error when example songs fail to load (%s)",
+    async (err, msg) => {
+      mockFetchDemos.mockRejectedValue(err);
+      render(SongAnalyzer);
+
+      await fireEvent.click(screen.getByText("Analyze 2 example songs"));
+
+      await waitFor(() => expect(screen.getByText(msg)).toBeTruthy());
+    },
   );
 });

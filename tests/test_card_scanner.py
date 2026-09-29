@@ -239,3 +239,37 @@ class TestScanCard:
         report = scan_card(card_root)
         assert len(report.missing_references) == 0
         assert len(report.unused_samples) == 0
+
+
+class TestScannerEdges:
+    def test_malformed_xml_contributes_no_refs(self, tmp_path: Path):
+        (tmp_path / "SAMPLES").mkdir()
+        (tmp_path / "SAMPLES" / "a.wav").write_bytes(b"RIFF")
+        (tmp_path / "SONGS").mkdir()
+        (tmp_path / "SONGS" / "BAD.XML").write_text("<song><unclosed")
+
+        report = scan_card(tmp_path)
+
+        assert report.unused_samples == {"SAMPLES/a.wav"}
+
+    def test_no_songs_or_preset_dirs(self, tmp_path: Path):
+        (tmp_path / "SAMPLES").mkdir()
+        messages: list[str] = []
+
+        report = scan_card(tmp_path, on_progress=messages.append)
+
+        assert scan_xml_references(tmp_path) == set()
+        assert report.unused_presets == set()
+        assert messages == [
+            "Scanning samples...",
+            "Scanning XML references...",
+            "Checking presets...",
+        ]
+
+    def test_no_samples_dir(self, tmp_path: Path):
+        assert find_all_samples(tmp_path) == {}
+
+    def test_unstatable_sample_counts_zero_bytes(self, tmp_path: Path):
+        (tmp_path / "SAMPLES").mkdir()
+        (tmp_path / "SAMPLES" / "gone.wav").symlink_to(tmp_path / "missing.wav")
+        assert find_all_samples(tmp_path) == {"SAMPLES/gone.wav": 0}

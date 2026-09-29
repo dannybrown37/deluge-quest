@@ -1,13 +1,17 @@
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 
 from deluge_tools.parser import (
+    EnvelopePatch,
     Note,
+    _parse_clip_sound_params,
     parse_clip_instances,
     parse_note_data,
     parse_note_data_with_lift,
     parse_song,
+    parse_song_xml,
 )
 
 SAMPLE_SONG = Path(__file__).parent / "fixtures" / "square_spelunking.XML"
@@ -524,3 +528,26 @@ class TestSynthPatchParsing:
         assert sp.params["oscAVolume"] == "0x7FFFFFFF"
         assert len(sp.patch_cables) == 1
         assert sp.patch_cables[0].destination == "volume"
+
+
+class TestParserEdges:
+    def test_truncated_trailing_record_ignored(self):
+        assert parse_note_data("0x00000240000000C04014ABCD") == [
+            Note(position=576, length=192, velocity=64, lift_velocity=20)
+        ]
+
+    def test_missing_tempo_defaults_to_120(self):
+        assert parse_song_xml("<song/>").bpm == 120.0
+
+    def test_unknown_instrument_tags_skipped(self):
+        song = parse_song_xml(
+            '<song><instruments><mystery/><sound presetSlot="1"/></instruments></song>'
+        )
+        assert [i.instrument_type for i in song.instruments] == ["synth"]
+
+    def test_clip_sound_params_missing_envelope_uses_defaults(self):
+        clip = ET.fromstring('<instrumentClip><soundParams volume="0x1"/></instrumentClip>')
+        params = _parse_clip_sound_params(clip)
+        assert params is not None
+        assert params.envelope1 == EnvelopePatch()
+        assert params.params == {"volume": "0x1"}

@@ -537,3 +537,308 @@ class TestNoArgs:
     def test_no_subcommand_shows_help(self):
         with pytest.raises(SystemExit):
             _main([])
+
+
+@pytest.fixture
+def env(env_vars, monkeypatch) -> dict[str, str]:
+    for k, v in env_vars.items():
+        monkeypatch.setenv(k, v)
+    return env_vars
+
+
+@pytest.fixture
+def mount(env) -> Path:
+    m = Path(env["DELUGE_CARD_MOUNT"])
+    (m / "SONGS").mkdir(parents=True)
+    (m / "SONGS" / "SONG001.XML").write_text("<song/>")
+    return m
+
+
+class TestIsWsl:
+    @pytest.mark.parametrize(
+        ("content", "expected"),
+        [("Linux version 6.1-microsoft-standard-WSL2", True), ("Linux version 6.1-generic", False)],
+    )
+    def test_reads_proc_version(self, content: str, expected: bool):
+        from deluge_tools.cli_backup import _is_wsl
+
+        with patch("pathlib.Path.read_text", return_value=content):
+            assert _is_wsl() is expected
+
+    def test_unreadable_proc_version(self):
+        from deluge_tools.cli_backup import _is_wsl
+
+        with patch("pathlib.Path.read_text", side_effect=OSError):
+            assert _is_wsl() is False
+
+
+class TestMountNeedsHelp:
+    def test_missing_mount_name(self, tmp_path: Path):
+        from deluge_tools.cli_backup import _mount_needs_help
+
+        assert _mount_needs_help(tmp_path / "absent") is False
+
+    def test_iterdir_errors_fall_back_false(self, tmp_path: Path):
+        from deluge_tools.cli_backup import _mount_needs_help
+
+        with patch("pathlib.Path.iterdir", side_effect=OSError):
+            assert _mount_needs_help(tmp_path / "mnt") is False
+
+    def test_mount_failure_warns(self, tmp_path: Path, capsys):
+        from deluge_tools.cli_backup import _ensure_mount
+
+        mount = tmp_path / "mnt"
+        mount.mkdir()
+        with (
+            patch("deluge_tools.cli_backup._is_wsl", return_value=True),
+            patch("subprocess.run", return_value=subprocess.CompletedProcess([], 1)),
+        ):
+            _ensure_mount(mount, "D:")
+        assert "mount failed" in capsys.readouterr().err
+
+
+class TestToolDetection:
+    @pytest.mark.parametrize(
+        ("side_effect", "expected"),
+        [
+            (None, True),
+            (FileNotFoundError, False),
+            (subprocess.CalledProcessError(1, "rsync"), False),
+        ],
+    )
+    def test_has_rsync(self, side_effect, expected: bool):
+        from deluge_tools.cli_backup import _has_rsync
+
+        with patch("subprocess.run", side_effect=side_effect):
+            assert _has_rsync() is expected
+
+    @pytest.mark.parametrize(
+        ("side_effect", "expected"), [(None, True), (FileNotFoundError, False)]
+    )
+    def test_has_du(self, side_effect, expected: bool):
+        from deluge_tools.cli_backup import _has_du
+
+        with patch("subprocess.run", side_effect=side_effect):
+            assert _has_du() is expected
+
+
+class TestGetDirSize:
+    def test_du_empty_output(self, tmp_path: Path):
+        from deluge_tools.cli_backup import _get_dir_size
+
+        with (
+            patch("deluge_tools.cli_backup._has_du", return_value=True),
+            patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout="")),
+        ):
+            assert _get_dir_size(tmp_path) == "?"
+
+    def test_du_passes_excludes(self, tmp_path: Path):
+        from deluge_tools.cli_backup import _get_dir_size
+
+        result = subprocess.CompletedProcess([], 0, stdout="12M\t.\n")
+        with (
+            patch("deluge_tools.cli_backup._has_du", return_value=True),
+            patch("subprocess.run", return_value=result) as mock_run,
+        ):
+            assert _get_dir_size(tmp_path, excludes=[".git"]) == "12M"
+        assert "--exclude=.git" in mock_run.call_args.args[0]
+
+    def test_python_fallback(self, tmp_path: Path):
+        from deluge_tools.cli_backup import _get_dir_size
+
+        (tmp_path / "a").write_bytes(b"x" * 10)
+        (tmp_path / ".git").mkdir()
+        (tmp_path / ".git" / "big").write_bytes(b"x" * 5000)
+        with patch("deluge_tools.cli_backup._has_du", return_value=False):
+            assert _get_dir_size(tmp_path, excludes=[".git"]) == "10B"
+
+
+class TestInitWithoutRsync:
+    def test_copies_with_sync_tree(self, tmp_path: Path, monkeypatch):
+        src = tmp_path / "src"
+        (src / "SONGS").mkdir(parents=True)
+        (src / "SONGS" / "A.XML").write_text("<song/>")
+        dest = tmp_path / "card"
+        monkeypatch.setenv("DELUGE_CARD_DIR", str(dest))
+        with (
+            patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout="1")),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=False),
+            patch("deluge_tools.cli_backup._has_du", return_value=False),
+        ):
+            _main(["init", str(src)])
+        assert (dest / "SONGS" / "A.XML").read_text() == "<song/>"
+        assert (dest / ".gitattributes").read_text() == "* -text\n"
+
+
+class TestSyncOutput:
+    @pytest.mark.parametrize(
+        ("status_out", "expected"),
+        [
+            ("", "No changes"),
+            (" M SONGS/A.XML\n", "M SONGS/A.XML"),
+            ("".join(f"?? F{i}\n" for i in range(13)), "13 files changed"),
+        ],
+    )
+    def test_rsync_go_summarizes(self, card_dir, mount, capsys, status_out: str, expected: str):
+        result = subprocess.CompletedProcess([], 0, stdout=status_out)
+        with (
+            patch("subprocess.run", return_value=result),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=True),
+            patch("deluge_tools.cli_backup._is_wsl", return_value=False),
+        ):
+            _main(["sync", "--go"])
+        assert expected in capsys.readouterr().out
+
+    def test_mount_iterdir_error_exits(self, card_dir, env, capsys):
+        with (
+            patch("deluge_tools.cli_backup._is_wsl", return_value=False),
+            patch("pathlib.Path.iterdir", side_effect=OSError),
+            patch("pathlib.Path.is_dir", return_value=True),
+        ):
+            with pytest.raises(SystemExit):
+                _main(["sync"])
+        assert "SD card not found" in capsys.readouterr().err
+
+    def test_python_dry_run_lists_without_copying(self, card_dir, mount, capsys):
+        with (
+            patch("deluge_tools.cli_backup._has_rsync", return_value=False),
+            patch("deluge_tools.cli_backup._is_wsl", return_value=False),
+        ):
+            _main(["sync"])
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+        assert "copy SONGS/SONG001.XML" in out
+        assert not (card_dir / "SONGS").exists()
+
+    def test_python_dry_run_no_changes(self, card_dir, env, capsys):
+        m = Path(env["DELUGE_CARD_MOUNT"])
+        m.mkdir()
+        (m / "SYSTEM").mkdir()
+        (card_dir / "SYSTEM").mkdir()
+        with (
+            patch("deluge_tools.cli_backup._has_rsync", return_value=False),
+            patch("deluge_tools.cli_backup._is_wsl", return_value=False),
+        ):
+            _main(["sync"])
+        assert "No changes" in capsys.readouterr().out
+
+    def test_python_go_copies(self, card_dir, mount, capsys):
+        with (
+            patch("deluge_tools.cli_backup._has_rsync", return_value=False),
+            patch("deluge_tools.cli_backup._is_wsl", return_value=False),
+        ):
+            _main(["sync", "--go"])
+        assert (card_dir / "SONGS" / "SONG001.XML").exists()
+        assert "copy SONGS/SONG001.XML" in capsys.readouterr().out
+
+        with (
+            patch("deluge_tools.cli_backup._has_rsync", return_value=False),
+            patch("deluge_tools.cli_backup._is_wsl", return_value=False),
+        ):
+            _main(["sync", "--go"])
+        assert "No changes" in capsys.readouterr().out
+
+    def test_python_go_many_changes(self, card_dir, mount, capsys):
+        for i in range(13):
+            (mount / "SONGS" / f"S{i}.XML").write_text("x")
+        with (
+            patch("deluge_tools.cli_backup._has_rsync", return_value=False),
+            patch("deluge_tools.cli_backup._is_wsl", return_value=False),
+        ):
+            _main(["sync", "--go"])
+        assert "14 files changed" in capsys.readouterr().out
+
+
+class TestChangelogFormatting:
+    @pytest.mark.parametrize(
+        ("status", "f1", "f2", "prefix", "expected"),
+        [
+            ("A", "SONGS/A.XML", "", "", "- Added `SONGS/A.XML`"),
+            ("R100", "a", "b", "", "- Renamed `a` → `b`"),
+            ("R090", "SAMPLES/a.wav", "SAMPLES/b.wav", "SAMPLES/", "  - renamed `a.wav` → `b.wav`"),
+            ("X", "f", "", "", "- X `f`"),
+        ],
+    )
+    def test_format_change(self, status: str, f1: str, f2: str, prefix: str, expected: str):
+        from deluge_tools.cli_backup import _format_change
+
+        assert _format_change(status, f1, f2, prefix) == expected
+
+    def test_entry_lists_sample_changes(self):
+        from deluge_tools.cli_backup import _build_changelog_entry
+
+        entry = _build_changelog_entry("A\tSAMPLES/kick.wav\nM\tSONGS/A.XML\n", "msg")
+        assert "- **Samples:**" in entry
+        assert "  - added `kick.wav`" in entry
+        assert "- Modified `SONGS/A.XML`" in entry
+
+    def test_entry_summarizes_many_changes(self):
+        from deluge_tools.cli_backup import _build_changelog_entry
+
+        entry = _build_changelog_entry("".join(f"M\tSONGS/{i}.XML\n" for i in range(13)), "msg")
+        assert "13 files changed (too many to list individually)" in entry
+        assert "- No sample changes." in entry
+
+
+class TestReadText:
+    def test_falls_back_to_cp1252(self, tmp_path: Path):
+        from deluge_tools.cli_backup import _read_text
+
+        p = tmp_path / "README.md"
+        p.write_bytes("café".encode("cp1252"))
+        assert _read_text(p) == "café"
+
+
+class TestRemoteInitExtras:
+    def test_reports_current_remote(self, card_dir, env, capsys):
+        (card_dir / ".xml-remote" / ".git").mkdir(parents=True)
+        current = subprocess.CompletedProcess([], 0, stdout="git@github.com:u/r.git\n")
+        with patch("subprocess.run", return_value=current):
+            with pytest.raises(SystemExit):
+                _main(["remote-init", "https://github.com/user/repo.git"])
+        assert "Current remote: git@github.com:u/r.git" in capsys.readouterr().err
+
+    def test_without_rsync_copies_xml_only(self, card_dir, env):
+        (card_dir / "SONGS").mkdir()
+        (card_dir / "SONGS" / "A.XML").write_text("<song/>")
+        (card_dir / "SAMPLES").mkdir()
+        (card_dir / "SAMPLES" / "k.wav").write_bytes(b"RIFF")
+        with (
+            patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, stdout="")),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=False),
+        ):
+            _main(["remote-init", "https://github.com/user/repo.git"])
+        remote = card_dir / ".xml-remote"
+        assert (remote / "SONGS" / "A.XML").exists()
+        assert not (remote / "SAMPLES" / "k.wav").exists()
+
+
+class TestPushWithoutRsync:
+    def test_copies_xml_with_sync_tree(self, card_dir, env):
+        (card_dir / ".xml-remote" / ".git").mkdir(parents=True)
+        (card_dir / "SONGS").mkdir()
+        (card_dir / "SONGS" / "A.XML").write_text("<song/>")
+
+        def side_effect(cmd, **kw):
+            if "--quiet" in cmd:
+                return subprocess.CompletedProcess(cmd, 1)
+            return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+        with (
+            patch("subprocess.run", side_effect=side_effect),
+            patch("deluge_tools.cli_backup._has_rsync", return_value=False),
+        ):
+            _main(["push", "msg"])
+        assert (card_dir / ".xml-remote" / "SONGS" / "A.XML").exists()
+
+
+class TestOpenBrowserSafety:
+    @pytest.mark.parametrize("url", ["file:///etc/passwd", "https://x.com/a&calc", "javascript:1"])
+    def test_refuses_suspicious_urls(self, url: str, capsys):
+        from deluge_tools.cli_backup import _open_browser
+
+        with patch("subprocess.run") as mock_run, patch("webbrowser.open") as mock_open:
+            _open_browser(url)
+        mock_run.assert_not_called()
+        mock_open.assert_not_called()
+        assert "refusing" in capsys.readouterr().err
