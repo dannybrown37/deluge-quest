@@ -1129,3 +1129,142 @@ describe("CardScanner", () => {
     expect(screen.queryByTitle(/Move to/)).toBeFalsy();
   });
 });
+
+describe("CardScanner MIDI channel filter", () => {
+  const midiSong = (chs: number[]) =>
+    `<song><instruments>${chs.map((c) => `<midi channel="${c}" />`).join("")}</instruments></song>`;
+
+  beforeEach(() => {
+    localStorage.clear();
+    mockCardStore.songXmls.set("SONGS/a.XML", midiSong([0]));
+    mockCardStore.songXmls.set("SONGS/ab.XML", midiSong([0, 1]));
+    mockCardStore.songXmls.set("SONGS/abc.XML", midiSong([0, 1, 2]));
+  });
+
+  async function openSongsTab() {
+    await scanAndWait();
+    await fireEvent.click(screen.getByText(/^Songs/));
+  }
+
+  const moveButton = () => screen.queryByText(/^Move \d+ songs to folder…$/);
+
+  it.each([
+    ["OR", 0, 3],
+    ["AND", 1, 2],
+    ["ONLY", 2, 2],
+  ])("channels 1+2 in %s mode match %i songs", async (label, clicks, count) => {
+    await openSongsTab();
+    await fireEvent.click(screen.getByText("Ch 1"));
+    await fireEvent.click(screen.getByText("Ch 2"));
+    const toggle = document.querySelector(".mode-toggle") as HTMLElement;
+    for (let i = 0; i < clicks; i++) await fireEvent.click(toggle);
+
+    expect(toggle.textContent).toBe(label);
+    expect(moveButton()?.textContent).toBe(`Move ${count} songs to folder…`);
+  });
+
+  it("clears the channel selection", async () => {
+    await openSongsTab();
+    await fireEvent.click(screen.getByText("Ch 3"));
+    expect(moveButton()?.textContent).toBe("Move 1 songs to folder…");
+
+    await fireEvent.click(screen.getByText("Clear"));
+    expect(moveButton()).toBeNull();
+    expect(screen.getByText("Ch 3").getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("moves filtered songs into a sanitized custom folder and remembers it", async () => {
+    const dir = fakeWritableDir({
+      "a.XML": midiSong([0]),
+      "ab.XML": midiSong([0, 1]),
+      "abc.XML": midiSong([0, 1, 2]),
+    });
+    mockGetOrCreateDir.mockResolvedValue(dir);
+    await openSongsTab();
+    await fireEvent.click(screen.getByText("Ch 3"));
+    await fireEvent.click(moveButton() as HTMLElement);
+
+    const input = screen.getByLabelText(
+      "Destination folder name",
+    ) as HTMLInputElement;
+    expect(input.value).toBe("CH3");
+    await fireEvent.input(input, { target: { value: "my synth!" } });
+    expect(input.value).toBe("MYSYNTH");
+
+    await fireEvent.click(screen.getByText("Move 1 songs"));
+
+    await waitFor(() =>
+      expect(mockTrack).toHaveBeenCalledWith("manage", "sort_songs"),
+    );
+    expect(mockGetOrCreateDir).toHaveBeenCalledWith(
+      mockCardStore.rootHandle,
+      "SONGS/MYSYNTH",
+    );
+    expect(
+      JSON.parse(localStorage.getItem("deluge-song-folders") ?? "[]"),
+    ).toEqual(["MYSYNTH"]);
+    expect(screen.queryByLabelText("Destination folder name")).toBeNull();
+  });
+
+  it("submits the move with Enter and cancels with Escape or the Cancel button", async () => {
+    mockGetOrCreateDir.mockResolvedValue(
+      fakeWritableDir({ "abc.XML": midiSong([0, 1, 2]) }),
+    );
+    await openSongsTab();
+    await fireEvent.click(screen.getByText("Ch 3"));
+
+    await fireEvent.click(moveButton() as HTMLElement);
+    await fireEvent.keyDown(screen.getByLabelText("Destination folder name"), {
+      key: "Escape",
+    });
+    expect(screen.queryByLabelText("Destination folder name")).toBeNull();
+
+    await fireEvent.click(moveButton() as HTMLElement);
+    await fireEvent.click(screen.getByText("Cancel"));
+    expect(screen.queryByLabelText("Destination folder name")).toBeNull();
+
+    await fireEvent.click(moveButton() as HTMLElement);
+    await fireEvent.keyDown(screen.getByLabelText("Destination folder name"), {
+      key: "Enter",
+    });
+    await waitFor(() =>
+      expect(mockGetOrCreateDir).toHaveBeenCalledWith(
+        mockCardStore.rootHandle,
+        "SONGS/CH3",
+      ),
+    );
+  });
+
+  it("does not prefill a folder name when several channels are selected", async () => {
+    await openSongsTab();
+    await fireEvent.click(screen.getByText("Ch 1"));
+    await fireEvent.click(screen.getByText("Ch 2"));
+    await fireEvent.click(moveButton() as HTMLElement);
+
+    expect(
+      (screen.getByLabelText("Destination folder name") as HTMLInputElement)
+        .value,
+    ).toBe("");
+    expect(
+      (screen.getByText("Move 3 songs") as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("edits channel labels, which rename the chips", async () => {
+    await openSongsTab();
+    await fireEvent.click(document.querySelector(".gear-btn") as HTMLElement);
+    const inputs = document.querySelectorAll<HTMLInputElement>(".label-input");
+    expect(inputs).toHaveLength(3);
+
+    const firstChip = () =>
+      document.querySelector(".channel-chip")?.textContent;
+    await fireEvent.change(inputs[0], { target: { value: "Minilogue" } });
+    expect(firstChip()).toBe("Minilogue");
+
+    await fireEvent.change(
+      document.querySelectorAll<HTMLInputElement>(".label-input")[0],
+      { target: { value: " " } },
+    );
+    expect(firstChip()).toBe("Ch 1");
+  });
+});

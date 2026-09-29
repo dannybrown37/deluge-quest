@@ -217,4 +217,52 @@ describe("SongPlayer", () => {
 
     rafSpy.mockRestore();
   });
+
+  it.each([
+    [
+      { name: "Other Tune!", year: 2024, genre: "Ambient" },
+      "2024",
+      "other-tune",
+    ],
+    [
+      { name: "Slugged", year: "2023", slug: "custom-slug" },
+      "2023",
+      "custom-slug",
+    ],
+  ])(
+    "follows the site player when it switches to %o",
+    async (song, yearText, slug) => {
+      let publish: (() => void) | undefined;
+      mockHomeAudio.subscribe.mockImplementation((fn: () => void) => {
+        publish = fn;
+        return vi.fn();
+      });
+      const writeText = vi.fn();
+      vi.stubGlobal("navigator", { clipboard: { writeText } });
+
+      render(SongPlayer, {
+        name: "Test Song",
+        pageUrl: "https://deluge.quest/songs/test",
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      (mockHomeAudio as unknown as { currentSong: unknown }).currentSong = song;
+      publish?.();
+      await Promise.resolve();
+
+      expect(screen.getByRole("heading").textContent).toBe(song.name);
+      expect(screen.getByText(yearText)).toBeTruthy();
+      await fireEvent.click(
+        screen.getByRole("button", { name: /share|copy/i }),
+      );
+      expect(writeText).toHaveBeenCalledWith(
+        `https://deluge.quest/songs/${slug}`,
+      );
+
+      delete (mockHomeAudio as unknown as { currentSong?: unknown })
+        .currentSong;
+      vi.unstubAllGlobals();
+    },
+  );
 });

@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SequencerEngine } from "../lib/sequencerAudio";
 import KitBuilder from "./KitBuilder.svelte";
 
 vi.mock("../lib/analytics", () => ({
@@ -902,4 +903,305 @@ describe("KitBuilder", () => {
       await fireEvent.dragOver(landing);
     }
   });
+});
+
+function cachedRow(name: string) {
+  return {
+    name,
+    samplePath: `SAMPLES/${name.toLowerCase()}.wav`,
+    volume: 50,
+    pan: 0,
+    loopMode: "once",
+    polyphonic: "auto",
+  };
+}
+
+function seedCachedKit(names: string[], seq?: unknown) {
+  localStorage.setItem(
+    "kit-builder-cache",
+    JSON.stringify({
+      name: "Seq Kit",
+      rows: names.map(cachedRow),
+      selectedIndex: 0,
+    }),
+  );
+  if (seq !== undefined)
+    localStorage.setItem("kit-builder-seq", JSON.stringify(seq));
+}
+
+function stepCells(row: number): HTMLButtonElement[] {
+  const rows = document.querySelectorAll(".seq-row");
+  return Array.from(rows[row].querySelectorAll(".step-cell"));
+}
+
+function pressed(row: number): number[] {
+  return stepCells(row)
+    .map((c, i) => (c.getAttribute("aria-pressed") === "true" ? i : -1))
+    .filter((i) => i >= 0);
+}
+
+function storedPattern(): boolean[][] {
+  return JSON.parse(localStorage.getItem("kit-builder-seq") ?? "{}").pattern;
+}
+
+describe("KitBuilder sequencer", () => {
+  const pattern = (on: number[]) =>
+    Array.from({ length: 16 }, (_, i) => on.includes(i));
+
+  it("restores pattern and bpm from the sequencer cache", async () => {
+    seedCachedKit(["KICK", "SNARE"], {
+      pattern: [pattern([0, 8]), pattern([4, 12])],
+      bpm: 95,
+    });
+    render(KitBuilder);
+
+    await waitFor(() =>
+      expect(document.querySelectorAll(".seq-row").length).toBe(2),
+    );
+    expect(pressed(0)).toEqual([0, 8]);
+    expect(pressed(1)).toEqual([4, 12]);
+    expect(
+      (document.querySelector(".seq-bpm-input") as HTMLInputElement).value,
+    ).toBe("95");
+  });
+
+  it("ignores a corrupt sequencer cache", async () => {
+    seedCachedKit(["KICK"]);
+    localStorage.setItem("kit-builder-seq", "{bad");
+    render(KitBuilder);
+
+    await waitFor(() =>
+      expect(document.querySelectorAll(".seq-row").length).toBe(1),
+    );
+    expect(pressed(0)).toEqual([]);
+  });
+
+  it("keeps step cells in sync with the engine across repeated toggles, row clears, and clear all", async () => {
+    seedCachedKit(["KICK", "SNARE"]);
+    render(KitBuilder);
+    await waitFor(() =>
+      expect(document.querySelectorAll(".seq-row").length).toBe(2),
+    );
+
+    await fireEvent.click(stepCells(0)[2]);
+    await fireEvent.click(stepCells(1)[5]);
+    expect(pressed(0)).toEqual([2]);
+    expect(storedPattern()[1][5]).toBe(true);
+
+    await fireEvent.click(stepCells(0)[2]);
+    expect(pressed(0)).toEqual([]);
+
+    await fireEvent.click(stepCells(0)[3]);
+    await fireEvent.click(document.querySelectorAll(".seq-row-clear")[0]);
+    expect(pressed(0)).toEqual([]);
+    expect(pressed(1)).toEqual([5]);
+
+    await fireEvent.click(screen.getByText("Clear All"));
+    expect(pressed(1)).toEqual([]);
+    expect(storedPattern().flat().some(Boolean)).toBe(false);
+  });
+
+  it.each([
+    ["500", "300"],
+    ["10", "40"],
+    ["abc", "120"],
+    ["140", "140"],
+  ])("clamps bpm input %s to %s", async (input, expected) => {
+    seedCachedKit(["KICK"]);
+    render(KitBuilder);
+    const bpm = (await waitFor(() =>
+      document.querySelector(".seq-bpm-input"),
+    )) as HTMLInputElement;
+
+    bpm.value = input;
+    await fireEvent.change(bpm);
+
+    expect(bpm.value).toBe(expected);
+  });
+
+  it("plays and stops, loading row samples before playing", async () => {
+    const play = vi
+      .spyOn(SequencerEngine.prototype, "play")
+      .mockImplementation(() => {});
+    const stop = vi
+      .spyOn(SequencerEngine.prototype, "stop")
+      .mockImplementation(() => {});
+    const setBpm = vi.spyOn(SequencerEngine.prototype, "setBpm");
+    seedCachedKit(["KICK"], { pattern: [pattern([0])], bpm: 100 });
+    render(KitBuilder);
+    await waitFor(() => screen.getByText("Play"));
+
+    await fireEvent.click(screen.getByText("Play"));
+    await waitFor(() => expect(play).toHaveBeenCalledOnce());
+    expect(setBpm).toHaveBeenCalledWith(100);
+    expect(screen.getByText("Stop")).toBeTruthy();
+    expect(document.querySelector(".status-seq")?.textContent).toBe("▶ 100bpm");
+
+    await fireEvent.click(screen.getByText("Stop"));
+    expect(stop).toHaveBeenCalledOnce();
+    expect(document.querySelector(".status-seq")?.textContent).toBe("SEQ");
+
+    play.mockRestore();
+    stop.mockRestore();
+    setBpm.mockRestore();
+  });
+
+  it("adds and removes engine rows as kit rows change", async () => {
+    seedCachedKit(["KICK", "SNARE", "HAT"]);
+    render(KitBuilder);
+    await waitFor(() =>
+      expect(document.querySelectorAll(".seq-row").length).toBe(3),
+    );
+    await fireEvent.click(stepCells(2)[1]);
+
+    const container = document.querySelector(".kit-builder") as HTMLElement;
+    await fireEvent.keyDown(container, { key: "Tab" });
+    await fireEvent.keyDown(container, { key: "d" });
+    await fireEvent.keyDown(container, { key: "d" });
+
+    await waitFor(() =>
+      expect(document.querySelectorAll(".seq-row").length).toBe(2),
+    );
+    expect(pressed(1)).toEqual([1]);
+  });
+});
+
+describe("KitBuilder range deletes", () => {
+  async function renderWithRows(selected: number) {
+    localStorage.setItem(
+      "kit-builder-cache",
+      JSON.stringify({
+        name: "Range Kit",
+        rows: ["A", "B", "C", "D"].map(cachedRow),
+        selectedIndex: selected,
+      }),
+    );
+    render(KitBuilder);
+    await waitFor(() =>
+      expect(document.querySelectorAll(".row-name").length).toBe(4),
+    );
+    const container = document.querySelector(".kit-builder") as HTMLElement;
+    await fireEvent.keyDown(container, { key: "Tab" });
+    return container;
+  }
+
+  const rowNames = () =>
+    Array.from(document.querySelectorAll(".row-name")).map((n) =>
+      n.textContent?.trim(),
+    );
+
+  it("dG deletes from the selected row to the end", async () => {
+    const container = await renderWithRows(1);
+    await fireEvent.keyDown(container, { key: "d" });
+    await fireEvent.keyDown(container, { key: "G" });
+    await waitFor(() => expect(rowNames()).toEqual(["A"]));
+    expect(document.querySelectorAll(".seq-row").length).toBe(1);
+  });
+
+  it("dg deletes from the start through the selected row", async () => {
+    const container = await renderWithRows(2);
+    await fireEvent.keyDown(container, { key: "d" });
+    await fireEvent.keyDown(container, { key: "g" });
+    await waitFor(() => expect(rowNames()).toEqual(["D"]));
+  });
+
+  it("a non-modifier key cancels a pending d", async () => {
+    const container = await renderWithRows(0);
+    await fireEvent.keyDown(container, { key: "d" });
+    expect(document.querySelector(".status-pending")).toBeTruthy();
+    await fireEvent.keyDown(container, { key: "Shift" });
+    expect(document.querySelector(".status-pending")).toBeTruthy();
+    await fireEvent.keyDown(container, { key: "x" });
+    expect(document.querySelector(".status-pending")).toBeNull();
+  });
+});
+
+describe("KitBuilder modals", () => {
+  async function openBigFolder() {
+    const files: [string, FakeFile][] = Array.from({ length: 17 }, (_, i) => [
+      `s${i}.wav`,
+      fakeFile(`s${i}.wav`),
+    ]);
+    const samplesDir = fakeDir("SAMPLES", [["big", fakeDir("big", files)]]);
+    (
+      window as unknown as { showDirectoryPicker: unknown }
+    ).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText("Open SAMPLES Folder"));
+    await waitFor(() =>
+      expect(document.querySelector(".browse-name")).toBeTruthy(),
+    );
+    const container = document.querySelector(".kit-builder") as HTMLElement;
+    await fireEvent.keyDown(container, { key: "a" });
+    await waitFor(() => screen.getByText("Add entire folder?"));
+    return container;
+  }
+
+  it("asks before adding more than 16 samples and cancels via button", async () => {
+    await openBigFolder();
+    await fireEvent.click(screen.getByText("Cancel"));
+    expect(screen.queryByText("Add entire folder?")).toBeNull();
+    expect(document.querySelectorAll(".row-name").length).toBe(0);
+  });
+
+  it("confirms a large folder add via button", async () => {
+    await openBigFolder();
+    await fireEvent.click(screen.getByText("Add 17 Samples"));
+    await waitFor(() =>
+      expect(document.querySelectorAll(".row-name").length).toBe(17),
+    );
+  });
+
+  it("confirms with Enter and dismisses with Escape", async () => {
+    let container = await openBigFolder();
+    await fireEvent.keyDown(container, { key: "Escape" });
+    expect(screen.queryByText("Add entire folder?")).toBeNull();
+
+    await fireEvent.keyDown(container, { key: "a" });
+    await waitFor(() => screen.getByText("Add entire folder?"));
+    container = document.querySelector(".kit-builder") as HTMLElement;
+    await fireEvent.keyDown(container, { key: "Enter" });
+    await waitFor(() =>
+      expect(document.querySelectorAll(".row-name").length).toBe(17),
+    );
+  });
+
+  it("dismisses the overlay by clicking the backdrop", async () => {
+    await openBigFolder();
+    await fireEvent.click(document.querySelector(".overlay") as HTMLElement);
+    expect(screen.queryByText("Add entire folder?")).toBeNull();
+  });
+
+  it("closes the new-kit modal with Escape, Cancel, and backdrop", async () => {
+    const container = await openFolderAndAddKickStandalone();
+    for (const close of [
+      () => fireEvent.keyDown(container, { key: "Escape" }),
+      () => fireEvent.click(screen.getByText("Cancel")),
+      () => fireEvent.click(document.querySelector(".overlay") as HTMLElement),
+    ]) {
+      await fireEvent.click(screen.getByText("New Kit"));
+      expect(screen.getByText("Save before creating new kit?")).toBeTruthy();
+      await close();
+      expect(screen.queryByText("Save before creating new kit?")).toBeNull();
+    }
+    expect(document.querySelectorAll(".row-name").length).toBe(1);
+  });
+
+  async function openFolderAndAddKickStandalone() {
+    const samplesDir = fakeDir("SAMPLES", [["kick.wav", fakeFile("kick.wav")]]);
+    (
+      window as unknown as { showDirectoryPicker: unknown }
+    ).showDirectoryPicker = vi.fn().mockResolvedValue(samplesDir);
+    render(KitBuilder);
+    await fireEvent.click(screen.getByText("Open SAMPLES Folder"));
+    await waitFor(() =>
+      expect(document.querySelector(".browse-name")).toBeTruthy(),
+    );
+    const container = document.querySelector(".kit-builder") as HTMLElement;
+    await fireEvent.keyDown(container, { key: "a" });
+    await waitFor(() =>
+      expect(document.querySelector(".row-name")).toBeTruthy(),
+    );
+    return container;
+  }
 });

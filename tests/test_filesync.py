@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from deluge_tools.filesync import dir_size, sync_tree
+import pytest
+
+from deluge_tools.filesync import dir_size, format_size, sync_tree
 
 
 class TestSyncTree:
@@ -188,3 +190,77 @@ class TestDirSize:
 
     def test_empty_dir(self, tmp_path: Path):
         assert dir_size(tmp_path) == 0
+
+
+class TestSyncTreeMirrorEdges:
+    def test_removes_stale_dirs(self, tmp_path: Path):
+        src = tmp_path / "src"
+        dst = tmp_path / "dst"
+        src.mkdir()
+        (dst / "old" / "nested").mkdir(parents=True)
+        (dst / "old" / "nested" / "f.txt").write_text("x")
+
+        changes = sync_tree(src, dst, delete=True)
+
+        assert not (dst / "old").exists()
+        assert "delete old/nested/f.txt" in changes
+
+    def test_dry_run_keeps_stale_dirs_and_files(self, tmp_path: Path):
+        src = tmp_path / "src"
+        dst = tmp_path / "dst"
+        src.mkdir()
+        (dst / "old").mkdir(parents=True)
+        (dst / "old" / "f.txt").write_text("x")
+
+        changes = sync_tree(src, dst, delete=True, dry_run=True)
+
+        assert (dst / "old" / "f.txt").exists()
+        assert changes == ["delete old/f.txt"]
+
+    def test_excluded_dir_in_dst_untouched(self, tmp_path: Path):
+        src = tmp_path / "src"
+        dst = tmp_path / "dst"
+        src.mkdir()
+        (dst / ".git" / "sub").mkdir(parents=True)
+        (dst / ".git" / "sub" / "HEAD").write_text("ref")
+        (dst / "keep.tmp").write_text("x")
+
+        changes = sync_tree(src, dst, delete=True, excludes=[".git", "*.tmp"])
+
+        assert (dst / ".git" / "sub" / "HEAD").exists()
+        assert (dst / "keep.tmp").exists()
+        assert changes == []
+
+    def test_nonempty_stale_dir_rmdir_error_swallowed(self, tmp_path: Path):
+        src = tmp_path / "src"
+        dst = tmp_path / "dst"
+        src.mkdir()
+        (dst / "old").mkdir(parents=True)
+        (dst / "old" / "keep.tmp").write_text("x")
+
+        sync_tree(src, dst, delete=True, excludes=["*.tmp"])
+
+        assert (dst / "old" / "keep.tmp").exists()
+
+
+class TestDirSizeErrors:
+    def test_skips_unstatable_files(self, tmp_path: Path):
+        (tmp_path / "a.txt").write_bytes(b"x" * 10)
+        (tmp_path / "dangling").symlink_to(tmp_path / "missing")
+
+        assert dir_size(tmp_path) == 10
+
+
+class TestFormatSize:
+    @pytest.mark.parametrize(
+        ("size", "expected"),
+        [
+            (0, "0B"),
+            (1023, "1023B"),
+            (2048, "2K"),
+            (int(1.5 * 1024 * 1024), "1.5M"),
+            (3 * 1024**3, "3.0G"),
+        ],
+    )
+    def test_formats(self, size: int, expected: str):
+        assert format_size(size) == expected

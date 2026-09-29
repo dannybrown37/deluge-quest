@@ -234,6 +234,11 @@ async function seqPlay() {
 
 let seqVersion = $state(0);
 
+// engine.pattern isn't reactive; taking seqVersion makes the template re-read it after each mutation.
+function isStepOn(row: number, step: number, _version: number): boolean {
+  return engine?.pattern[row]?.[step] ?? false;
+}
+
 function seqToggleStep(row: number, step: number) {
   const eng = getOrCreateEngine();
   eng.toggleStep(row, step);
@@ -1147,14 +1152,14 @@ function handleKitKey(e: KeyboardEvent) {
                 <button class="seq-row-clear" onclick={() => seqClearRow(ri)} title="Clear row">×</button>
               </div>
               {#each { length: NUM_STEPS } as _, si}
-                {@const _v = seqVersion}
+                {@const on = isStepOn(ri, si, seqVersion)}
                 <button
                   class="step-cell"
-                  class:step-on={engine?.pattern[ri]?.[si] ?? false}
+                  class:step-on={on}
                   class:step-active={si === currentStep && sequencerPlaying}
                   class:step-beat={si % 4 === 0}
                   aria-label="Step {si + 1} for {row.name}"
-                  aria-pressed={engine?.pattern[ri]?.[si] ?? false}
+                  aria-pressed={on}
                   onclick={() => seqToggleStep(ri, si)}
                 ></button>
               {/each}
