@@ -306,6 +306,36 @@ describe("readWavFrameCount", () => {
     expect(await readWavFrameCount(wav)).toBe(1000);
   });
 
+  function withChunkBeforeData(wav: ArrayBuffer, chunkSize: number): Blob {
+    const padded = chunkSize + (chunkSize % 2);
+    const out = new Uint8Array(wav.byteLength + 8 + padded);
+    const src = new Uint8Array(wav);
+    out.set(src.subarray(0, 36));
+    const view = new DataView(out.buffer);
+    out.set(new TextEncoder().encode("LIST"), 36);
+    view.setUint32(40, chunkSize, true);
+    out.set(src.subarray(36), 44 + padded);
+    return new Blob([out]);
+  }
+
+  it.each([3, 4])(
+    "skips a %i-byte chunk (with RIFF pad byte) before the data chunk",
+    async (size) => {
+      const wav = await makeWav(500).arrayBuffer();
+      expect(await readWavFrameCount(withChunkBeforeData(wav, size))).toBe(500);
+    },
+  );
+
+  it("returns undefined when no data chunk is present", async () => {
+    const wav = await makeWav(0).arrayBuffer();
+    const noData = new Uint8Array(wav.slice(0, 44));
+    noData.set(
+      [..."junk"].map((c) => c.charCodeAt(0)),
+      36,
+    );
+    expect(await readWavFrameCount(new Blob([noData]))).toBeUndefined();
+  });
+
   it("returns undefined for non-RIFF data", async () => {
     const blob = new Blob(["not a wav file at all"]);
     expect(await readWavFrameCount(blob)).toBeUndefined();

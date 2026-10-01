@@ -10,6 +10,8 @@ import pytest
 
 from deluge_tools.converter import song_to_musicxml
 from deluge_tools.musicxml_writer import (
+    TRIPLET_DURATIONS,
+    VALID_DURATIONS,
     MusicXMLWriter,
     PartData,
     _add_tuplet_brackets,
@@ -96,6 +98,11 @@ def test_dur_info_snaps_unknown_ticks():
 )
 def test_split_rests_sums_to_input_on_clean_values(ticks, triplet):
     assert sum(_split_rests(ticks, triplet=triplet)) == ticks
+
+
+@pytest.mark.parametrize("triplet,pool", [(False, VALID_DURATIONS), (True, TRIPLET_DURATIONS)])
+def test_split_rests_below_smallest_duration_falls_back_to_smallest(triplet, pool):
+    assert _split_rests(pool[0] - 1, triplet=triplet) == [pool[0]]
 
 
 # ---- _build_note_seq / _add_tuplet_brackets (triplet padding + merging) ----
