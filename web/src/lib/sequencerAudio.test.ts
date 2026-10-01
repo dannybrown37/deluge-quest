@@ -236,6 +236,29 @@ describe("transport", () => {
     expect(e.isPlaying).toBe(true);
   });
 
+  it.each([
+    ["succeeds", () => undefined],
+    [
+      "throws",
+      () => {
+        throw new Error("already disconnected");
+      },
+    ],
+  ])(
+    "removeRow while playing disconnects the row gain when disconnect %s",
+    (_, impl) => {
+      const e = makeEngine();
+      e.addRow();
+      e.addRow();
+      e.play();
+      const rowGain = contexts[0].createGain.mock.results[2].value;
+      rowGain.disconnect.mockImplementation(impl);
+      expect(() => e.removeRow(1)).not.toThrow();
+      expect(rowGain.disconnect).toHaveBeenCalled();
+      expect(e.pattern).toHaveLength(1);
+    },
+  );
+
   it("play() is a no-op if already playing", () => {
     const e = makeEngine();
     e.addRow();

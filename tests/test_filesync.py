@@ -100,6 +100,17 @@ class TestSyncTree:
 
         assert (dst / ".git" / "config").read_text() == "precious"
 
+    def test_nested_excluded_dir_not_deleted_with_mirror(self, tmp_path: Path):
+        src = tmp_path / "src"
+        dst = tmp_path / "dst"
+        (src / "songs").mkdir(parents=True)
+        (dst / "songs" / ".git").mkdir(parents=True)
+        (dst / "songs" / ".git" / "config").write_text("precious")
+
+        sync_tree(src, dst, delete=True, excludes=[".git"])
+
+        assert (dst / "songs" / ".git" / "config").read_text() == "precious"
+
     def test_include_filter(self, tmp_path: Path):
         src = tmp_path / "src"
         dst = tmp_path / "dst"
