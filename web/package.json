@@ -19,25 +19,25 @@
     "test:integration": "vitest run --coverage --config vitest.integration.config.ts"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "^7.2.4",
+    "@astrojs/markdown-remark": "^7.3.1",
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.4",
     "@astrojs/svelte": "^9.0.1",
-    "astro": "^7.2.9",
-    "music-metadata": "^11.15.0",
-    "svelte": "^5.57.0",
+    "astro": "^7.3.5",
+    "music-metadata": "^11.16.1",
+    "svelte": "^5.57.1",
     "typescript": "^6.0.3"
   },
   "allowScripts": {
     "esbuild": true
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.14",
-    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@biomejs/biome": "^2.5.15",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@testing-library/svelte": "^5.4.2",
-    "@vitest/coverage-v8": "^5.0.0",
+    "@vitest/coverage-v8": "^5.0.3",
     "fake-indexeddb": "6.2.5",
-    "happy-dom": "^20.13.2",
+    "happy-dom": "^20.14.5",
     "pyodide": "0.27.7",
     "svelte-check": "^4.7.6",
     "vitest": "^5.0.0"
