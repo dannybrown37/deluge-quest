@@ -38,7 +38,7 @@
     "@vitest/coverage-v8": "^5.0.0",
     "fake-indexeddb": "6.2.5",
     "happy-dom": "^20.13.2",
-    "pyodide": "0.27.7",
+    "pyodide": "314.0.7",
     "svelte-check": "^4.7.6",
     "vitest": "^5.0.0"
   }
