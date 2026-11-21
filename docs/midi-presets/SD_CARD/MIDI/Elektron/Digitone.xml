@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<midi
+	firmwareVersion="c1.3.0"
+	earliestCompatibleFirmware="4.1.0-alpha"
+	channel="4"
+	suffix="-1">
+	<modKnobs>
+		<modKnob
+			cc="10" />
+		<modKnob
+			cc="95" />
+		<modKnob
+			cc="24" />
+		<modKnob
+			cc="23" />
+		<modKnob
+			cc="107" />
+		<modKnob
+			cc="104" />
+		<modKnob
+			cc="19" />
+		<modKnob
+			cc="13" />
+		<modKnob
+			cc="12" />
+		<modKnob
+			cc="14" />
+		<modKnob
+			cc="29" />
+		<modKnob
+			cc="28" />
+		<modKnob
+			cc="9" />
+		<modKnob
+			cc="17" />
+		<modKnob
+			cc="82" />
+		<modKnob
+			cc="78" />
+	</modKnobs>
+	<polyToMonoConversion
+		aftertouch="0"
+		mpe="1"
+		yCC="74" />
+	<midiDevice>
+		<definitionFile
+			name="MIDI_DEVICES/DEFINITION/Elektron/Digitone.xml" />
+		<ccLabels
+			0=""
+			2=""
+			3="Note"
+			4="Velocity"
+			5="Length"
+			6=""
+			7="Volume"
+			8=""
+			9="Drive"
+			10="Pan"
+			11=""
+			12="Chorus send"
+			13="Delay send"
+			14="Reverb send"
+			15="Portamento time"
+			16="Ratio B"
+			17="Harmonics"
+			18="Detune"
+			19="Feedback"
+			20="Mix"
+			21=""
+			22=""
+			23="Filter freq"
+			24="Resonance"
+			25="Filter env depth"
+			26="Filter base"
+			27="Filter width"
+			28="LFO1 Speed"
+			29="LFO1 Depth"
+			30="LFO2 Speed"
+			31="LFO2 Depth"
+			32=""
+			33=""
+			34=""
+			35=""
+			36=""
+			37=""
+			38=""
+			39=""
+			40=""
+			41=""
+			42=""
+			43="Filter env delay"
+			44=""
+			45=""
+			46=""
+			47=""
+			48=""
+			49=""
+			50=""
+			51=""
+			52=""
+			53=""
+			54=""
+			55=""
+			56=""
+			57=""
+			58=""
+			59=""
+			60=""
+			61=""
+			62=""
+			63=""
+			64="Sustain"
+			65=""
+			66=""
+			67=""
+			68=""
+			69=""
+			70="Filter attack"
+			71="Filter decay"
+			72="Filter sustain"
+			73="Filter release"
+			74="Filter type"
+			75="A env attack"
+			76="A env decay"
+			77="A env end"
+			78="A level"
+			79="B env attack"
+			80="B env decay"
+			81="B env end"
+			82="B level"
+			83=""
+			84=""
+			85=""
+			86=""
+			87=""
+			88=""
+			89=""
+			90="Algorithm"
+			91="Ratio C"
+			92="Ratio A"
+			93=""
+			94="Mute"
+			95="Track level"
+			96=""
+			97=""
+			98=""
+			99=""
+			100=""
+			101=""
+			102=""
+			103=""
+			104="Amp attack"
+			105="Amp decay"
+			106="Amp sustain"
+			107="Amp release"
+			108="LFO1 Mult"
+			109="LFO1 Fade"
+			110="LFO1 Dest"
+			111="LFO1 Wave"
+			112=""
+			113=""
+			114=""
+			115=""
+			116=""
+			117=""
+			118=""
+			119="" />
+		<hideUnlabeledCC
+			value="1" />
+	</midiDevice>
+</midi>

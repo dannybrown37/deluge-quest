@@ -60,6 +60,11 @@ deluge_tools/           — pure-stdlib format logic (except music21/mido, CLI-o
   bridges.py            — JSON-in/JSON-out wrappers around analyzer/parser for pyodide.ts to call
   filesync.py           — pure-Python directory sync (rsync equivalent), used by cli_backup.py
                           when `rsync` isn't on PATH
+  midi_presets.py       — c1.3 MIDI preset + device-definition XML writer (mirrors firmware
+                          midi_instrument.cpp), plus HTML knob explainer
+                          (template: midi_presets_explainer.html). Local-only, not in browser
+  midi_preset_devices.py — CC tables + knob layouts for the owner's synths; `just midi-presets`
+                          writes docs/midi-presets/{SD_CARD/,index.html}
   cli.py                — `deluge-score`   (argparse, MuseScore WSL launcher)
   cli_import.py         — `deluge-import`
   cli_stats.py          — `deluge-stats`   (directory scanner, table output)

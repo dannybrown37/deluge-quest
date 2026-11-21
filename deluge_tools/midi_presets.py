@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from xml.sax.saxutils import quoteattr
 
 FIRMWARE_VERSION = "c1.3.0"
 EARLIEST_COMPATIBLE = "4.1.0-alpha"
@@ -56,6 +55,10 @@ def validate(device: Device) -> None:
     for cc in device.labels:
         if not 0 <= cc < NUM_REAL_CCS or cc == MOD_WHEEL_CC:
             raise ValueError(f"{device.name}: CC {cc} can't carry a label")
+    # The firmware's XML reader doesn't decode entities, so unsafe characters can't be escaped.
+    for text in [*device.labels.values(), device.vendor, device.name]:
+        if any(ch in text for ch in '"<>&'):
+            raise ValueError(f"{device.name}: unsafe character in {text!r}")
     for pair in device.knobs:
         for cc in pair:
             if cc is not None and cc not in device.labels:
@@ -64,7 +67,7 @@ def validate(device: Device) -> None:
 
 def _cc_labels_xml(labels: dict[int, str], indent: str) -> str:
     attrs = "".join(
-        f"\n{indent}\t{cc}={quoteattr(labels.get(cc, ''))}"
+        f'\n{indent}\t{cc}="{labels.get(cc, "")}"'
         for cc in range(NUM_REAL_CCS)
         if cc != MOD_WHEEL_CC
     )
@@ -74,8 +77,7 @@ def _cc_labels_xml(labels: dict[int, str], indent: str) -> str:
 def _midi_device_xml(device: Device, indent: str, with_file_name: bool) -> str:
     lines = [f"{indent}<midiDevice>"]
     if with_file_name:
-        name = quoteattr(device.definition_path)
-        lines.append(f"{indent}\t<definitionFile\n{indent}\t\tname={name} />")
+        lines.append(f'{indent}\t<definitionFile\n{indent}\t\tname="{device.definition_path}" />')
     lines.append(_cc_labels_xml(device.labels, indent + "\t"))
     lines.append(f'{indent}\t<hideUnlabeledCC\n{indent}\t\tvalue="1" />')
     lines.append(f"{indent}</midiDevice>")

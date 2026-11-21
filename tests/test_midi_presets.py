@@ -53,11 +53,6 @@ def test_preset_links_definition_and_zero_indexes_channel():
     assert "<definitionFile" not in definition_xml(PEAK)
 
 
-def test_label_with_quote_is_escaped():
-    xml = definition_xml(replace(P90, labels={**P90.labels, 7: 'Vol "main"'}))
-    assert "7='Vol \"main\"'" in xml
-
-
 @pytest.mark.parametrize(
     "change, msg",
     [
@@ -66,6 +61,9 @@ def test_label_with_quote_is_escaped():
         ({"labels": {**PEAK.labels, 1: "Mod"}}, "can't carry"),
         ({"labels": {**PEAK.labels, 120: "x"}}, "can't carry"),
         ({"knobs": ((2, None),) + PEAK.knobs[1:]}, "no label"),
+        ({"labels": {**PEAK.labels, 7: 'Vol "x"'}}, "unsafe"),
+        ({"labels": {**PEAK.labels, 7: "A&B"}}, "unsafe"),
+        ({"name": "P<k"}, "unsafe"),
     ],
 )
 def test_validate_rejects(change, msg):
