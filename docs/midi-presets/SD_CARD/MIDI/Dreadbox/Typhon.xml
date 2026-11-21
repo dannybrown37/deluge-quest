@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<midi
+	firmwareVersion="c1.3.0"
+	earliestCompatibleFirmware="4.1.0-alpha"
+	channel="1"
+	suffix="-1">
+	<modKnobs>
+		<modKnob
+			cc="6" />
+		<modKnob
+			cc="5" />
+		<modKnob
+			cc="3" />
+		<modKnob
+			cc="4" />
+		<modKnob
+			cc="37" />
+		<modKnob
+			cc="34" />
+		<modKnob
+			cc="17" />
+		<modKnob
+			cc="21" />
+		<modKnob
+			cc="22" />
+		<modKnob
+			cc="26" />
+		<modKnob
+			cc="41" />
+		<modKnob
+			cc="40" />
+		<modKnob
+			cc="7" />
+		<modKnob
+			cc="12" />
+		<modKnob
+			cc="14" />
+		<modKnob
+			cc="16" />
+	</modKnobs>
+	<polyToMonoConversion
+		aftertouch="0"
+		mpe="1"
+		yCC="74" />
+	<midiDevice>
+		<definitionFile
+			name="MIDI_DEVICES/DEFINITION/Dreadbox/Typhon.xml" />
+		<ccLabels
+			0=""
+			2="CC2"
+			3="Resonance"
+			4="Cutoff"
+			5="Wave"
+			6="OSC2 Tune"
+			7="Glide Amount"
+			8="VC OS Level"
+			9="Filter Tracking"
+			10=""
+			11="Filter FM Amount"
+			12="HP Cutoff"
+			13="HP Resonance"
+			14="FX1 Param1"
+			15="FX1 Param2"
+			16="FX1 MIX"
+			17="FX2 Param1"
+			18="FX2 Param2"
+			19="FX2 Param3"
+			20="FX2 Param4"
+			21="FX2 MIX"
+			22="FX3 Param1"
+			23="FX3 Param2"
+			24="FX3 Param3"
+			25="FX3 Param4"
+			26="FX3 MIX"
+			27="VCF EG Attack"
+			28="VCF EG Decay"
+			29="VCF EG Sustain"
+			30="VCF EG Release"
+			31="VCF EG Time"
+			32=""
+			33="VCF EG Level"
+			34="VCA EG Attack"
+			35="VCA EG Decay"
+			36="VCA EG Sustain"
+			37="VCA EG Release"
+			38="VCA EG Time"
+			39=""
+			40="M1 Param1"
+			41="M1 Param2"
+			42="M1 Param3"
+			43=""
+			44=""
+			45=""
+			46=""
+			47="M1 Cutoff Lvl"
+			48=""
+			49=""
+			50=""
+			51=""
+			52=""
+			53=""
+			54=""
+			55=""
+			56="M2 Param1"
+			57="M2 Param2"
+			58="M2 Param3"
+			59=""
+			60=""
+			61=""
+			62=""
+			63="M2 Cutoff Lvl"
+			64=""
+			65=""
+			66=""
+			67=""
+			68=""
+			69=""
+			70=""
+			71=""
+			72=""
+			73="M3 Param1"
+			74="M3 Param2"
+			75="M3 Param3"
+			76=""
+			77=""
+			78=""
+			79=""
+			80="M3 Cutoff Lvl"
+			81=""
+			82=""
+			83=""
+			84=""
+			85=""
+			86=""
+			87=""
+			88=""
+			89="SEQ Length"
+			90="SEQ Division"
+			91="SEQ Probability"
+			92="SEQ Swing"
+			93=""
+			94=""
+			95=""
+			96=""
+			97=""
+			98=""
+			99=""
+			100=""
+			101=""
+			102=""
+			103=""
+			104=""
+			105=""
+			106=""
+			107=""
+			108=""
+			109=""
+			110=""
+			111=""
+			112=""
+			113=""
+			114=""
+			115=""
+			116=""
+			117=""
+			118=""
+			119="" />
+		<hideUnlabeledCC
+			value="1" />
+	</midiDevice>
+</midi>

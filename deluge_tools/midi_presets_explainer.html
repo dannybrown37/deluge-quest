@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deluge c1.3 MIDI presets — studio rig</title>
+<style>
+:root{--bg:#131316;--fg:#e8e6e1;--mut:#8a8880;--gold:#D4A847;--teal:#5AABAC;--card:#1c1c21}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:15px/1.5 system-ui,sans-serif;padding:24px;max-width:1200px;margin:auto}
+h1{font-family:ui-monospace,monospace;color:var(--gold);margin:0 0 4px}
+.lede{color:var(--mut);margin:0 0 24px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:32px}
+.step{background:var(--card);border-left:3px solid var(--teal);padding:12px 14px;border-radius:6px}
+.step b{color:var(--teal);font-family:ui-monospace,monospace;display:block}
+.step kbd{background:#2a2a31;border-radius:4px;padding:1px 6px;font-family:ui-monospace,monospace;color:var(--gold)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:20px}
+.card{background:var(--card);border-radius:10px;padding:16px}
+.card h2{margin:0 0 10px;font:600 18px ui-monospace,monospace;display:flex;justify-content:space-between}
+.card h2 small{color:var(--bg);background:var(--gold);border-radius:4px;padding:1px 8px;font-size:13px}
+.head,.row{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:6px;align-items:stretch}
+.head{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.row{margin-bottom:6px}
+.btn{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut)}
+.btn i{width:14px;height:14px;border-radius:3px;background:#2a2a31;border:1px solid #444;flex:none}
+.knob{background:#25252b;border-radius:6px;padding:4px 8px;border-top:2px solid var(--gold)}
+.row .knob:last-child{border-top-color:var(--teal)}
+.knob b{font:600 12px ui-monospace,monospace;color:var(--gold);display:block}
+.row .knob:last-child b{color:var(--teal)}
+.knob span{font-size:13px}.knob.off{opacity:.35}
+.files{font-size:12px;color:var(--mut)}code{color:var(--fg)}
+ul{padding-left:18px;margin:6px 0 0;font-size:13px}
+</style></head><body>
+<h1>Deluge c1.3 MIDI presets</h1>
+<p class="lede">One MIDI preset per synth: loads the channel, all 16 gold-knob CC assignments, and
+links the device definition so CC names show on the OLED and in Automation View.</p>
+<div class="steps">
+<div class="step"><b>1 · Copy</b>Copy the <kbd>MIDI</kbd> and <kbd>MIDI_DEVICES</kbd> folders from
+<kbd>SD_CARD/</kbd> to the root of the Deluge SD card (merge with existing folders).</div>
+<div class="step"><b>2 · Set the synth</b>Set each synth to the MIDI channel on its card below and
+enable CC receive (see notes).</div>
+<div class="step"><b>3 · Load</b>Make a MIDI track (press <kbd>MIDI</kbd>), then <kbd>Load</kbd> +
+<kbd>MIDI</kbd>, browse to the vendor folder, pick the synth, press <kbd>Select</kbd>.</div>
+<div class="step"><b>4 · Play</b>Press one of the 8 mod buttons (left of the gold knobs) to pick a
+row below; turn the top/bottom gold knob. Press a gold knob to see its CC name.</div>
+<div class="step"><b>5 · Automate</b>Hold a pad/step + turn a knob for step automation, or record
+while playing. Automation View (press <kbd>Clip</kbd> while in the clip) lists only the labeled CCs.</div>
+<div class="step"><b>6 · Tweak</b>Reassign a knob: hold the gold knob + turn Select to pick any CC
+(names now show). Save the song or re-save the preset to keep it.</div>
+</div>
+<div class="grid">
+{{CARDS}}
+</div>
+</body></html>

@@ -451,3 +451,7 @@ clean: clean-py
 init:
   git config core.hooksPath .git/hooks 2>/dev/null || true
   just setup
+
+# Regenerate Deluge c1.3 MIDI presets + device definitions for the studio rig
+midi-presets:
+  uv run python -m deluge_tools.midi_preset_devices docs/midi-presets/SD_CARD
