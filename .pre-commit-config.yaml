@@ -27,10 +27,11 @@ repos:
         pass_filenames: false
 
   - repo: https://github.com/dannybrown37/git-a-grip
-    rev: v0.15.1
+    rev: v0.16.2
     hooks:
       - id: commitizen-early
       - id: block-private-terms
+      - id: protect-branch
       - id: zizmor
       - id: ruff-check
       - id: ruff-format
