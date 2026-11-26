@@ -41,7 +41,7 @@ repos:
         exclude: ^web/public/py/
 
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.17.0
+    rev: v4.19.4
     hooks:
       - id: commitizen
         stages: [commit-msg]
@@ -67,6 +67,6 @@ repos:
       - id: shellcheck
 
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.13.1-1
+    rev: v3.14.1-1
     hooks:
       - id: shfmt
